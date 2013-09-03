@@ -5,6 +5,8 @@ from pyramid.config import Configurator
 from pyramid.settings import asbool
 from pyramid_zodbconn import get_connection
 
+from .translogger import TransLogger
+
 
 log = logging.getLogger(__name__)
 
@@ -120,4 +122,6 @@ def main(global_config, **settings):
     config.add_static_view('static', 'static', cache_max_age=3600)
     config.scan()
 
-    return config.make_wsgi_app()
+    app = config.make_wsgi_app()
+    app = TransLogger(app, setup_console_handler=False)
+    return app
