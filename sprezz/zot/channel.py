@@ -99,6 +99,7 @@ class ChannelView(object):
                  request_method='POST',
                  renderer='json')
     def create_channel(self):
+        # TODO validate name and nickname (colander)
         nickname = self.request.params['nickname'].strip().lower()
         name = self.request.params['name'].strip()
         zot_service = find_service(self.context, 'zot')
