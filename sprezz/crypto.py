@@ -30,7 +30,8 @@ class PersistentRSAKey(Persistent):
             self._v_key = None
 
     def export_public_key(self):
-        return self._public_key
+        """Export public key as a string of text"""
+        return self._public_key.decode('ascii')
 
     def sign_message(self, message):
         if not hasattr(self, '_v_key') or self._v_key is None:
