@@ -41,3 +41,13 @@ class PersistentRSAKey(Persistent):
             signer = PKCS1_v1_5.new(self._v_key)
             return signer.sign(h)
         return None
+
+    def verify_message(self, message, signature):
+        if not hasattr(self, '_v_key') or self._v_key is None:
+            self._import_keys()
+        if self._v_key is not None:
+            h = SHA256.new(message)
+            verifier = PKCS1_v1_5.new(self._v_key)
+            if verifier.verify(h, signature):
+                return True
+        return False

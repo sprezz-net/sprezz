@@ -15,6 +15,8 @@ class Root(Folder):
         log.info('Registering Root object')
         zot = registry.content.create('Zot')
         self.add_service('zot', zot, registry=registry)
+        well_known = registry.content.create('WellKnown')
+        self.add_service('.well-known', well_known, registry=registry)
         # TODO
         #channel = zot.add_channel('admin', 'Administrator')
         log.info('Root object created')
