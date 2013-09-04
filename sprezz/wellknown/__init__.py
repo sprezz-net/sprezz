@@ -7,7 +7,7 @@ from pyramid.view import view_config
 from ..content import content, service
 from ..crypto import PersistentRSAKey
 from ..folder import Folder
-from ..util import base64_url_decode
+from ..util import base64_url_decode, find_service
 
 
 log = logging.getLogger(__name__)
@@ -54,21 +54,74 @@ class ZotInfoProtocol(object):
         ztarget_sig = self.request.params.get('target_sig', None)
         zkey = self.request.params.get('key', None)
         if (zkey is None) or (ztarget_sig is None):
-            result['message'] = 'zfinger: No key or target signature supplied'
+            result['message'] = 'No key or target signature supplied.'
+            return result
         key = PersistentRSAKey(extern_public_key=zkey)
         if not key.verify_message(ztarget, base64_url_decode(ztarget_sig)):
-            result['message'] = 'zfinger: Invalid target signature'
+            result['message'] = 'Invalid target signature.'
+            return result
 
-        # TODO Check if zaddress is known here and return profile info
+        channel_service = find_service(self.context, 'zot', 'channel')
+        xchannel_service = find_service(self.context, 'zot', 'xchannel')
 
-        #result['success'] = True
+        if zaddress is not None:
+            if zaddress in channel_service:
+                zhash = channel_service[zaddress].channel_hash
+            else:
+                result['message'] = 'Item not found.'
+                return result
+        else:
+            result['message'] = 'Invalid request.'
+            return result
+
+        # TODO Create a profile service which checks permissions
+        profile = {
+                'description': '',
+                'birthday': '0000-00-00',
+                'gender' : '',
+                'marital' : '',
+                'sexual' : '',
+                'locale' : '',
+                'region' : '',
+                'postcode' : '',
+                'keywords' : {},
+                }
+        result['profile'] = profile
+
+        result['guid'] = xchannel_service[zhash].guid
+        result['guid_sig'] = xchannel_service[zhash].signature
+        result['key'] = xchannel_service[zhash].key.export_public_key()
+        result['name'] = xchannel_service[zhash].name
+        result['name_updated'] = '0000-00-00 00:00:00'
+        result['address'] = xchannel_service[zhash].address
+        result['photo_mimetype'] = ''
+        result['photo'] = ''
+        result['photo_updated'] = '0000-00-00 00:00:00'
+        result['url'] = xchannel_service[zhash].url
+        result['connections_url'] = xchannel_service[zhash].connections_url
+        result['target'] = ztarget
+        result['target_sig'] = ztarget_sig
+        result['searchable'] = False
+
+        # TODO permissions and hub locations
+
+        result['success'] = True
         log.debug('result = %s' % pprint.pformat(result))
+
+        checkkey = PersistentRSAKey(extern_public_key=result['key'])
+        if not checkkey.verify_message(result['guid'],
+                base64_url_decode(result['guid_sig'])):
+            log.warning('Invalid sprezz signature')
+        else:
+            log.warning('sig is ok!')
+
         return result
 
     @view_config(context=ZotChannelInfo,
                  request_method='POST',
                  renderer='json')
     def zot_channel_info(self):
+        # TODO When is this triggered?
         result = {'success': False}
         log.debug('context = %s' % pprint.pformat(self.context))
         log.debug('graph = %s' % pprint.pformat(self.graph))
