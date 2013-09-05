@@ -15,7 +15,7 @@ def base64_url_encode(data, strip_padding=True):
     """
     out = urlsafe_b64encode(data).decode('ascii')
     if strip_padding:
-        out = out.strip('=')
+        out = out.rstrip('=')
     return out
 
 
