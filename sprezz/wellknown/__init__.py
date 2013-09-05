@@ -108,13 +108,6 @@ class ZotInfoProtocol(object):
         result['success'] = True
         log.debug('result = %s' % pprint.pformat(result))
 
-        checkkey = PersistentRSAKey(extern_public_key=result['key'])
-        if not checkkey.verify_message(result['guid'],
-                base64_url_decode(result['guid_sig'])):
-            log.warning('Invalid sprezz signature')
-        else:
-            log.warning('sig is ok!')
-
         return result
 
     @view_config(context=ZotChannelInfo,
