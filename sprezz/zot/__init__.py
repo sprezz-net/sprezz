@@ -134,7 +134,10 @@ class Zot(Folder):
     def _create_channel_address(self, nickname, root=None):
         if root is None:
             root = find_root(self)
-        return '@'.join([nickname, root.hostname])
+        address = '@'.join([nickname, root.hostname])
+        if root.port != 80 and root.port != 443:
+            address = '{0}:{1:d}'.format(address, root.port)
+        return address
 
     def _create_channel_url(self, nickname, root=None):
         if root is None:
@@ -145,7 +148,7 @@ class Zot(Folder):
         if root is None:
             root = find_root(self)
         return '{0}{1}'.format(root.app_url, resource_path(self['poco'],
-                                  nickname))
+                                                           nickname))
 
     def _create_hub_hostname(self, root=None):
         if root is None:

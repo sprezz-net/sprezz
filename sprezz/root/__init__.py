@@ -25,7 +25,6 @@ class Root(Folder):
         registry = kw.pop('registry', None)
         if registry is None:
             registry = get_current_registry()
-
         settings = registry.settings
         return settings['sprezz.app_url']
 
@@ -33,9 +32,16 @@ class Root(Folder):
         registry = kw.pop('registry', None)
         if registry is None:
             registry = get_current_registry()
-
         settings = registry.settings
         return settings['sprezz.hostname']
+
+    def get_port(self, *arg, **kw):
+        registry = kw.pop('registry', None)
+        if registry is None:
+            registry = get_current_registry()
+        settings = registry.settings
+        return settings['sprezz.port']
     
     app_url = property(get_app_url)
     hostname = property(get_host)
+    port = property(get_port)
