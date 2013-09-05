@@ -21,8 +21,7 @@ class Zot(Folder):
         log.info('Generating RSA keys for this site')
         self._private_site_key = PersistentRSAKey()
         self._private_site_key.generate_keypair()
-        self._public_site_key = PersistentRSAKey(
-                self._private_site_key.export_public_key())
+        self._public_site_key = self._private_site_key.get_public_key()
         log.info('Registering Zot services')
         hub = registry.content.create('ZotHubs')
         channel = registry.content.create('ZotChannels')
@@ -49,7 +48,7 @@ class Zot(Folder):
 
         prv_key = PersistentRSAKey()
         prv_key.generate_keypair()
-        pub_key = PersistentRSAKey(prv_key.export_public_key())
+        pub_key = prv_key.get_public_key()
 
         guid = self._create_channel_guid(nickname, root)
         sig = self._create_channel_signature(guid, prv_key)

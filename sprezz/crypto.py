@@ -11,13 +11,14 @@ class PersistentRSAKey(Persistent):
         self._private_key = None
         self._public_key = extern_public_key
 
-    def generate_keypair(self, bits=4096):
-        g = Random.new().read
-        self._v_key = RSA.generate(bits, g)
+    def generate_keypair(self, bits=4096, randfunc=None):
+        if randfunc is None:
+            randfunc = Random.new().read
+        self._v_key = RSA.generate(bits, randfunc)
         self._private_key = self._v_key.exportKey(format='PEM',
                 passphrase=None, pkcs=1)
         self._public_key = self._v_key.publickey().exportKey(format='PEM',
-                passphrase=None, pkcs=1)
+                passphrase=None)
 
     def _import_keys(self):
         if self._private_key is not None:
@@ -29,9 +30,16 @@ class PersistentRSAKey(Persistent):
         else:
             self._v_key = None
 
+    def get_public_key(self):
+        return PersistentRSAKey(extern_public_key=self._public_key)
+
     def export_public_key(self):
-        """Export public key as a string of text"""
-        return self._public_key.decode('ascii')
+        pub_key = self._public_key[:].decode("latin-1")
+        pub_key = pub_key.replace('-----BEGIN RSA PUBLIC KEY-----',
+                                  '-----BEGIN PUBLIC KEY-----')
+        pub_key = pub_key.replace('-----END RSA PUBLIC KEY-----',
+                                  '-----END PUBLIC KEY-----')
+        return pub_key
 
     def sign_message(self, message):
         if not hasattr(self, '_v_key') or self._v_key is None:
