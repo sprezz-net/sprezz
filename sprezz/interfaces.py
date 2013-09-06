@@ -82,3 +82,43 @@ class IObjectRemovedEvent(IObjectEvent):
     parent = Attribute('The folder from which the object is removed')
     name = Attribute('The name of the object that is removed from '
                      'the folder')
+
+
+class IZotChannel(Interface):
+    """Interface for a Zot channel."""
+    nickname = Attribute('Nickname of channel')
+    name = Attribute('Channel description')
+    channel_hash = Attribute('Hash of channel')
+    guid = Attribute('Global unique identifier')
+    signature = Attribute('Signature of guid')
+    key = Attribute('Public private keypair')
+
+
+class IZotXChannel(Interface):
+    """Interface for Zot xchannels."""
+    nickname = Attribute('Nickname of channel')
+    name = Attribute('Channel description')
+    channel_hash = Attribute('Hash of channel')
+    guid = Attribute('Global unique identifier')
+    signature = Attribute('Signature of guid')
+    key = Attribute('Public private keypair')
+
+    photo = Attribute('Channal photo avatar')
+    flags = Attribute('Channel flags')
+
+    address = Attribute('Channel address')
+    url = Attribute('Channel URL')
+    connections_url = Attribute('Connections URL')
+
+
+class IZotHub(Interface):
+    """Interface for Zot hubs."""
+    channel_hash = Attribute('Hash of channel')
+    guid = Attribute('Global unique identifier')
+    signature = Attribute('Signature of guid')
+    key = Attribute('Public private keypair')
+
+    address = Attribute('Channel address')
+    url = Attribute('Hub URL')
+    url_signature = Attribute('Signature of hub URL')
+    callback = Attribute('Zot endpoint URL')
