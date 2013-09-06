@@ -14,11 +14,12 @@ class PersistentRSAKey(Persistent):
     def generate_keypair(self, bits=4096, randfunc=None):
         if randfunc is None:
             randfunc = Random.new().read
-        self._v_key = RSA.generate(bits, randfunc)
-        self._private_key = self._v_key.exportKey(format='PEM',
-                passphrase=None, pkcs=1)
-        self._public_key = self._v_key.publickey().exportKey(format='PEM',
-                passphrase=None)
+        key = RSA.generate(bits, randfunc)
+        self._private_key = key.exportKey(format='PEM',
+                                          passphrase=None, pkcs=1)
+        self._public_key = key.publickey().exportKey(format='PEM',
+                                                     passphrase=None)
+        self._v_key = key
 
     def _import_keys(self):
         if self._private_key is not None:
@@ -42,7 +43,10 @@ class PersistentRSAKey(Persistent):
         return pub_key
 
     def sign_message(self, message):
-        if not hasattr(self, '_v_key') or self._v_key is None:
+        try:
+            if self._v_key is None:
+                self._import_keys()
+        except AttributeError:
             self._import_keys()
         if (self._v_key is not None) and (
                 self._v_key.can_sign() and self._v_key.has_private()):
@@ -52,7 +56,10 @@ class PersistentRSAKey(Persistent):
         return None
 
     def verify_message(self, message, signature):
-        if not hasattr(self, '_v_key') or self._v_key is None:
+        try:
+            if self._v_key is None:
+                self._import_keys()
+        except AttributeError:
             self._import_keys()
         if self._v_key is not None:
             h = SHA256.new(message)
