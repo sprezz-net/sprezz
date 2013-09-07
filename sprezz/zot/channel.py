@@ -96,6 +96,22 @@ class ZotLocalHub(Folder):
             return url
 
 
+@content('ZotRemoteHub')
+@implementer(IZotHub)
+class ZotRemoteHub(Folder):
+    def __init__(self, channel_hash, guid, signature, key,
+                 address, url, url_signature, callback):
+        super().__init__()
+        self.channel_hash = channel_hash
+        self.guid = guid
+        self.signature = signature
+        self.key = key
+        self.address = address
+        self.url = url
+        self.url_signature = url_signature
+        self.callback = callback
+
+
 @content('ZotLocalChannel')
 @implementer(IZotChannel)
 class ZotLocalChannel(Folder):
@@ -160,6 +176,25 @@ class ZotLocalXChannel(Folder):
                                                               self.nickname))
             self._v_connections_url = url
             return url
+
+
+@content('ZotRemoteXChannel')
+@implementer(IZotXChannel)
+class ZotRemoteXChannel(Folder):
+    def __init__(self, nickname, name, channel_hash, guid, signature, key,
+                 address, url, connections_url, photo, flags):
+        super().__init__()
+        self.nickname = nickname
+        self.name = name
+        self.channel_hash = channel_hash
+        self.guid = guid
+        self.signature = signature
+        self.key = key
+        self.address = address
+        self.url = url
+        self.connections_url = connections_url
+        self.photo = photo
+        self.flags = flags
 
 
 class ChannelView(object):
