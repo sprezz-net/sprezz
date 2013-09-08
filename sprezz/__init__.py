@@ -45,6 +45,7 @@ def initialize_app_url(scheme, hostname, port, app_path, force_ssl):
 
 
 def initialize_sprezz(settings):
+    """Normalize configuration"""
     def strip_bool(value):
         if value is not None:
             return asbool(value)
@@ -93,6 +94,17 @@ def initialize_sprezz(settings):
     settings['sprezz.app_path'] = app_path
     settings['sprezz.app_url'] = initialize_app_url(scheme, hostname, port,
                                                     app_path, force_ssl)
+
+    admin_channel = strip_string(settings.get('sprezz.admin.channel',
+                                              'admin'))
+    admin_name = strip_string(settings.get('sprezz.admin.name',
+                                           'Administrator'))
+    admin_email = strip_string(settings.get('sprezz.admin.email',
+                                            '@'.join(['webmaster', hostname])))
+
+    settings['sprezz.admin.channel'] = admin_channel
+    settings['sprezz.admin.name'] = admin_name
+    settings['sprezz.admin.email'] = admin_email
 
 
 def include(config):

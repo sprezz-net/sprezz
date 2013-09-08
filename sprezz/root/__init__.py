@@ -13,12 +13,16 @@ log = logging.getLogger(__name__)
 class Root(Folder):
     def after_create(self, inst, registry):
         log.info('Registering Root object')
-        zot = registry.content.create('Zot')
-        self.add_service('zot', zot, registry=registry)
-        well_known = registry.content.create('WellKnown')
-        self.add_service('.well-known', well_known, registry=registry)
+        zot_service = registry.content.create('Zot')
+        self.add_service('zot', zot_service, registry=registry)
+        well_known_service = registry.content.create('WellKnown')
+        self.add_service('.well-known', well_known_service, registry=registry)
+
         log.info('Adding default admin channel')
-        zot.add_channel('admin', 'Administrator')
+        settings = registry.settings
+        zot_service.add_channel(settings['sprezz.admin.channel'],
+                                settings['sprezz.admin.name'])
+
         log.info('Root object created')
 
     def get_app_url(self, *arg, **kw):
