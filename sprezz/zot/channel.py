@@ -55,8 +55,8 @@ class ZotLocalHub(Folder):
         try:
             return self._v_address
         except AttributeError:
-            xchannel = find_service(self, 'zot', 'xchannel')
-            address = xchannel[self.channel_hash].address
+            xchannel_service = find_service(self, 'zot', 'xchannel')
+            address = xchannel_service[self.channel_hash].address
             self._v_address = address
             return address
 
@@ -77,10 +77,10 @@ class ZotLocalHub(Folder):
         try:
             return self._v_url_signature
         except AttributeError:
-            channel = find_service(self, 'zot', 'channel')
-            xchannel = find_service(self, 'zot', 'xchannel')
-            nickname = xchannel[self.channel_hash].nickname
-            url_signature = channel[nickname].sign_hub_url(self.url)
+            channel_service = find_service(self, 'zot', 'channel')
+            xchannel_service = find_service(self, 'zot', 'xchannel')
+            nickname = xchannel_service[self.channel_hash].nickname
+            url_signature = channel_service[nickname].sign_hub_url(self.url)
             self._v_url_signature = url_signature
             return url_signature
 
@@ -90,8 +90,8 @@ class ZotLocalHub(Folder):
             return self._v_callback
         except AttributeError:
             root = find_root(self)
-            endpoint = find_service(self, 'zot', 'post')
-            url = '{0}{1}'.format(root.app_url, resource_path(endpoint))
+            endpoint_service = find_service(self, 'zot', 'post')
+            url = '{0}{1}'.format(root.app_url, resource_path(endpoint_service))
             self._v_callback = url
             return url
 
@@ -171,8 +171,8 @@ class ZotLocalXChannel(Folder):
             return self._v_connections_url
         except AttributeError:
             root = find_root(self)
-            poco = find_service(self, 'zot', 'poco')
-            url = '{0}{1}'.format(root.app_url, resource_path(poco,
+            poco_service = find_service(self, 'zot', 'poco')
+            url = '{0}{1}'.format(root.app_url, resource_path(poco_service,
                                                               self.nickname))
             self._v_connections_url = url
             return url
