@@ -105,9 +105,22 @@ class ZotInfoProtocol(object):
 
         # TODO permissions and hub locations
 
+        hub_service = find_service(self.context, 'zot', 'hub')
+        hub = hub_service[zhash]
+        locations = []
+        locations.append({
+                'host': hub.host,
+                'address' : hub.address,
+                'primary' : True,
+                'url' : hub.url,
+                'url_sig' : hub.url_signature,
+                'callback' : hub.callback,
+                'sitekey': hub.key.export_public_key(),
+                })
+        result['locations'] = locations
+
         result['success'] = True
         log.debug('result = %s' % pprint.pformat(result))
-
         return result
 
     @view_config(context=ZotChannelInfo,

@@ -51,6 +51,18 @@ class ZotLocalHub(Folder):
         self.key = key
 
     @property
+    def host(self):
+        try:
+            return self._v_host
+        except AttributeError:
+            root = find_root(self)
+            host = root.hostname
+            if root.port != 80 and root.port != 443:
+                host = '{0}:{1:d}'.format(host, root.port)
+            self._v_host = host
+            return host
+
+    @property
     def address(self):
         try:
             return self._v_address
@@ -66,9 +78,7 @@ class ZotLocalHub(Folder):
             return self._v_url
         except AttributeError:
             root = find_root(self)
-            url = root.hostname
-            if root.port != 80 and root.port != 443:
-                url = '{0}:{1:d}'.format(url, root.port)
+            url = root.app_url
             self._v_url = url
             return url
 
@@ -100,12 +110,13 @@ class ZotLocalHub(Folder):
 @implementer(IZotHub)
 class ZotRemoteHub(Folder):
     def __init__(self, channel_hash, guid, signature, key,
-                 address, url, url_signature, callback):
+                 host, address, url, url_signature, callback):
         super().__init__()
         self.channel_hash = channel_hash
         self.guid = guid
         self.signature = signature
         self.key = key
+        self.host = host
         self.address = address
         self.url = url
         self.url_signature = url_signature

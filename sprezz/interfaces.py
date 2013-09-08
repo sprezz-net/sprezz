@@ -118,6 +118,7 @@ class IZotHub(Interface):
     signature = Attribute('Signature of guid')
     key = Attribute('Public private keypair')
 
+    host = Attribute('Host of hub')
     address = Attribute('Channel address')
     url = Attribute('Hub URL')
     url_signature = Attribute('Signature of hub URL')
