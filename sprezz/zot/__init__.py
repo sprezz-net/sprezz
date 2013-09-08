@@ -22,21 +22,44 @@ class Zot(Folder):
         self._private_site_key = PersistentRSAKey()
         self._private_site_key.generate_keypair()
         self._public_site_key = self._private_site_key.get_public_key()
+
         log.info('Registering Zot services')
-        hub = registry.content.create('ZotHubs')
-        channel = registry.content.create('ZotChannels')
-        xchannel = registry.content.create('ZotXChannels')
-        endpoint = registry.content.create('ZotEndpoint')
-        poco = registry.content.create('ZotPoco')
-        self.add('hub', hub, registry=registry)
-        self.add('channel', channel, registry=registry)
-        self.add('xchannel', xchannel, registry=registry)
-        self.add('post', endpoint, registry=registry)
-        self.add('poco', poco, registry=registry)
+        site_service = registry.content.create('ZotSites')
+        hub_service = registry.content.create('ZotHubs')
+        channel_service = registry.content.create('ZotChannels')
+        xchannel_service = registry.content.create('ZotXChannels')
+        endpoint_service = registry.content.create('ZotEndpoint')
+        poco_service = registry.content.create('ZotPoco')
+
+        self.add('site', site_service, registry=registry)
+        self.add('hub', hub_service, registry=registry)
+        self.add('channel', channel_service, registry=registry)
+        self.add('xchannel', xchannel_service, registry=registry)
+        self.add('post', endpoint_service, registry=registry)
+        self.add('poco', poco_service, registry=registry)
 
     @property
     def public_site_key(self):
         return self._public_site_key
+
+    @property
+    def site_url(self):
+        try:
+            return self._v_site_url
+        except AttributeError:
+            root = find_root(self)
+            self._v_site_url = root.app_url
+            return root.app_url
+
+    @property
+    def site_signature(self):
+        try:
+            return self._v_site_signature
+        except AttributeError:
+            root = find_root(self)
+            signature = base64_url_encode(self._private_site_key.sign_message(self.site_url))
+            self._v_site_signature = signature
+            return signature
 
     def add_channel(self, nickname, name, *arg, **kw):
         registry = kw.pop('registry', None)
@@ -62,7 +85,7 @@ class Zot(Folder):
                 flags=None,
                 *arg, **kw)
         self['xchannel'].add(channel_hash, xchannel)
-        
+
         channel = registry.content.create('ZotLocalChannel',
                 nickname=nickname,
                 name=name, # TODO move to graph?

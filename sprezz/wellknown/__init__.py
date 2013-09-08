@@ -61,8 +61,9 @@ class ZotInfoProtocol(object):
             result['message'] = 'Invalid target signature.'
             return result
 
-        channel_service = find_service(self.context, 'zot', 'channel')
-        xchannel_service = find_service(self.context, 'zot', 'xchannel')
+        zot_service = find_service(self.context, 'zot')
+        channel_service = zot_service['channel']
+        xchannel_service = zot_service['xchannel']
 
         if zaddress is not None:
             if zaddress in channel_service:
@@ -104,7 +105,6 @@ class ZotInfoProtocol(object):
         result['searchable'] = False
 
         # TODO permissions and hub locations
-
         hub_service = find_service(self.context, 'zot', 'hub')
         hub = hub_service[zhash]
         locations = []
@@ -118,6 +118,19 @@ class ZotInfoProtocol(object):
                 'sitekey': hub.key.export_public_key(),
                 })
         result['locations'] = locations
+
+        # TODO Site mode and policies
+        site = {
+                'url' : zot_service.site_url,
+                'url_sig' : zot_service.site_signature,
+                'directory_mode' : 0x0100,
+                'directory_url' : '',
+                'register_policy' : 0,
+                'access_policy' : 0,
+                'version' : 'Sprezz Matrix 0.1',
+                'admin' : self.request.registry.settings['sprezz.admin.email'],
+                }
+        result['site'] = site
 
         result['success'] = True
         log.debug('result = %s' % pprint.pformat(result))
