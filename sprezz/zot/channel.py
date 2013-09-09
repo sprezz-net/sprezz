@@ -230,5 +230,5 @@ class ChannelView(object):
                  request_method='GET',
                  renderer='json')
     def list_channels(self):
-        return { 'channel': [c.__json__(self.request) for c in
-                             self.context.values()] }
+        return { 'channels': [c.__json__(self.request) for c in
+                              self.context.values()] }
