@@ -135,6 +135,11 @@ class ZotLocalChannel(Folder):
         self.signature = signature
         self.key = key
 
+    def __json__(self, request):
+        return { 'id' : self.channel_hash,
+                 'nickname' : self.nickname,
+                 'name' : self.name }
+
     def sign_hub_url(self, url):
         return base64_url_encode(self.key.sign_message(url))
 
@@ -222,12 +227,12 @@ class ChannelView(object):
         nickname = self.request.params['nickname'].strip().lower()
         name = self.request.params['name'].strip()
         zot_service = find_service(self.context, 'zot')
-        zot_service.add_channel(nickname, name)
-        return { 'nickname': nickname, 'name': name }
+        channel = zot_service.add_channel(nickname, name)
+        return channel.__json__(self.request)
 
     @view_config(context=ZotChannels,
                  request_method='GET',
                  renderer='json')
     def list_channels(self):
-        l = list(self.context.keys())
-        return json.dumps(l)
+        return { 'channel': [c.__json__(self.request) for c in
+                             self.context.values()] }

@@ -114,6 +114,7 @@ class Zot(Folder):
         log.debug('hub url = %s' % hub.url)
         log.debug('hub url sig = %s' % hub.url_signature)
         log.debug('callback = %s' % hub.callback)
+        return channel
 
     def _create_channel_guid(self, nickname, root=None):
         if root is None:
