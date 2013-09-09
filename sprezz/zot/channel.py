@@ -56,9 +56,7 @@ class ZotLocalHub(Folder):
             return self._v_host
         except AttributeError:
             root = find_root(self)
-            host = root.hostname
-            if root.port != 80 and root.port != 443:
-                host = '{0}:{1:d}'.format(host, root.port)
+            host = root.netloc
             self._v_host = host
             return host
 
@@ -165,9 +163,7 @@ class ZotLocalXChannel(Folder):
             return self._v_address
         except AttributeError:
             root = find_root(self)
-            address = '@'.join([self.nickname, root.hostname])
-            if root.port != 80 and root.port != 443:
-                address = '{0}:{1:d}'.format(address, root.port)
+            address = '@'.join([self.nickname, root.netloc])
             self._v_address = address
             return address
 

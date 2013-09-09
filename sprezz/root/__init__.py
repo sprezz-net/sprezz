@@ -45,7 +45,15 @@ class Root(Folder):
             registry = get_current_registry()
         settings = registry.settings
         return settings['sprezz.port']
-    
+
     app_url = property(get_app_url)
     hostname = property(get_host)
     port = property(get_port)
+
+    @property
+    def netloc(self):
+        netloc = self.hostname
+        port = self.port
+        if port not in [80, 443]:
+            netloc = '{0}:{1:d}'.format(netloc, port)
+        return netloc
