@@ -43,7 +43,6 @@ class ZotInfoProtocol(object):
         self.graph = request.graph
 
     @view_config(context=ZotInfo,
-                 request_method='POST',
                  renderer='json')
     def zot_info(self):
         result = {'success': False}
@@ -53,13 +52,15 @@ class ZotInfoProtocol(object):
         ztarget = self.request.params.get('target', '')
         ztarget_sig = self.request.params.get('target_sig', None)
         zkey = self.request.params.get('key', None)
-        if (zkey is None) or (ztarget_sig is None):
-            result['message'] = 'No key or target signature supplied.'
-            return result
-        key = PersistentRSAKey(extern_public_key=zkey)
-        if not key.verify_message(ztarget, base64_url_decode(ztarget_sig)):
-            result['message'] = 'Invalid target signature.'
-            return result
+
+        if ztarget is not '':
+            if (zkey is None) or (ztarget_sig is None):
+                result['message'] = 'No key or target signature supplied.'
+                return result
+            key = PersistentRSAKey(extern_public_key=zkey)
+            if not key.verify_message(ztarget, base64_url_decode(ztarget_sig)):
+                result['message'] = 'Invalid target signature.'
+                return result
 
         zot_service = find_service(self.context, 'zot')
         channel_service = zot_service['channel']
