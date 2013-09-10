@@ -1,10 +1,12 @@
 import logging
 import random
+import requests
 import sys
 import whirlpool
 
 from pyramid.threadlocal import get_current_registry
 from pyramid.traversal import find_root, resource_path
+from urllib.parse import urlparse, urlunparse
 
 from ..content import service
 from ..crypto import PersistentRSAKey
@@ -136,3 +138,72 @@ class Zot(Folder):
         message = '{0}{1}'.format(guid, signature).encode('ascii')
         wp = whirlpool.new(message)
         return base64_url_encode(wp.digest())
+
+    def zot_finger(self, url, channel_hash=None):
+        result = {}
+        log.debug('zot_finger: url = %s' % url)
+        if '@' in url:
+            parts = url.split(sep='@')
+            nickname = parts[0]
+            netloc = parts[1]
+        else:
+            root = find_root(self)
+            nickname = url
+            netloc = root.netloc
+
+        xchannel_address = '@'.join([nickname, netloc])
+        log.debug('zot_finger: xchannel_address = %s' % xchannel_address)
+
+        if (not nickname) or (not netloc):
+            log.error('zot_finger: need to supply a valid address URL')
+            return result
+
+        hub_service = self['hub']
+        xchannel_service = self['xchannel']
+
+        scheme = 'https'
+        well_known = '/.well-known/zot-info'
+        query = ''
+        payload = None
+        request_method = requests.post
+
+        for xchannel in xchannel_service.values():
+            if xchannel.address == xchannel_address:
+                hub = hub_service[xchannel.channel_hash]
+                url = urlparse(hub.url)
+                scheme = url.scheme
+                netloc = url.netloc
+                log.debug('zot_finger: known hub scheme=%s, netloc=%s' % (scheme, netloc))
+                break
+
+        if (channel_hash is not None) and (channel_hash in xchannel_service):
+            my_channel = xchannel_service[channel_hash]
+            payload = {
+                    'address' : nickname,
+                    'target' : my_channel.guid,
+                    'target_sig' : my_channel.signature,
+                    'key' : my_channel.key.export_public_key(),
+                    }
+            log.debug('zot_finger: payload = %s' % payload)
+        else:
+            request_method = requests.get
+            query = 'address={}'.format(nickname)
+
+        url = urlunparse((scheme, netloc, well_known, '', query, '',) )
+        log.debug('zot_finger: url = %s' % url)
+
+        response = request_method(url, data=payload, verify=True,
+                                  allow_redirects=True, timeout=1)
+        if response.status_code == 200:
+            result = response.json()
+        elif scheme != 'http':
+            scheme = 'http'
+            url = urlunparse((scheme, netloc, well_known, '', query, '',) )
+            log.debug('zot_finger: falling back to http at url %s' % url)
+            reponse = request_method(url, data=payload, verify=True,
+                                     allow_redirects=True, timeout=1)
+            if response.status_code == 200:
+                result = reponse.json()
+
+        log.debug('zot_finger: result =  %s' % result)
+        return result

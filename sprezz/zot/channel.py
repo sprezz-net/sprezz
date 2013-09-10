@@ -232,3 +232,13 @@ class ChannelView(object):
     def list_channels(self):
         return { 'channels': [c.__json__(self.request) for c in
                               self.context.values()] }
+
+    @view_config(context=ZotLocalChannel,
+                 request_method='POST',
+                 name='connection',
+                 renderer='json')
+    def add_connection(self):
+        url = self.request.params['url'].strip()
+        zot_service = find_service(self.context, 'zot')
+        result = zot_service.zot_finger(url, self.context.channel_hash)
+        return result

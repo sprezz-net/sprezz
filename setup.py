@@ -16,7 +16,7 @@ requires = [
     'ZODB>=4.0.0b3',
     'rdflib==4.1-dev',
     'rdflib_zodb',
-    'urllib3',
+    'requests>=1.2.3',
     'whirlpool>0.3',
     'pycrypto>=2.6',
     'zope.copy',
