@@ -174,7 +174,7 @@ class Zot(Folder):
                 url = urlparse(hub.url)
                 scheme = url.scheme
                 netloc = url.netloc
-                log.debug('zot_finger: known hub scheme=%s, netloc=%s' % (scheme, netloc))
+                log.debug('zot_finger: known hub using scheme=%s, netloc=%s' % (scheme, netloc))
                 break
 
         if (channel_hash is not None) and (channel_hash in xchannel_service):
@@ -190,32 +190,33 @@ class Zot(Folder):
             request_method = requests.get
             query = 'address={}'.format(nickname)
 
-        url = urlunparse((scheme, netloc, well_known, '', query, '',) )
+        url = urlunparse((scheme, netloc, well_known, '', query, '',))
         log.debug('zot_finger: url = %s' % url)
-
         try:
             response = request_method(url, data=payload, verify=True,
                                       allow_redirects=True, timeout=1)
         except requests.exceptions.RequestException as e:
             result['message'] = str(e)
-            log.debug('zot_finger: error = %s' % e)
+            log.debug('zot_finger: error = %s' % str(e))
+
+            if scheme != 'http':
+                scheme = 'http'
+                url = urlunparse((scheme, netloc, well_known, '', query, '',))
+                log.debug('zot_finger: falling back to http at url %s' % url)
+                try:
+                    response = request_method(url, data=payload, verify=True,
+                                              allow_redirects=True, timeout=1)
+                except requests.exceptions.RequestException as f:
+                    result['message'] = str(f)
+                    log.debug('zot_finger: error = %s' % f)
+                else:
+                    if response.status_code == 200:
+                        result = response.json()
+                        result['success'] = True
         else:
             if response.status_code == 200:
                 result = response.json()
-
-        if result['success'] is False and scheme != 'http':
-            scheme = 'http'
-            url = urlunparse((scheme, netloc, well_known, '', query, '',))
-            log.debug('zot_finger: falling back to http at url %s' % url)
-            try:
-                response = request_method(url, data=payload, verify=True,
-                                         allow_redirects=True, timeout=1)
-            except requests.exceptions.RequestException as e:
-                result['message'] = str(e)
-                log.debug('zot_finger: error = %s' % e)
-            else:
-                if response.status_code == 200:
-                    result = response.json()
+                result['success'] = True
 
         log.debug('zot_finger: result =  %s' % result)
         return result
