@@ -140,8 +140,9 @@ class Zot(Folder):
         return base64_url_encode(wp.digest())
 
     def zot_finger(self, url, channel_hash=None):
-        result = {}
+        result = {'success': False}
         log.debug('zot_finger: url = %s' % url)
+
         if '@' in url:
             parts = url.split(sep='@')
             nickname = parts[0]
@@ -192,18 +193,29 @@ class Zot(Folder):
         url = urlunparse((scheme, netloc, well_known, '', query, '',) )
         log.debug('zot_finger: url = %s' % url)
 
-        response = request_method(url, data=payload, verify=True,
-                                  allow_redirects=True, timeout=1)
-        if response.status_code == 200:
-            result = response.json()
-        elif scheme != 'http':
-            scheme = 'http'
-            url = urlunparse((scheme, netloc, well_known, '', query, '',) )
-            log.debug('zot_finger: falling back to http at url %s' % url)
-            reponse = request_method(url, data=payload, verify=True,
-                                     allow_redirects=True, timeout=1)
+        try:
+            response = request_method(url, data=payload, verify=True,
+                                      allow_redirects=True, timeout=1)
+        except requests.exceptions.RequestException as e:
+            result['message'] = str(e)
+            log.debug('zot_finger: error = %s' % e)
+        else:
             if response.status_code == 200:
-                result = reponse.json()
+                result = response.json()
+
+        if result['success'] is False and scheme != 'http':
+            scheme = 'http'
+            url = urlunparse((scheme, netloc, well_known, '', query, '',))
+            log.debug('zot_finger: falling back to http at url %s' % url)
+            try:
+                response = request_method(url, data=payload, verify=True,
+                                         allow_redirects=True, timeout=1)
+            except requests.exceptions.RequestException as e:
+                result['message'] = str(e)
+                log.debug('zot_finger: error = %s' % e)
+            else:
+                if response.status_code == 200:
+                    result = response.json()
 
         log.debug('zot_finger: result =  %s' % result)
         return result
