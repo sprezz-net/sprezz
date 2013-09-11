@@ -210,11 +210,11 @@ class Zot(Folder):
                     result['message'] = str(f)
                     log.debug('zot_finger: error = %s' % f)
                 else:
-                    if response.status_code == 200:
+                    if 200 <= response.status_code <= 299:
                         result = response.json()
                         result['success'] = True
         else:
-            if response.status_code == 200:
+            if 200 <= response.status_code <= 299:
                 result = response.json()
                 result['success'] = True
 
