@@ -194,7 +194,7 @@ class Zot(Folder):
         log.debug('zot_finger: url = %s' % url)
         try:
             response = request_method(url, data=payload, verify=True,
-                                      allow_redirects=True)
+                                      allow_redirects=True, timeout=3)
         except requests.exceptions.RequestException as e:
             log.error('zot_finger: Caught RequestException = %s' % str(e))
             if scheme != 'http':
@@ -203,7 +203,7 @@ class Zot(Folder):
                 log.debug('zot_finger: Falling back to HTTP at URL %s' % url)
                 try:
                     response = request_method(url, data=payload, verify=True,
-                                              allow_redirects=True)
+                                              allow_redirects=True, timeout=3)
                 except requests.exceptions.RequestException as f:
                     log.error('zot_finger: Caught RequestException = %s' % str(f))
                     raise
@@ -231,7 +231,7 @@ class Zot(Folder):
         # success status code
         log.debug('zot_finger: result =  %s' % result)
         if not result['success']:
-            if hasattr(result, 'message'):
+            if 'message' in result:
                 raise ValueError(result['message'])
             else:
                 raise ValueError('No results')
