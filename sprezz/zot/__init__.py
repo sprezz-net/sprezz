@@ -177,7 +177,7 @@ class Zot(Folder):
                           'scheme=%s, netloc=%s' % (scheme, netloc))
                 break
 
-        if (channel_hash is not None) and (channel_hash in xchannel_service):
+        try:
             my_channel = xchannel_service[channel_hash]
             payload = {
                     'address' : nickname,
@@ -186,7 +186,7 @@ class Zot(Folder):
                     'key' : my_channel.key.export_public_key(),
                     }
             log.debug('zot_finger: payload = %s' % payload)
-        else:
+        except (KeyError, TypeError):
             request_method = requests.get
             query = 'address={}'.format(nickname)
 
