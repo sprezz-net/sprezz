@@ -140,8 +140,7 @@ class Zot(Folder):
         return base64_url_encode(wp.digest())
 
     def zot_finger(self, url, channel_hash=None):
-        result = {'success': False}
-        log.debug('zot_finger: url = %s' % url)
+        result = {}
 
         if '@' in url:
             parts = url.split(sep='@')
@@ -152,12 +151,12 @@ class Zot(Folder):
             nickname = url
             netloc = root.netloc
 
+        if (not nickname) or (not netloc):
+            log.error('zot_finger: No valid address in URL %s' % url)
+            raise ValueError('No valid address in URL %s' % url)
+
         xchannel_address = '@'.join([nickname, netloc])
         log.debug('zot_finger: xchannel_address = %s' % xchannel_address)
-
-        if (not nickname) or (not netloc):
-            log.error('zot_finger: need to supply a valid address URL')
-            return result
 
         hub_service = self['hub']
         xchannel_service = self['xchannel']
@@ -174,7 +173,8 @@ class Zot(Folder):
                 url = urlparse(hub.url)
                 scheme = url.scheme
                 netloc = url.netloc
-                log.debug('zot_finger: known hub using scheme=%s, netloc=%s' % (scheme, netloc))
+                log.debug('zot_finger: Found known hub using '
+                          'scheme=%s, netloc=%s' % (scheme, netloc))
                 break
 
         if (channel_hash is not None) and (channel_hash in xchannel_service):
@@ -194,29 +194,45 @@ class Zot(Folder):
         log.debug('zot_finger: url = %s' % url)
         try:
             response = request_method(url, data=payload, verify=True,
-                                      allow_redirects=True, timeout=1)
+                                      allow_redirects=True)
         except requests.exceptions.RequestException as e:
-            result['message'] = str(e)
-            log.debug('zot_finger: error = %s' % str(e))
-
+            log.error('zot_finger: Caught RequestException = %s' % str(e))
             if scheme != 'http':
                 scheme = 'http'
                 url = urlunparse((scheme, netloc, well_known, '', query, '',))
-                log.debug('zot_finger: falling back to http at url %s' % url)
+                log.debug('zot_finger: Falling back to HTTP at URL %s' % url)
                 try:
                     response = request_method(url, data=payload, verify=True,
-                                              allow_redirects=True, timeout=1)
+                                              allow_redirects=True)
                 except requests.exceptions.RequestException as f:
-                    result['message'] = str(f)
-                    log.debug('zot_finger: error = %s' % f)
+                    log.error('zot_finger: Caught RequestException = %s' % str(f))
+                    raise
                 else:
+                    log.debug('zot_finger: Inner request history = %s' % response.history)
+                    log.debug('zot_finger: Response status code = %d' % (
+                            response.status_code))
                     if 200 <= response.status_code <= 299:
                         result = response.json()
-                        result['success'] = True
+                    else:
+                        response.raise_for_status()
+            else:
+                # No need to retry if scheme was already HTTP
+                raise
         else:
+            log.debug('zot_finger: Outer request history = %s' % response.history)
+            log.debug('zot_finger: Response status code = %d' % (
+                    response.status_code))
             if 200 <= response.status_code <= 299:
                 result = response.json()
-                result['success'] = True
+            else:
+                response.raise_for_status()
 
+        # We only reach this point when we received a response with a 2xx
+        # success status code
         log.debug('zot_finger: result =  %s' % result)
+        if not result['success']:
+            if hasattr(result, 'message'):
+                raise ValueError(result['message'])
+            else:
+                raise ValueError('No results')
         return result
