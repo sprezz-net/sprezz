@@ -45,10 +45,25 @@ class ZotInfoProtocol(object):
     @view_config(context=ZotInfo,
                  renderer='json')
     def zot_info(self):
+        """Return .well-known/zot-info queries.
+
+        This function answers zot-info queries and returns them conform Red
+        API.
+
+        The (post or get) request understands the following parameters:
+        `address` is the nickname of the channel. 
+        `guid` and `guid_sig` are the global ID and signature of the channel.
+        `guid_hash` corresponds to the channel hash.
+        `target` is the channel guid of the requestor, along with its
+        `target_sig` signature and public `key`.
+        """
         result = {'success': False}
         log.debug('params = %s' % pprint.pformat(self.request.params))
 
         zaddress = self.request.params.get('address', None)
+        zguid = self.request.params.get('guid', None)
+        zguid_sig = self.request.params.get('guid_sig', None)
+        zhash = self.request.params.get('guid_hash', None)
         ztarget = self.request.params.get('target', '')
         ztarget_sig = self.request.params.get('target_sig', None)
         zkey = self.request.params.get('key', None)
@@ -66,15 +81,36 @@ class ZotInfoProtocol(object):
         channel_service = zot_service['channel']
         xchannel_service = zot_service['xchannel']
 
-        if zaddress is not None:
-            if zaddress in channel_service:
+        xchannel = None
+        try:
+            # First try if zhash exists
+            xchannel = xchannel_service[zhash]
+        except KeyError:
+            result['message'] = 'Item not found.'
+            return result
+        except TypeError:
+            try:
+                # Otherwise try if zaddress is a known channel
                 zhash = channel_service[zaddress].channel_hash
-            else:
+                xchannel = xchannel_service[zhash]
+            except KeyError:
                 result['message'] = 'Item not found.'
                 return result
-        else:
-            result['message'] = 'Invalid request.'
-            return result
+            except TypeError:
+                if (zguid is not None) and (zguid_sig is not None):
+                    # Otherwise loop through channel to check for guid
+                    for xchannel in xchannel_service:
+                        if (xchannel.guid == zguid) and (
+                                xchannel.signature == zguid_sig):
+                            zhash = xchannel.channel_hash
+                            xchannel = xchannel_service[zhash]
+                            break
+                    if xchannel is None:
+                        result['message'] = 'Item not found.'
+                        return result
+                else:
+                    result['message'] = 'Invalid request.'
+                    return result
 
         # TODO Create a profile service which checks permissions
         profile = {
@@ -90,17 +126,17 @@ class ZotInfoProtocol(object):
                 }
         result['profile'] = profile
 
-        result['guid'] = xchannel_service[zhash].guid
-        result['guid_sig'] = xchannel_service[zhash].signature
-        result['key'] = xchannel_service[zhash].key.export_public_key()
-        result['name'] = xchannel_service[zhash].name
+        result['guid'] = xchannel.guid
+        result['guid_sig'] = xchannel.signature
+        result['key'] = xchannel.key.export_public_key()
+        result['name'] = xchannel.name
         result['name_updated'] = '0000-00-00 00:00:00'
-        result['address'] = xchannel_service[zhash].address
+        result['address'] = xchannel.address
         result['photo_mimetype'] = ''
         result['photo'] = ''
         result['photo_updated'] = '0000-00-00 00:00:00'
-        result['url'] = xchannel_service[zhash].url
-        result['connections_url'] = xchannel_service[zhash].connections_url
+        result['url'] = xchannel.url
+        result['connections_url'] = xchannel.connections_url
         result['target'] = ztarget
         result['target_sig'] = ztarget_sig
         result['searchable'] = False
