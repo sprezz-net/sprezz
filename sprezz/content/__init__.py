@@ -4,7 +4,7 @@ import venusian
 from pyramid.compat import is_nonstr_iter
 from pyramid.location import lineage
 
-from ..util import get_dotted_name, get_factory_type
+from ..util.folder import get_dotted_name, get_factory_type
 
 
 class ContentRegistry(object):

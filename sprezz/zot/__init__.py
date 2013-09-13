@@ -9,9 +9,9 @@ from pyramid.traversal import find_root, resource_path
 from urllib.parse import urlparse, urlunparse
 
 from ..content import service
-from ..crypto import PersistentRSAKey
 from ..folder import Folder
-from ..util import base64_url_encode
+from ..util.base64 import base64_url_encode
+from ..util.crypto import PersistentRSAKey
 
 
 log = logging.getLogger(__name__)

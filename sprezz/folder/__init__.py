@@ -17,7 +17,7 @@ from .events import (
         ObjectRemoved
         )
 from ..interfaces import IFolder, marker
-from ..util import find_service, find_services
+from ..util.folder import find_service, find_services
 
 
 @content('Folder')

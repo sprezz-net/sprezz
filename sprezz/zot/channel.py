@@ -9,7 +9,8 @@ from zope.interface import implementer
 from ..content import content
 from ..folder import Folder
 from ..interfaces import IZotHub, IZotChannel, IZotXChannel
-from ..util import find_service, base64_url_encode
+from ..util.base64 import base64_url_encode
+from ..util.folder import find_service
 
 
 log = logging.getLogger(__name__)
