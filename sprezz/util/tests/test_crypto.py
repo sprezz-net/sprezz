@@ -1,7 +1,6 @@
 import unittest
 
-from ..util.base64 import base64_url_encode, base64_url_decode
-from ..util.crypto import PersistentRSAKey
+from ..crypto import PersistentRSAKey
 
 
 class Test_crypto(unittest.TestCase):
