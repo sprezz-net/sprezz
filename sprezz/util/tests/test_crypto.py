@@ -17,3 +17,5 @@ class TestCrypto(unittest.TestCase):
 
         pub2_key = prv_key.get_public_key()
         self.assertTrue(pub2_key.verify_message(message, sig))
+        self.assertFalse(pub2_key.verify_message('hi there!', sig))
+        self.assertIsNone(pub2_key.sign_message(message))
