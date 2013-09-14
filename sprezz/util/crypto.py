@@ -24,10 +24,10 @@ class PersistentRSAKey(Persistent):
     def _import_keys(self):
         if self._private_key is not None:
             self._v_key = RSA.importKey(self._private_key,
-                    passphrase=None)
+                                        passphrase=None)
         elif self._public_key is not None:
             self._v_key = RSA.importKey(self._public_key,
-                    passphrase=None)
+                                        passphrase=None)
         else:
             self._v_key = None
 

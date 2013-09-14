@@ -3,38 +3,32 @@ import unittest
 from ..base64 import base64_url_encode, base64_url_decode
 
 
-data = {
-        'empty'  : b'',
-        'f'      : b'f',
-        'fo'     : b'fo',
-        'foo'    : b'foo',
-        'foob'   : b'foob',
-        'fooba'  : b'fooba',
-        'foobar' : b'foobar',
-        'binary' : b'fo\xaf\xfea',
-        }
+data = {'empty' : b'',
+        'f'     : b'f',
+        'fo'    : b'fo',
+        'foo'   : b'foo',
+        'foob'  : b'foob',
+        'fooba' : b'fooba',
+        'foobar': b'foobar',
+        'binary': b'fo\xaf\xfea'}
 
-result = {
-        'empty'  : '',
-        'f'      : 'Zg==',
-        'fo'     : 'Zm8=',
-        'foo'    : 'Zm9v',
-        'foob'   : 'Zm9vYg==',
-        'fooba'  : 'Zm9vYmE=',
-        'foobar' : 'Zm9vYmFy',
-        'binary' : 'Zm-v_mE=',
-        }
+result = {'empty' : '',
+          'f'     : 'Zg==',
+          'fo'    : 'Zm8=',
+          'foo'   : 'Zm9v',
+          'foob'  : 'Zm9vYg==',
+          'fooba' : 'Zm9vYmE=',
+          'foobar': 'Zm9vYmFy',
+          'binary': 'Zm-v_mE='}
 
-result_np = {
-        'empty'  : '',
-        'f'      : 'Zg',
-        'fo'     : 'Zm8',
-        'foo'    : 'Zm9v',
-        'foob'   : 'Zm9vYg',
-        'fooba'  : 'Zm9vYmE',
-        'foobar' : 'Zm9vYmFy',
-        'binary' : 'Zm-v_mE',
-        }
+result_np = {'empty' : '',
+             'f'     : 'Zg',
+             'fo'    : 'Zm8',
+             'foo'   : 'Zm9v',
+             'foob'  : 'Zm9vYg',
+             'fooba' : 'Zm9vYmE',
+             'foobar': 'Zm9vYmFy',
+             'binary': 'Zm-v_mE'}
 
 
 class Test_base64_url_encode(unittest.TestCase):

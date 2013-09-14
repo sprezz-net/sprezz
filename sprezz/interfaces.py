@@ -67,7 +67,7 @@ class IObjectAddedEvent(IObjectEvent):
     name = Attribute('The name under which the object is added to '
                      'the folder')
 
-    
+
 class IObjectWillBeRemovedEvent(IObjectEvent):
     """An event type sent before an object is removed."""
     object = Attribute('The object being removed')

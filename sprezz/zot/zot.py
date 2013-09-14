@@ -59,7 +59,8 @@ class Zot(Folder):
             return self._v_site_signature
         except AttributeError:
             root = find_root(self)
-            signature = base64_url_encode(self._private_site_key.sign_message(self.site_url))
+            signature = base64_url_encode(
+                self._private_site_key.sign_message(self.site_url))
             self._v_site_signature = signature
             return signature
 
@@ -77,34 +78,34 @@ class Zot(Folder):
         channel_hash = self._create_channel_hash(guid, signature)
 
         xchannel = registry.content.create('ZotLocalXChannel',
-                nickname=nickname,
-                name=name, # TODO move to graph?
-                channel_hash=channel_hash,
-                guid=guid,
-                signature=signature,
-                key=pub_key,
-                photo=None,
-                flags=None,
-                *arg, **kw)
+                                           nickname=nickname,
+                                           name=name,  # TODO move to graph?
+                                           channel_hash=channel_hash,
+                                           guid=guid,
+                                           signature=signature,
+                                           key=pub_key,
+                                           photo=None,
+                                           flags=None,
+                                           *arg, **kw)
         self['xchannel'].add(channel_hash, xchannel)
 
         channel = registry.content.create('ZotLocalChannel',
-                nickname=nickname,
-                name=name, # TODO move to graph?
-                channel_hash=channel_hash,
-                guid=guid, # TODO redundant with xchannel?
-                signature=signature, # TODO redundant with xchannel?
-                key=prv_key,
-                # TODO add various channel flags
-                *arg, **kw)
+                                          nickname=nickname,
+                                          name=name,  # TODO move to graph?
+                                          channel_hash=channel_hash,
+                                          guid=guid,  # TODO redundant with xchannel?
+                                          signature=signature,  # TODO redundant with xchannel?
+                                          key=prv_key,
+                                          # TODO add various channel flags
+                                          *arg, **kw)
         self['channel'].add(nickname, channel)
 
         hub = registry.content.create('ZotLocalHub',
-                channel_hash=channel_hash,
-                guid=guid,
-                signature=signature,
-                key=self.public_site_key,
-                *arg, **kw)
+                                      channel_hash=channel_hash,
+                                      guid=guid,
+                                      signature=signature,
+                                      key=self.public_site_key,
+                                      *arg, **kw)
         self['hub'].add(channel_hash, hub)
 
         log.debug('guid = %s' % guid)
@@ -179,12 +180,10 @@ class Zot(Folder):
 
         try:
             my_channel = xchannel_service[channel_hash]
-            payload = {
-                    'address' : nickname,
-                    'target' : my_channel.guid,
-                    'target_sig' : my_channel.signature,
-                    'key' : my_channel.key.export_public_key(),
-                    }
+            payload = {'address': nickname,
+                       'target': my_channel.guid,
+                       'target_sig': my_channel.signature,
+                       'key': my_channel.key.export_public_key()}
             log.debug('zot_finger: payload = %s' % payload)
         except (KeyError, TypeError):
             request_method = requests.get
@@ -205,12 +204,14 @@ class Zot(Folder):
                     response = request_method(url, data=payload, verify=True,
                                               allow_redirects=True, timeout=3)
                 except requests.exceptions.RequestException as f:
-                    log.error('zot_finger: Caught RequestException = %s' % str(f))
+                    log.error('zot_finger: Caught RequestException = %s' % (
+                        str(f)))
                     raise
                 else:
-                    log.debug('zot_finger: Inner request history = %s' % response.history)
+                    log.debug('zot_finger: Inner request history = %s' % (
+                        response.history))
                     log.debug('zot_finger: Response status code = %d' % (
-                            response.status_code))
+                        response.status_code))
                     if 200 <= response.status_code <= 299:
                         result = response.json()
                     else:
@@ -219,9 +220,10 @@ class Zot(Folder):
                 # No need to retry if scheme was already HTTP
                 raise
         else:
-            log.debug('zot_finger: Outer request history = %s' % response.history)
+            log.debug('zot_finger: Outer request history = %s' % (
+                response.history))
             log.debug('zot_finger: Response status code = %d' % (
-                    response.status_code))
+                response.status_code))
             if 200 <= response.status_code <= 299:
                 result = response.json()
             else:

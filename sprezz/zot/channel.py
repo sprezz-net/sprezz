@@ -100,7 +100,8 @@ class ZotLocalHub(Folder):
         except AttributeError:
             root = find_root(self)
             endpoint_service = find_service(self, 'zot', 'post')
-            url = '{0}{1}'.format(root.app_url, resource_path(endpoint_service))
+            url = '{0}{1}'.format(root.app_url,
+                                  resource_path(endpoint_service))
             self._v_callback = url
             return url
 
@@ -135,9 +136,9 @@ class ZotLocalChannel(Folder):
         self.key = key
 
     def __json__(self, request):
-        return { 'id' : self.channel_hash,
-                 'nickname' : self.nickname,
-                 'name' : self.name }
+        return {'id': self.channel_hash,
+                'nickname': self.nickname,
+                'name': self.name}
 
     def sign_hub_url(self, url):
         return base64_url_encode(self.key.sign_message(url))
@@ -231,8 +232,8 @@ class ChannelView(object):
                  request_method='GET',
                  renderer='json')
     def list_channels(self):
-        return { 'channels': [c.__json__(self.request) for c in
-                              self.context.values()] }
+        return {'channels': [c.__json__(self.request) for c in
+                             self.context.values()]}
 
     @view_config(context=ZotLocalChannel,
                  request_method='POST',
