@@ -5,7 +5,7 @@ from pyramid.config import Configurator
 from pyramid.settings import asbool
 from pyramid_zodbconn import get_connection
 
-from .translogger import TransLogger
+from .util.translogger import TransLogger
 
 
 log = logging.getLogger(__name__)
