@@ -6,23 +6,24 @@ here = os.path.abspath(os.path.dirname(__file__))
 README = open(os.path.join(here, 'README.rst')).read()
 CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 
-requires = [
-    'pyramid>=1.5a1',
-    'pyramid_zodbconn',
-    'transaction',
-    'pyramid_tm',
-    'pyramid_debugtoolbar',
-    'waitress',
-    'ZODB>=4.0.0b3',
-    'rdflib==4.1-dev',
-    'rdflib_zodb',
-    'requests>=1.2.3',
-    'whirlpool>0.3',
-    'pycrypto>=2.6',
-    'zope.copy',
-    'zope.component',
-    'venusian',
-    ]
+requires = ['pyramid>=1.5a1',
+            'pyramid_zodbconn',
+            'transaction',
+            'pyramid_tm',
+            'pyramid_debugtoolbar',
+            'waitress',
+            'ZODB>=4.0.0b3',
+            'rdflib==4.1-dev',
+            'rdflib_zodb',
+            'requests>=1.2.3',
+            'whirlpool>0.3',
+            'pycrypto>=2.6',
+            'zope.copy',
+            'zope.component',
+            'venusian']
+
+tests_require = ['nose',
+                 'coverage']
 
 setup(name='sprezz',
       version='0.0',
@@ -42,7 +43,7 @@ setup(name='sprezz',
       include_package_data=True,
       zip_safe=False,
       install_requires=requires,
-      tests_require=requires,
+      tests_require=tests_require,
       test_suite="sprezz",
       entry_points="""\
       [paste.app_factory]

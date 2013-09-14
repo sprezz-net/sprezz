@@ -31,7 +31,7 @@ result_np = {'empty' : '',
              'binary': 'Zm-v_mE'}
 
 
-class Test_base64_url_encode(unittest.TestCase):
+class TestBase64Encode(unittest.TestCase):
     def test_padding(self):
         for k in data.keys():
             out = base64_url_encode(data[k], False)
@@ -43,7 +43,7 @@ class Test_base64_url_encode(unittest.TestCase):
             self.assertEqual(out, result_np[k])
 
 
-class Test_base64_url_decode(unittest.TestCase):
+class TestBase64Decode(unittest.TestCase):
     def test_padding(self):
         for k in result.keys():
             out = base64_url_decode(result[k])

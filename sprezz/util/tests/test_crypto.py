@@ -3,7 +3,7 @@ import unittest
 from ..crypto import PersistentRSAKey
 
 
-class Test_crypto(unittest.TestCase):
+class TestCrypto(unittest.TestCase):
     def test_sign_verify(self):
         prv_key = PersistentRSAKey()
         prv_key.generate_keypair()
