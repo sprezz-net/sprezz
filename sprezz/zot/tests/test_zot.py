@@ -60,7 +60,8 @@ class TestZot(unittest.TestCase):
         inst._create_channel_signature = Mock(name='create_channel_signature')
         inst._create_channel_hash = Mock(name='create_channel_hash',
                                          return_value='hash')
-        inst._public_site_key = Mock(name='public_site_key')
+        inst._public_site_key = Mock(name='public_site_key',
+                                     return_value='key')
 
         ob_chan = Mock(name='ZotLocalChannel')
         ob_xchan = Mock(name='ZotLocalXChannel')
@@ -81,7 +82,6 @@ class TestZot(unittest.TestCase):
         self.assertEqual(inst._create_channel_guid.call_count, 1)
         self.assertEqual(inst._create_channel_signature.call_count, 1)
         self.assertEqual(inst._create_channel_hash.call_count, 1)
-        self.assertTrue(inst._public_site_key)
 
         # Check that the objects are added to the containers
         self.assertEqual(inst['channel']['admin'], ob_chan)
