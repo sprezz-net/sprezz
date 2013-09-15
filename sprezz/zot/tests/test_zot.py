@@ -128,6 +128,34 @@ class TestZot(unittest.TestCase):
         self.assertEqual(inst['hub']['hash'], ob_hub)
         self.assertEqual(result, ob_chan)
 
+    @patch('random.randint', return_value=100)
+    def test_create_channel_guid(self, rand_mock):
+        inst = self._makeOne()
+        root = testing.DummyResource()
+        root.app_url = 'app_url'
+        inst.__parent__ = root
+        guid = inst._create_channel_guid('admin')
+        # Base64 url encoded Whirlpool hashed 'app_url/admin.100'
+        self.assertEqual(guid, 't7towhe6RbhPjwPSTbQMCadsRUHAkUL86F89AGvIoui'
+                               '3DIOjA7mNUkMwVzLB6L9-D96VbwXwMp6LMnw2TrjAFg')
+
+    def test_create_channel_signature(self):
+        inst = self._makeOne()
+        def sign(value):
+            return bytes('signed %s' % value, 'utf-8')
+        key = Mock()
+        key.sign_message = Mock(side_effect=sign)
+        sig = inst._create_channel_signature('guid', key)
+        # Base64 url encoded 'signed guid'
+        self.assertEqual(sig, 'c2lnbmVkIGd1aWQ')
+
+    def test_create_channel_hash(self):
+        inst = self._makeOne()
+        hashed = inst._create_channel_hash('guid', 'signature')
+        # Base64 url encoded Whirlpool hashed 'guidsignature'
+        self.assertEqual(hashed, 'EtDtUr7cPtjoXQjDq_d68-AIFRNetS-KudlogIffsYy'
+                                 'kH66_LwsOKee3dtoV7KDg1V08s_6K4TVIgo2O5KvNiQ')
+
 
 class DummySingleContentRegistry(object):
     def __init__(self, result):
