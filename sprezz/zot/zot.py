@@ -58,7 +58,6 @@ class Zot(Folder):
         try:
             return self._v_site_signature
         except AttributeError:
-            root = find_root(self)
             signature = base64_url_encode(
                 self._private_site_key.sign_message(self.site_url))
             self._v_site_signature = signature
