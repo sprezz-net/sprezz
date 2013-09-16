@@ -1,6 +1,6 @@
 import unittest
 
-from ..crypto import PersistentRSAKey
+from sprezz.util.crypto import PersistentRSAKey
 
 
 class TestCrypto(unittest.TestCase):

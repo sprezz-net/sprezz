@@ -1,6 +1,6 @@
 import unittest
 
-from ..base64 import base64_url_encode, base64_url_decode
+from sprezz.util.base64 import base64_url_encode, base64_url_decode
 
 
 data = {'empty' : b'',

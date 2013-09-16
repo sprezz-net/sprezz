@@ -23,7 +23,7 @@ class TestZot(unittest.TestCase):
         testing.tearDown()
 
     def _makeOne(self):
-        from ..zot import Zot
+        from sprezz.zot.zot import Zot
         return Zot()
 
     @patch('sprezz.zot.zot.PersistentRSAKey', spec=True)
