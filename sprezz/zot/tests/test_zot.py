@@ -56,7 +56,7 @@ class TestZot(unittest.TestCase):
         """Test read-only property key"""
         inst = self._makeOne()
         inst._public_site_key = 'key'
-        self.assertTrue(inst.public_site_key, 'key')
+        self.assertEquals(inst.public_site_key, 'key')
         with self.assertRaises(AttributeError):
             inst.public_site_key = 'public'
 
