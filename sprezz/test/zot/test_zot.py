@@ -8,6 +8,12 @@ from requests.exceptions import HTTPError
 from requests.models import Response
 from unittest.mock import patch, call, Mock
 
+from ..testing import (
+        create_single_content_registry,
+        create_dict_content_registry,
+        DummyFolder
+        )
+
 
 log = logging.getLogger()
 log.level = logging.DEBUG
@@ -35,9 +41,7 @@ class TestZot(unittest.TestCase):
             Z[name] = val
         inst.add = add
         ob = testing.DummyResource()
-        content = DummySingleContentRegistry(ob)
-        registry = testing.DummyResource()
-        registry.content = content
+        registry = create_single_content_registry(ob)
         inst.after_create(None, registry)
 
         # Test generation of site keys
@@ -107,11 +111,9 @@ class TestZot(unittest.TestCase):
         ob_chan = Mock(name='ZotLocalChannel')
         ob_xchan = Mock(name='ZotLocalXChannel')
         ob_hub = Mock(name='ZotLocalHub')
-        content = DummyDictContentRegistry({'ZotLocalChannel': ob_chan,
-                                            'ZotLocalXChannel': ob_xchan,
-                                            'ZotLocalHub': ob_hub})
-        registry = testing.DummyResource()
-        registry.content = content
+        registry = create_dict_content_registry({'ZotLocalChannel': ob_chan,
+                                                 'ZotLocalXChannel': ob_xchan,
+                                                 'ZotLocalHub': ob_hub})
         result = inst.add_channel('admin', 'Adminstrator',
                                   registry=registry)
 
@@ -336,35 +338,3 @@ class TestZot(unittest.TestCase):
                           timeout=3, verify=True, allow_redirects=True)]
             req_post_mock.assert_has_calls(calls)
             self.assertEqual(req_post_mock.call_count, 1)
-
-
-class DummySingleContentRegistry(object):
-    def __init__(self, result):
-        self.result = result
-
-    def create(self, content_type, *arg, **kw):
-        return self.result
-
-
-class DummyDictContentRegistry(object):
-    def __init__(self, result):
-        self.result = result
-
-    def create(self, content_type, *arg, **kw):
-        return self.result[content_type]
-
-
-class DummyFolder(testing.DummyResource):
-    def __init__(self):
-        super().__init__()
-        self.data = {}
-
-    def add(self, name, val, registry=None):
-        self.data[name] = val
-        return name
-
-    def values(self):
-        return self.data.values()
-
-    def __getitem__(self, name):
-        return self.data[name]
