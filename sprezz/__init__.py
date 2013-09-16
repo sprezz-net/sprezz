@@ -121,7 +121,6 @@ def scan(config):
 def includeme(config):
     config.include(include)
     config.include(scan)
-
     settings = config.registry.settings
     initialize_sprezz(settings)
 
@@ -132,7 +131,7 @@ def main(global_config, **settings):
     config = Configurator(root_factory=root_factory, settings=settings)
     config.include('sprezz')
     config.add_static_view('static', 'static', cache_max_age=3600)
-    config.scan()
+    includeme(config)
 
     app = config.make_wsgi_app()
     app = TransLogger(app, setup_console_handler=False)
