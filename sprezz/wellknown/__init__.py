@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 @service('WellKnown', service_name='well-known', after_create='after_create')
 class WellKnown(Folder):
     def after_create(self, inst, registry):
-        zot_info = ZotInfo()
+        zot_info = registry.content.create('ZotInfo')
         self.add('zot-info', zot_info)
 
 
