@@ -140,7 +140,7 @@ class Zot(Folder):
         return base64_url_encode(wp.digest())
 
     def zot_finger(self, url, channel_hash=None):
-        result = {}
+        result = {'success': False}
 
         if '@' in url:
             parts = url.split(sep='@')
@@ -193,6 +193,10 @@ class Zot(Folder):
         try:
             response = request_method(url, data=payload, verify=True,
                                       allow_redirects=True, timeout=3)
+            log.debug('zot_finger: Response status code = %d' % (
+                      response.status_code))
+            if 400 <= response.status_code < 600:
+                response.raise_for_status()
         except requests.exceptions.RequestException as e:
             log.error('zot_finger: Caught RequestException = %s' % str(e))
             if scheme != 'http':
@@ -202,31 +206,27 @@ class Zot(Folder):
                 try:
                     response = request_method(url, data=payload, verify=True,
                                               allow_redirects=True, timeout=3)
+                    log.debug('zot_finger: Response status code = %d' % (
+                              response.status_code))
+                    if 400 <= response.status_code < 600:
+                        response.raise_for_status()
                 except requests.exceptions.RequestException as f:
                     log.error('zot_finger: Caught RequestException = %s' % (
-                        str(f)))
+                              str(f)))
                     raise
                 else:
                     log.debug('zot_finger: Inner request history = %s' % (
-                        response.history))
-                    log.debug('zot_finger: Response status code = %d' % (
-                        response.status_code))
-                    if 200 <= response.status_code <= 299:
+                              response.history))
+                    if 200 <= response.status_code < 300:
                         result = response.json()
-                    else:
-                        response.raise_for_status()
             else:
                 # No need to retry if scheme was already HTTP
                 raise
         else:
             log.debug('zot_finger: Outer request history = %s' % (
-                response.history))
-            log.debug('zot_finger: Response status code = %d' % (
-                response.status_code))
-            if 200 <= response.status_code <= 299:
+                      response.history))
+            if 200 <= response.status_code < 300:
                 result = response.json()
-            else:
-                response.raise_for_status()
 
         # We only reach this point when we received a response with a 2xx
         # success status code
