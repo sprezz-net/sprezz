@@ -5,3 +5,4 @@ Data\.fs*
 *\.swp
 *\.pid
 *\.zdsock
+\.coverage
