@@ -143,7 +143,7 @@ class ZotInfoProtocol(object):
         result['searchable'] = False
 
         # TODO permissions and hub locations
-        hub_service = find_service(self.context, 'zot', 'hub')
+        hub_service = zot_service['hub']
         hub = hub_service[zhash]
         locations = []
         locations.append({
