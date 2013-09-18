@@ -73,7 +73,7 @@ class Folder(Persistent):
         return self._order is not None
 
     def __iter__(self):
-        return iter(self.order)
+        return iter(self.keys())
 
     def values(self):
         if self._order is not None:

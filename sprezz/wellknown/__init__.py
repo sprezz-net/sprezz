@@ -82,36 +82,33 @@ class ZotInfoProtocol(object):
         channel_service = zot_service['channel']
         xchannel_service = zot_service['xchannel']
 
-        xchannel = None
-        try:
-            # First try if zhash exists
-            xchannel = xchannel_service[zhash]
-        except KeyError:
-            result['message'] = 'Item not found.'
-            return result
-        except TypeError:
+        if zhash is not None:
             try:
-                # Otherwise try if zaddress is a known channel
+                xchannel = xchannel_service[zhash]
+            except KeyError:
+                result['message'] = 'Item not found.'
+                return result
+        elif zaddress is not None:
+            try:
                 zhash = channel_service[zaddress].channel_hash
                 xchannel = xchannel_service[zhash]
             except KeyError:
                 result['message'] = 'Item not found.'
                 return result
-            except TypeError:
-                if (zguid is not None) and (zguid_sig is not None):
-                    # Otherwise loop through channel to check for guid
-                    for xchannel in xchannel_service:
-                        if (xchannel.guid == zguid) and (
-                                xchannel.signature == zguid_sig):
-                            zhash = xchannel.channel_hash
-                            xchannel = xchannel_service[zhash]
-                            break
-                    if xchannel is None:
-                        result['message'] = 'Item not found.'
-                        return result
-                else:
-                    result['message'] = 'Invalid request.'
-                    return result
+        elif (zguid is not None) and (zguid_sig is not None):
+            xchannel = None
+            for xchan in xchannel_service:
+                if (xchan.guid == zguid) and (
+                        xchan.signature == zguid_sig):
+                    zhash = xchan.channel_hash
+                    xchannel = xchannel_service[zhash]
+                    break
+            if xchannel is None:
+                result['message'] = 'Item not found.'
+                return result
+        else:
+            result['message'] = 'Invalid request.'
+            return result
 
         # TODO Create a profile service which checks permissions
         profile = {
