@@ -97,7 +97,7 @@ class ZotInfoProtocol(object):
                 return result
         elif (zguid is not None) and (zguid_sig is not None):
             xchannel = None
-            for xchan in xchannel_service:
+            for xchan in xchannel_service.values():
                 if (xchan.guid == zguid) and (
                         xchan.signature == zguid_sig):
                     zhash = xchan.channel_hash

@@ -3,7 +3,7 @@ import unittest
 import sys
 
 from pyramid import testing
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from ..testing import create_single_content_registry, DummyFolder
 
@@ -49,13 +49,79 @@ class TestZotInfoProtocol(unittest.TestCase):
 
     def _makeResourceTree(self, context):
         root = DummyFolder()
+        root.netloc = 'host:port'
+        root.app_url = 'app_url'
         root['context'] = context
         zot = root['zot'] = DummyFolder()
         zot.__is_service__ = True
+        zot.site_url = 'site_url'
+        zot.site_signature = 'site_sig'
         zot['channel'] = DummyFolder()
         zot['xchannel'] = DummyFolder()
         zot['hub'] = DummyFolder()
         return zot
+
+    def _makeChannels(self, zot):
+        from sprezz.zot.channel import (
+            ZotLocalChannel,
+            ZotRemoteXChannel,
+            ZotRemoteHub)
+        key = Mock()
+        key.export_public_key = Mock(return_value='key')
+        site_key = Mock()
+        site_key.export_public_key = Mock(return_value='site_key')
+        channel = ZotLocalChannel(nickname='nickname',
+                                  name='name',
+                                  channel_hash='hash',
+                                  guid='guid',
+                                  signature='guid_sig',
+                                  key=key)
+        xchannel = ZotRemoteXChannel(nickname='nickname',
+                                     name='name',
+                                     channel_hash='hash',
+                                     guid='guid',
+                                     signature='guid_sig',
+                                     key=key,
+                                     address='address',
+                                     url='url',
+                                     connections_url='conn_url',
+                                     photo='photo',
+                                     flags='flags')
+        hub = ZotRemoteHub(channel_hash='hash',
+                           guid='guid',
+                           signature='guid_sig',
+                           key=site_key,
+                           host='host',
+                           address='hub_address',
+                           url='hub_url',
+                           url_signature='url_sig',
+                           callback='callback')
+        zot['channel'].add(channel.nickname, channel)
+        zot['xchannel'].add(xchannel.channel_hash, xchannel)
+        zot['hub'].add(hub.channel_hash, hub)
+
+    def _assertZotInfo(self, result):
+        self.assertEqual(result['guid'], 'guid')
+        self.assertEqual(result['guid_sig'], 'guid_sig')
+        self.assertEqual(result['key'], 'key')
+        self.assertEqual(result['name'], 'name')
+        self.assertEqual(result['address'], 'address')
+        self.assertEqual(result['url'], 'url')
+        self.assertEqual(result['connections_url'], 'conn_url')
+        self.assertEqual(result['target'], 'target')
+        self.assertEqual(result['target_sig'], 'sig')
+        location = result['locations'][0]
+        self.assertEqual(location['host'], 'host')
+        self.assertEqual(location['address'], 'hub_address')
+        self.assertTrue(location['primary'])
+        self.assertEqual(location['url'], 'hub_url')
+        self.assertEqual(location['url_sig'], 'url_sig')
+        self.assertEqual(location['callback'], 'callback')
+        self.assertEqual(location['sitekey'], 'site_key')
+        site = result['site']
+        self.assertEqual(site['url'], 'site_url')
+        self.assertEqual(site['url_sig'], 'site_sig')
+        self.assertEqual(site['admin'], 'email')
 
     def test_zot_info_no_key(self):
         context = testing.DummyResource()
@@ -149,3 +215,61 @@ class TestZotInfoProtocol(unittest.TestCase):
         self.assertFalse(result['success'])
         self.assertEquals(result['message'],
                           'Invalid request.')
+
+    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_zot_info_hash_found(self, rsa_mock):
+        context = testing.DummyResource()
+        zot = self._makeResourceTree(context)
+        self._makeChannels(zot)
+        request = testing.DummyRequest(params={'guid_hash': 'hash',
+                                               'target': 'target',
+                                               'target_sig': 'sig',
+                                               'key': 'key'},
+                                       method='POST')
+        request.graph = None
+        request.registry = Mock()
+        request.registry.settings = {'sprezz.admin.email': 'email'}
+        inst = self._makeOne(context, request)
+        result = inst.zot_info()
+        self.assertTrue(result['success'])
+        self._assertZotInfo(result)
+
+    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_zot_info_address_found(self, rsa_mock):
+        context = testing.DummyResource()
+        zot = self._makeResourceTree(context)
+        self._makeChannels(zot)
+        request = testing.DummyRequest(params={'address': 'nickname',
+                                               'target': 'target',
+                                               'target_sig': 'sig',
+                                               'key': 'key'},
+                                       method='POST')
+        request.graph = None
+        request.registry = Mock()
+        request.registry.settings = {'sprezz.admin.email': 'email'}
+        inst = self._makeOne(context, request)
+        result = inst.zot_info()
+        self.assertTrue(result['success'])
+        self._assertZotInfo(result)
+
+    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_zot_info_guid_found(self, rsa_mock):
+        context = testing.DummyResource()
+        zot = self._makeResourceTree(context)
+        self._makeChannels(zot)
+        request = testing.DummyRequest(params={'guid': 'guid',
+                                               'guid_sig': 'guid_sig',
+                                               'target': 'target',
+                                               'target_sig': 'sig',
+                                               'key': 'key'},
+                                       method='POST')
+        request.graph = None
+        request.registry = Mock()
+        request.registry.settings = {'sprezz.admin.email': 'email'}
+        inst = self._makeOne(context, request)
+        result = inst.zot_info()
+        self.assertTrue(result['success'])
+        self._assertZotInfo(result)
