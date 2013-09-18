@@ -115,6 +115,8 @@ def include(config):
 
 def scan(config):
     config.scan('.folder')
+    config.scan('.root')
+    config.scan('.wellknown')
     config.scan('.zot')
 
 
