@@ -49,8 +49,6 @@ class TestZotInfoProtocol(unittest.TestCase):
 
     def _makeResourceTree(self, context):
         root = DummyFolder()
-        root.netloc = 'host:port'
-        root.app_url = 'app_url'
         root['context'] = context
         zot = root['zot'] = DummyFolder()
         zot.__is_service__ = True
