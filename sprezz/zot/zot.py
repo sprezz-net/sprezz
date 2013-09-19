@@ -10,7 +10,7 @@ from urllib.parse import urlparse, urlunparse
 
 from ..content import service
 from ..folder import Folder
-from ..util.base64 import base64_url_encode
+from ..util.base64 import base64_url_encode, base64_url_decode
 from ..util.crypto import PersistentRSAKey
 
 
@@ -138,6 +138,51 @@ class Zot(Folder):
         message = '{0}{1}'.format(guid, signature).encode('ascii')
         wp = whirlpool.new(message)
         return base64_url_encode(wp.digest())
+
+    def import_xchannel(self, info, *arg, **kw):
+        registry = kw.pop('registry', None)
+        if registry is None:
+            registry = get_current_registry()
+
+        pub_key = PersistentRSAKey(extern_public_key=info['key'])
+        if not pub_key.verify_message(info['guid'],
+                                      base64_url_decode(info['guid_sig'])):
+            raise ValueError('Unable to verify channel signature')
+        channel_hash = self._create_channel_hash(info['guid'],
+                                                 info['guid_sig'])
+        log.debug('import xchan: channel_hash = {}'.format(channel_hash))
+
+        if '/' in info['address']:
+            parts = info['address'].split(sep='/')
+            info['address'] = parts[0]
+
+        if '@' in info['address']:
+            parts = info['address'].split(sep='@')
+            nickname = parts[0]
+        else:
+            nickname = info['address']
+
+        xchannel_service = self['xchannel']
+        try:
+            xchannel = xchannel_service[channel_hash]
+        except KeyError:
+            xchannel = registry.content.create(
+                'ZotRemoteXChannel',
+                nickname=nickname,
+                name=info['name'],
+                channel_hash=channel_hash,
+                guid=info['guid'],
+                signature=info['guid_sig'],
+                key=pub_key,
+                address=info['address'],
+                url=info['url'],
+                connections_url=info['connections_url'],
+                photo=None,
+                flags=None,
+                *arg, **kw)
+            xchannel_service.add(channel_hash, xchannel)
+        else:
+            xchannel.update(info)
 
     def zot_finger(self, url, channel_hash=None):
         result = {'success': False}

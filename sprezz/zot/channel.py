@@ -191,6 +191,9 @@ class ZotLocalXChannel(Folder):
             self._v_connections_url = url
             return url
 
+    def update(self, data):
+        pass
+
 
 @content('ZotRemoteXChannel')
 @implementer(IZotXChannel)
@@ -209,6 +212,17 @@ class ZotRemoteXChannel(Folder):
         self.connections_url = connections_url
         self.photo = photo
         self.flags = flags
+
+    def update(self, data):
+        keys = ['nickname', 'name', 'address',
+                'url', 'connections_url', 'flags']
+        for x in keys:
+            if (x in data) and (getattr(self, x) != data[x]):
+                log.debug('xchannel.update() attr={0}, '
+                          'old={1}, new={2}'.format(x,
+                                                    getattr(self, x),
+                                                    data[x]))
+                setattr(self, x, data[x])
 
 
 class ChannelView(object):
@@ -240,7 +254,19 @@ class ChannelView(object):
                  name='connection',
                  renderer='json')
     def add_connection(self):
+        result = {'success': False}
         url = self.request.params['url'].strip()
         zot_service = find_service(self.context, 'zot')
-        result = zot_service.zot_finger(url, self.context.channel_hash)
+        #try:
+        info = zot_service.zot_finger(url, self.context.channel_hash)
+        #except Exception as e:
+            # TODO Check for the various exception classes like HTTP
+            # exeception, etc.
+            #result['message'] = str(e)
+            #return result
+
+        zot_service.import_xchannel(info)
+
+        result['success'] = True
+        result['info'] = info
         return result

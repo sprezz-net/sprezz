@@ -110,6 +110,9 @@ class IZotXChannel(Interface):
     url = Attribute('Channel URL')
     connections_url = Attribute('Connections URL')
 
+    def update(self, data):
+        """Update channel with data"""
+
 
 class IZotHub(Interface):
     """Interface for Zot hubs."""
