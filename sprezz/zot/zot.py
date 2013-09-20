@@ -214,7 +214,13 @@ class Zot(Folder):
 
         for xchannel in xchannel_service.values():
             if xchannel.address == xchannel_address:
-                hub = hub_service[xchannel.channel_hash]
+                try:
+                    # Every xchannel should have a hub, but just in
+                    # case something went wrong, no need to error out.
+                    # We're just checking if one exists.
+                    hub = hub_service[xchannel.channel_hash]
+                except KeyError:
+                    break
                 url = urlparse(hub.url)
                 scheme = url.scheme
                 netloc = url.netloc

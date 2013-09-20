@@ -218,6 +218,22 @@ class TestZot(unittest.TestCase):
         req_get_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
 
+    @patch('sprezz.zot.zot.requests.get')
+    def test_local_get_zot_finger_no_hub(self, req_get_mock):
+        """Test succesful finger using HTTPS GET without a known hub"""
+        inst = self._prepare_zot_finger()
+        resp = Response()
+        resp.status_code = 200
+        resp.json = Mock(return_value={'success': True})
+        req_get_mock.return_value=resp
+        result = inst.zot_finger('me@netloc:8080')
+        calls = [call('https://hubloc:8080/.well-known/zot-info?'
+                      'address=me',
+                      data=None,
+                      timeout=3, verify=True, allow_redirects=True)]
+        req_get_mock.assert_has_calls(calls)
+        self.assertTrue(result['success'])
+
     @patch('sprezz.zot.zot.requests.post')
     def test_local_post_zot_finger(self, req_post_mock):
         """Test succesful remote finger from own channel"""
