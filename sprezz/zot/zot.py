@@ -148,6 +148,7 @@ class Zot(Folder):
         if not pub_key.verify_message(info['guid'],
                                       base64_url_decode(info['guid_sig'])):
             raise ValueError('Unable to verify channel signature')
+
         channel_hash = self._create_channel_hash(info['guid'],
                                                  info['guid_sig'])
         log.debug('import xchan: channel_hash = {}'.format(channel_hash))
@@ -183,6 +184,62 @@ class Zot(Folder):
             xchannel_service.add(channel_hash, xchannel)
         else:
             xchannel.update(info)
+
+        for location in info.get('locations', []):
+            try:
+                self.import_hub(info, location, channel_hash=channel_hash,
+                                registry=registry, pub_key=pub_key)
+            except ValueError:
+                continue
+
+    def import_hub(self, info, location, *arg, **kw):
+        registry = kw.pop('registry', None)
+        if registry is None:
+            registry = get_current_registry()
+
+        channel_hash = kw.pop('channel_hash', None)
+        if channel_hash is None:
+            channel_hash = self._create_channel_hash(info['guid'],
+                                                     info['guid_sig'])
+
+        pub_key = kw.pop('pub_key', None)
+        if pub_key is None:
+            pub_key = PersistentRSAKey(extern_public_key=info['key'])
+        if not pub_key.verify_message(location['url'],
+                                      base64_url_decode(location['url_sig'])):
+            raise ValueError('Unable to verify site signature')
+
+        # TODO Allow channel clones
+        if not location['primary']:
+            return
+
+        try:
+            site_key = PersistentRSAKey(extern_public_key=location['sitekey'])
+        except KeyError:
+            raise ValueError('Empty hub site key')
+
+        if '/' in location['address']:
+            parts = info['address'].split(sep='/')
+            location['address'] = parts[0]
+
+        hub_service = self['hub']
+        try:
+            hub = hub_service[channel_hash]
+        except KeyError:
+            hub = registry.content.create(
+                'ZotRemoteHub',
+                channel_hash=channel_hash,
+                guid=info['guid'],
+                signature=info['guid_sig'],
+                key=site_key,
+                host=location['host'],
+                address=location['address'],
+                url=location['url'],
+                url_signature=location['url_sig'],
+                callback=location['callback'],
+                *arg, **kw)
+        else:
+            hub.update(location)
 
     def zot_finger(self, url, channel_hash=None):
         result = {'success': False}

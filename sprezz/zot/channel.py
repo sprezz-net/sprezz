@@ -104,6 +104,9 @@ class ZotLocalHub(Folder):
             self._v_callback = url
             return url
 
+    def update(self, data):
+        pass
+
 
 @content('ZotRemoteHub')
 @implementer(IZotHub)
@@ -120,6 +123,17 @@ class ZotRemoteHub(Folder):
         self.url = url
         self.url_signature = url_signature
         self.callback = callback
+
+    def update(self, data):
+        keys = ['host', 'address',
+                'url', 'url_signature', 'callback']
+        for x in keys:
+            if (x in data) and (getattr(self, x) != data[x]):
+                log.debug('hub.update() attr={0}, '
+                          'old={1}, new={2}'.format(x,
+                                                    getattr(self, x),
+                                                    data[x]))
+                setattr(self, x, data[x])
 
 
 @content('ZotLocalChannel')
