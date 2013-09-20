@@ -219,7 +219,7 @@ class TestZot(unittest.TestCase):
         self.assertTrue(result['success'])
 
     @patch('sprezz.zot.zot.requests.get')
-    def test_local_get_zot_finger_no_hub(self, req_get_mock):
+    def test_remote_get_zot_finger_no_hub(self, req_get_mock):
         """Test succesful finger using HTTPS GET without a known hub"""
         inst = self._prepare_zot_finger()
         resp = Response()
