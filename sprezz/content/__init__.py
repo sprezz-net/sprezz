@@ -45,9 +45,10 @@ class ContentRegistry(object):
             return maybe
         return default
 
-    def typeof(resource):
+    def typeof(self, resource):
         factory_type = get_factory_type(resource)
         content_type = self.factory_types.get(factory_type)
+        return content_type
 
     def exists(self, content_type):
         return content_type in self.content_types.keys()
@@ -55,7 +56,7 @@ class ContentRegistry(object):
     def find(self, resource, content_type):
         for obj in lineage(resource):
             if self.typeof(obj) == content_type:
-                return location
+                return obj
 
     def factory_type_for_content_type(self, content_type):
         for ftype, ctype in self.factory_types.items():
@@ -84,6 +85,7 @@ class content(object):
         info = self.venusian.attach(wrapped, callback, category='sprezz')
         self.meta['_info'] = info.codeinfo
         return wrapped
+
 
 class service(content):
     venusion = venusian
