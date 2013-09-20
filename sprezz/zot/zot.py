@@ -5,7 +5,7 @@ import sys
 import whirlpool
 
 from pyramid.threadlocal import get_current_registry
-from pyramid.traversal import find_root, resource_path
+from pyramid.traversal import find_root
 from urllib.parse import urlparse, urlunparse
 
 from ..content import service

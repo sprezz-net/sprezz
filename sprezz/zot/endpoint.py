@@ -6,7 +6,6 @@ from pyramid.traversal import resource_path
 from pyramid.view import view_config
 
 from ..content import content
-from ..folder import Folder
 
 
 log = logging.getLogger(__name__)

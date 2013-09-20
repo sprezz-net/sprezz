@@ -1,6 +1,5 @@
 import logging
 import unittest
-import sys
 
 from pyramid import testing
 from unittest.mock import patch, Mock
@@ -26,8 +25,10 @@ class TestWellKnown(unittest.TestCase):
     def test_after_create(self):
         inst = self._makeOne()
         Z = {}
+
         def add(name, val, registry=None):
             Z[name] = val
+
         inst.add = add
         ob = testing.DummyResource()
         registry = create_single_content_registry(ob)
@@ -150,7 +151,7 @@ class TestZotInfoProtocol(unittest.TestCase):
            return_value=True)
     def test_zot_info_hash_not_found(self, rsa_mock):
         context = testing.DummyResource()
-        zot = self._makeResourceTree(context)
+        self._makeResourceTree(context)
         request = testing.DummyRequest(params={'guid_hash': 'hash',
                                                'target': 'target',
                                                'target_sig': 'sig',
@@ -167,7 +168,7 @@ class TestZotInfoProtocol(unittest.TestCase):
            return_value=True)
     def test_zot_info_address_not_found(self, rsa_mock):
         context = testing.DummyResource()
-        zot = self._makeResourceTree(context)
+        self._makeResourceTree(context)
         request = testing.DummyRequest(params={'address': 'admin',
                                                'target': 'target',
                                                'target_sig': 'sig',
@@ -184,7 +185,7 @@ class TestZotInfoProtocol(unittest.TestCase):
            return_value=True)
     def test_zot_info_guid_not_found(self, rsa_mock):
         context = testing.DummyResource()
-        zot = self._makeResourceTree(context)
+        self._makeResourceTree(context)
         request = testing.DummyRequest(params={'guid': 'guid',
                                                'guid_sig': 'guid_sig',
                                                'target': 'target',
@@ -202,7 +203,7 @@ class TestZotInfoProtocol(unittest.TestCase):
            return_value=True)
     def test_zot_info_invalid(self, rsa_mock):
         context = testing.DummyResource()
-        zot = self._makeResourceTree(context)
+        self._makeResourceTree(context)
         request = testing.DummyRequest(params={'target': 'target',
                                                'target_sig': 'sig',
                                                'key': 'key'},

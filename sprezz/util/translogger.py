@@ -1,5 +1,8 @@
-# (c) 2005 Ian Bicking and contributors; written for Paste (http://pythonpaste.org)
-# Licensed under the MIT license: http://www.opensource.org/licenses/mit-license.php
+# (c) 2005 Ian Bicking and contributors;
+# written for Paste (http://pythonpaste.org)
+#
+# Licensed under the MIT license:
+# http://www.opensource.org/licenses/mit-license.php
 """
 Middleware for logging requests, using Apache combined log format
 """
@@ -7,6 +10,7 @@ Middleware for logging requests, using Apache combined log format
 import logging
 import time
 from urllib.parse import quote
+
 
 class TransLogger(object):
     """
@@ -55,6 +59,7 @@ class TransLogger(object):
         if environ.get('QUERY_STRING'):
             req_uri += '?'+environ['QUERY_STRING']
         method = environ['REQUEST_METHOD']
+
         def replacement_start_response(status, headers, exc_info=None):
             # @@: Ideally we would count the bytes going by if no
             # content-length header was provided; but that does add
@@ -98,13 +103,13 @@ class TransLogger(object):
         message = self.format % d
         self.logger.log(self.logging_level, message)
 
-def make_filter(
-    app, global_conf,
-    logger_name='wsgi',
-    format=None,
-    logging_level=logging.INFO,
-    setup_console_handler=True,
-    set_logger_level=logging.DEBUG):
+
+def make_filter(app, global_conf,
+                logger_name='wsgi',
+                format=None,
+                logging_level=logging.INFO,
+                setup_console_handler=True,
+                set_logger_level=logging.DEBUG):
     from paste.util.converters import asbool
     if isinstance(logging_level, basestring):
         logging_level = logging._levelNames[logging_level]

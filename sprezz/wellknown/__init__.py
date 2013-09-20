@@ -52,7 +52,7 @@ class ZotInfoProtocol(object):
         API.
 
         The (post or get) request understands the following parameters:
-        `address` is the nickname of the channel. 
+        `address` is the nickname of the channel.
         `guid` and `guid_sig` are the global ID and signature of the channel.
         `guid_hash` corresponds to the channel hash.
         `target` is the channel guid of the requestor, along with its
@@ -111,17 +111,15 @@ class ZotInfoProtocol(object):
             return result
 
         # TODO Create a profile service which checks permissions
-        profile = {
-                'description': '',
-                'birthday': '0000-00-00',
-                'gender' : '',
-                'marital' : '',
-                'sexual' : '',
-                'locale' : '',
-                'region' : '',
-                'postcode' : '',
-                'keywords' : {},
-                }
+        profile = {'description': '',
+                   'birthday': '0000-00-00',
+                   'gender': '',
+                   'marital': '',
+                   'sexual': '',
+                   'locale': '',
+                   'region': '',
+                   'postcode': '',
+                   'keywords': {}}
         result['profile'] = profile
 
         result['guid'] = xchannel.guid
@@ -143,28 +141,24 @@ class ZotInfoProtocol(object):
         hub_service = zot_service['hub']
         hub = hub_service[zhash]
         locations = []
-        locations.append({
-                'host': hub.host,
-                'address' : hub.address,
-                'primary' : True,
-                'url' : hub.url,
-                'url_sig' : hub.url_signature,
-                'callback' : hub.callback,
-                'sitekey': hub.key.export_public_key(),
-                })
+        locations.append({'host': hub.host,
+                          'address': hub.address,
+                          'primary': True,
+                          'url': hub.url,
+                          'url_sig': hub.url_signature,
+                          'callback': hub.callback,
+                          'sitekey': hub.key.export_public_key()})
         result['locations'] = locations
 
         # TODO Site mode and policies
-        site = {
-                'url' : zot_service.site_url,
-                'url_sig' : zot_service.site_signature,
-                'directory_mode' : 0x0100,
-                'directory_url' : '',
-                'register_policy' : 0,
-                'access_policy' : 0,
-                'version' : 'Sprezz Matrix 0.1',
-                'admin' : self.request.registry.settings['sprezz.admin.email'],
-                }
+        site = {'url': zot_service.site_url,
+                'url_sig': zot_service.site_signature,
+                'directory_mode': 0x0100,
+                'directory_url': '',
+                'register_policy': 0,
+                'access_policy': 0,
+                'version': 'Sprezz Matrix 0.1',
+                'admin': self.request.registry.settings['sprezz.admin.email']}
         result['site'] = site
 
         result['success'] = True

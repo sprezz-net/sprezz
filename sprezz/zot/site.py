@@ -21,7 +21,7 @@ class ZotSite(Persistent):
                  version, admin_email):
         super().__init__()
         self.url = url
-        self.register_policy = registrater_policy
+        self.register_policy = register_policy
         self.access_policy = access_policy
         self.directory_mode = directory_mode
         self.directory_url = directory_url
