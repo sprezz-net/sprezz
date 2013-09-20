@@ -4,18 +4,18 @@ from BTrees.Length import Length
 from persistent import Persistent
 from persistent.interfaces import IPersistent
 from pyramid.compat import string_types
+from pyramid.location import inside
 from pyramid.threadlocal import get_current_registry
-from zope.copy import copy
 from zope.copy.interfaces import ICopyHook, ResumeCopy
 from zope.interface import implementer
 
 from ..content import content
 from .events import (
-        ObjectWillBeAdded,
-        ObjectAdded,
-        ObjectWillBeRemoved,
-        ObjectRemoved
-        )
+    ObjectWillBeAdded,
+    ObjectAdded,
+    ObjectWillBeRemoved,
+    ObjectRemoved
+    )
 from ..interfaces import IFolder, marker
 from ..util.folder import find_service, find_services
 
@@ -96,7 +96,9 @@ class Folder(Persistent):
     def __repr__(self):
         klass = self.__class__
         classname = '%s.%s' % (klass.__module__, klass.__name__)
-        return '<%s object named %r at %#x>' % (classname, self.__name__, id(self))
+        return '<%s object named %r at %#x>' % (classname,
+                                                self.__name__,
+                                                id(self))
 
     def __getitem__(self, name):
         return self.data[name]
