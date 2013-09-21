@@ -19,6 +19,7 @@ log.level = logging.DEBUG
 
 class TestZot(unittest.TestCase):
     def setUp(self):
+        #import sys
         #stream_handler = logging.StreamHandler(sys.stdout)
         #log.addHandler(stream_handler)
         self.config = testing.setUp()
@@ -246,12 +247,12 @@ class TestZot(unittest.TestCase):
         req_post_mock.return_value = resp
         with self.assertRaises(ValueError):
             inst.zot_finger('admin', 'me_hash')
-            calls = [call('http://hubloc:8080/.well-known/zot-info',
-                          data={'address': 'admin', 'key': 'me_key',
-                                'target': 'me_guid',
-                                'target_sig': 'me_signature'},
-                          verify=True, allow_redirects=True, timeout=3)]
-            req_post_mock.assert_has_calls(calls)
+        calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      data={'address': 'admin', 'key': 'me_key',
+                            'target': 'me_guid',
+                            'target_sig': 'me_signature'},
+                      verify=True, allow_redirects=True, timeout=3)]
+        req_post_mock.assert_has_calls(calls)
 
     @patch('sprezz.zot.zot.requests.post')
     def test_local_post_zot_finger_invalid(self, req_post_mock):
@@ -263,12 +264,12 @@ class TestZot(unittest.TestCase):
         req_post_mock.return_value = resp
         with self.assertRaises(ValueError):
             inst.zot_finger('admin', 'me_hash')
-            calls = [call('http://hubloc:8080/.well-known/zot-info',
-                          data={'address': 'admin', 'key': 'me_key',
-                                'target': 'me_guid',
-                                'target_sig': 'me_signature'},
-                          verify=True, allow_redirects=True, timeout=3)]
-            req_post_mock.assert_has_calls(calls)
+        calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      data={'address': 'admin', 'key': 'me_key',
+                            'target': 'me_guid',
+                            'target_sig': 'me_signature'},
+                      verify=True, allow_redirects=True, timeout=3)]
+        req_post_mock.assert_has_calls(calls)
 
     @patch('sprezz.zot.zot.requests.post')
     def test_remote_post_zot_finger_fallback(self, req_post_mock):
@@ -311,17 +312,17 @@ class TestZot(unittest.TestCase):
         req_post_mock.return_value = resp
         with self.assertRaises(HTTPError):
             inst.zot_finger('remote@remoteloc:6543', 'me_hash')
-            calls = [call('https://remoteloc:6543/.well-known/zot-info',
-                          data={'address': 'remote', 'key': 'me_key',
-                                'target': 'me_guid',
-                                'target_sig': 'me_signature'},
-                          verify=True, allow_redirects=True, timeout=3),
-                     call('http://remoteloc:6543/.well-known/zot-info',
-                          data={'address': 'remote', 'key': 'me_key',
-                                'target': 'me_guid',
-                                'target_sig': 'me_signature'},
-                          verify=True, allow_redirects=True, timeout=3)]
-            req_post_mock.assert_has_calls(calls)
+        calls = [call('https://remoteloc:6543/.well-known/zot-info',
+                      data={'address': 'remote', 'key': 'me_key',
+                            'target': 'me_guid',
+                            'target_sig': 'me_signature'},
+                      verify=True, allow_redirects=True, timeout=3),
+                 call('http://remoteloc:6543/.well-known/zot-info',
+                      data={'address': 'remote', 'key': 'me_key',
+                            'target': 'me_guid',
+                            'target_sig': 'me_signature'},
+                      verify=True, allow_redirects=True, timeout=3)]
+        req_post_mock.assert_has_calls(calls)
 
     @patch('sprezz.zot.zot.requests.post')
     def test_local_post_zot_finger_no_fallback(self, req_post_mock):
@@ -333,10 +334,10 @@ class TestZot(unittest.TestCase):
         req_post_mock.return_value = resp
         with self.assertRaises(HTTPError):
             inst.zot_finger('admin', 'me_hash')
-            calls = [call('http://hubloc:8080/.well-known/zot-info',
-                          data={'address': 'admin', 'key': 'me_key',
-                                'target': 'me_guid',
-                                'target_sig': 'me_signature'},
-                          verify=True, allow_redirects=True, timeout=3)]
-            req_post_mock.assert_has_calls(calls)
-            self.assertEqual(req_post_mock.call_count, 1)
+        calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      data={'address': 'admin', 'key': 'me_key',
+                            'target': 'me_guid',
+                            'target_sig': 'me_signature'},
+                      verify=True, allow_redirects=True, timeout=3)]
+        req_post_mock.assert_has_calls(calls)
+        self.assertEqual(req_post_mock.call_count, 1)
