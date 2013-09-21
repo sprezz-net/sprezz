@@ -85,12 +85,14 @@ class ZotInfoProtocol(object):
         if zhash is not None:
             try:
                 xchannel = xchannel_service[zhash]
+                channel = channel_service[xchannel.nickname]
             except KeyError:
                 result['message'] = 'Item not found.'
                 return result
         elif zaddress is not None:
             try:
-                zhash = channel_service[zaddress].channel_hash
+                channel = channel_service[zaddress]
+                zhash = channel.channel_hash
                 xchannel = xchannel_service[zhash]
             except KeyError:
                 result['message'] = 'Item not found.'
@@ -102,6 +104,7 @@ class ZotInfoProtocol(object):
                         xchan.signature == zguid_sig):
                     zhash = xchan.channel_hash
                     xchannel = xchannel_service[zhash]
+                    channel = channel_service[xchannel.nickname]
                     break
             if xchannel is None:
                 result['message'] = 'Item not found.'
@@ -152,7 +155,7 @@ class ZotInfoProtocol(object):
 
         # TODO Site mode and policies
         site = {'url': zot_service.site_url,
-                'url_sig': zot_service.site_signature,
+                'url_sig': channel.sign_url(zot_service.site_url),
                 'directory_mode': 0x0100,
                 'directory_url': '',
                 'register_policy': 0,

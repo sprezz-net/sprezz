@@ -53,16 +53,6 @@ class Zot(Folder):
             self._v_site_url = root.app_url
             return root.app_url
 
-    @property
-    def site_signature(self):
-        try:
-            return self._v_site_signature
-        except AttributeError:
-            signature = base64_url_encode(
-                self._private_site_key.sign_message(self.site_url))
-            self._v_site_signature = signature
-            return signature
-
     def add_channel(self, nickname, name, *arg, **kw):
         registry = kw.pop('registry', None)
         if registry is None:

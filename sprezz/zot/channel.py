@@ -88,7 +88,7 @@ class ZotLocalHub(Folder):
             channel_service = find_service(self, 'zot', 'channel')
             xchannel_service = find_service(self, 'zot', 'xchannel')
             nickname = xchannel_service[self.channel_hash].nickname
-            url_signature = channel_service[nickname].sign_hub_url(self.url)
+            url_signature = channel_service[nickname].sign_url(self.url)
             self._v_url_signature = url_signature
             return url_signature
 
@@ -153,7 +153,7 @@ class ZotLocalChannel(Folder):
                 'nickname': self.nickname,
                 'name': self.name}
 
-    def sign_hub_url(self, url):
+    def sign_url(self, url):
         return base64_url_encode(self.key.sign_message(url))
 
 

@@ -77,26 +77,6 @@ class TestZot(unittest.TestCase):
         inst._v_site_url = 'cached'
         self.assertEqual(inst.site_url, 'cached')
 
-    def test_site_signature(self):
-        """Test read-only property site_signature and its caching"""
-        inst = self._makeOne()
-        root = testing.DummyResource()
-        root.app_url = 'app_url'
-        inst.__parent__ = root
-
-        def sign(value):
-            return bytes('signed %s' % value, 'utf-8')
-
-        inst._private_site_key = Mock()
-        inst._private_site_key.sign_message = Mock(side_effect=sign)
-        # Base64 url encoded 'signed app_url'
-        self.assertEqual(inst.site_signature, 'c2lnbmVkIGFwcF91cmw')
-        with self.assertRaises(AttributeError):
-            inst.site_signature = 'new sig'
-        self.assertEqual(inst._v_site_signature, 'c2lnbmVkIGFwcF91cmw')
-        inst._v_site_signature = 'cached'
-        self.assertEqual(inst.site_signature, 'cached')
-
     @patch('sprezz.zot.zot.PersistentRSAKey', spec=True)
     def test_add_channel(self, rsa_mock):
         inst = self._makeOne()

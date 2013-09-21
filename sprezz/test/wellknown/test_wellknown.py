@@ -54,7 +54,6 @@ class TestZotInfoProtocol(unittest.TestCase):
         zot = root['zot'] = DummyFolder()
         zot.__is_service__ = True
         zot.site_url = 'site_url'
-        zot.site_signature = 'site_sig'
         zot['channel'] = DummyFolder()
         zot['xchannel'] = DummyFolder()
         zot['hub'] = DummyFolder()
@@ -65,7 +64,12 @@ class TestZotInfoProtocol(unittest.TestCase):
             ZotLocalChannel,
             ZotRemoteXChannel,
             ZotRemoteHub)
+
+        def sign(value):
+            return bytes('signed %s' % value, 'utf-8')
+
         key = Mock()
+        key.sign_message = Mock(side_effect=sign)
         key.export_public_key = Mock(return_value='key')
         site_key = Mock()
         site_key.export_public_key = Mock(return_value='site_key')
@@ -119,7 +123,8 @@ class TestZotInfoProtocol(unittest.TestCase):
         self.assertEqual(location['sitekey'], 'site_key')
         site = result['site']
         self.assertEqual(site['url'], 'site_url')
-        self.assertEqual(site['url_sig'], 'site_sig')
+        # Base64 url encoded 'signed site_url'
+        self.assertEqual(site['url_sig'], 'c2lnbmVkIHNpdGVfdXJs')
         self.assertEqual(site['admin'], 'email')
 
     def test_zot_info_no_key(self):
