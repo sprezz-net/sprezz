@@ -129,3 +129,17 @@ class IZotHub(Interface):
 
     def update(self, data):
         """Update hub with data"""
+
+
+class IZotSite(Interface):
+    """Interface for Zot sites."""
+    url = Attribute('URL of site')
+    register_policy = Attribute('Site registration policy')
+    access_policy = Attribute('Site access policy')
+    directory_mode = Attribute('Mode to list site in directory')
+    directory_url = Attribute('URL of site directory')
+    version = Attribute('Version')
+    admin_email = Attribute('Email address of site administrator')
+
+    def update(self, data):
+        """Update site with data"""

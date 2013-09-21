@@ -1,9 +1,11 @@
 import logging
 
 from persistent import Persistent
+from zope.interface import implementer
 
 from ..content import content
 from ..folder import Folder
+from ..interfaces import IZotSite
 
 
 log = logging.getLogger(__name__)
@@ -15,6 +17,7 @@ class ZotSites(Folder):
 
 
 @content('ZotSite')
+@implementer(IZotSite)
 class ZotSite(Persistent):
     def __init__(self, url, register_policy, access_policy,
                  directory_mode, directory_url,
@@ -27,3 +30,14 @@ class ZotSite(Persistent):
         self.directory_url = directory_url
         self.version = version
         self.admin_email = admin_email
+
+    def update(self, data):
+        keys = ['url', 'register_policy', 'access_policy',
+                'directory_mode', 'directory_url', 'version', 'admin']
+        for x in keys:
+            if (x in data) and (getattr(self, x) != data[x]):
+                log.debug('site.update() attr={0}, '
+                          'old={1}, new={2}'.format(x,
+                                                    getattr(self, x),
+                                                    data[x]))
+                setattr(self, x, data[x])

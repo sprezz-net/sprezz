@@ -134,14 +134,16 @@ class Zot(Folder):
         if registry is None:
             registry = get_current_registry()
 
-        pub_key = PersistentRSAKey(extern_public_key=info['key'])
-        if not pub_key.verify_message(info['guid'],
-                                      base64_url_decode(info['guid_sig'])):
-            raise ValueError('Unable to verify channel signature')
-
         channel_hash = self._create_channel_hash(info['guid'],
                                                  info['guid_sig'])
         log.debug('import xchan: channel_hash = {}'.format(channel_hash))
+
+        pub_key = PersistentRSAKey(extern_public_key=info['key'])
+        if not pub_key.verify_message(info['guid'],
+                                      base64_url_decode(info['guid_sig'])):
+            log.error('import_xchannel: Unable to verify xchannel signature '
+                      'for xchannel with hash {}'.format(channel_hash))
+            raise ValueError('Unable to verify channel signature')
 
         if '/' in info['address']:
             parts = info['address'].split(sep='/')
@@ -182,6 +184,15 @@ class Zot(Folder):
             except ValueError:
                 continue
 
+        # TODO import photos and profiles
+
+        site = info.get('site', [])
+        try:
+            self.import_site(info, site,
+                             registry=registry, pub_key=pub_key)
+        except (KeyError, ValueError):
+            pass
+
     def import_hub(self, info, location, *arg, **kw):
         registry = kw.pop('registry', None)
         if registry is None:
@@ -197,6 +208,8 @@ class Zot(Folder):
             pub_key = PersistentRSAKey(extern_public_key=info['key'])
         if not pub_key.verify_message(location['url'],
                                       base64_url_decode(location['url_sig'])):
+            log.error('import_hub: Unable to verify hub signature '
+                      'for hub with hash {}'.format(channel_hash))
             raise ValueError('Unable to verify site signature')
 
         # TODO Allow channel clones
@@ -231,6 +244,40 @@ class Zot(Folder):
             hub_service.add(channel_hash, hub)
         else:
             hub.update(location)
+
+    def import_site(self, info, site, *arg, **kw):
+        registry = kw.pop('registry', None)
+        if registry is None:
+            registry = get_current_registry()
+
+        url = site['url']
+
+        pub_key = kw.pop('pub_key', None)
+        if pub_key is None:
+            pub_key = PersistentRSAKey(extern_public_key=info['key'])
+        if not pub_key.verify_message(url,
+                                      base64_url_decode(site['url_sig'])):
+            log.error('import_site: Unable to verify site signature '
+                      'for site {}'.format(url))
+            raise ValueError('Unable to verify site signature')
+
+        site_service = self['site']
+        try:
+            site = site_service[url]
+        except KeyError:
+            site = registry.content.create(
+                'ZotSite',
+                url=url,
+                register_policy=site['register_policy'],
+                access_policy=site['access_policy'],
+                directory_mode=site['directory_mode'],
+                directory_url=site['directory_url'],
+                version=site['version'],
+                admin_email=site['admin'],
+                *arg, **kw)
+            site_service.add(url, site)
+        else:
+            site.update(site)
 
     def zot_finger(self, url, channel_hash=None):
         result = {'success': False}
