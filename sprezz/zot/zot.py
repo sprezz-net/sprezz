@@ -238,6 +238,7 @@ class Zot(Folder):
                 url_signature=location['url_sig'],
                 callback=location['callback'],
                 *arg, **kw)
+            hub_service.add(channel_hash, hub)
         else:
             hub.update(location)
 

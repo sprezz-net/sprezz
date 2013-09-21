@@ -126,3 +126,6 @@ class IZotHub(Interface):
     url = Attribute('Hub URL')
     url_signature = Attribute('Signature of hub URL')
     callback = Attribute('Zot endpoint URL')
+
+    def update(self, data):
+        """Update hub with data"""
