@@ -342,7 +342,7 @@ class TestZot(unittest.TestCase):
         req_post_mock.assert_has_calls(calls)
         self.assertEqual(req_post_mock.call_count, 1)
 
-    def _prepare_import(self):
+    def _prepare_import(self, location=True, site=True):
         info = {'guid': 'guid',
                 # Base64 encoded 'guid_sig'
                 'guid_sig': 'Z3VpZF9zaWc',
@@ -350,30 +350,32 @@ class TestZot(unittest.TestCase):
                 'name': 'name',
                 'address': 'someone@remote/site',
                 'url': 'url',
-                'connections_url': 'conn_url',
-                'locations': [{'url': 'url_1',
-                               # Base64 encoded 'url_sig_1'
-                               'url_sig': 'dXJsX3NpZ18x',
-                               'primary': False,
-                               'sitekey': 'site_key_1',
-                               'address': 'address_1',
-                               'callback': 'callback_1'},
-                              {'url': 'url_2',
-                               # Base64 encoded 'url_sig_2'
-                               'url_sig': 'dXJsX3NpZ18y',
-                               'primary': True,
-                               'sitekey': 'site_key_2',
-                               'address': 'address_2',
-                               'callback': 'callback_2'}],
-                'site': {'url': 'site_url',
-                         # Base64 encoded 'site_sig'
-                         'url_sig': 'c2l0ZV9zaWc',
-                         'register_policy': 'register_policy',
-                         'access_policy': 'access_policy',
-                         'directory_mode': 'directory_mode',
-                         'directory_url': 'directory_url',
-                         'version': 'version',
-                         'admin': 'admin'}}
+                'connections_url': 'conn_url'}
+        if location:
+            info['locations'] = [{'url': 'url_1',
+                                  # Base64 encoded 'url_sig_1'
+                                  'url_sig': 'dXJsX3NpZ18x',
+                                  'primary': False,
+                                  'sitekey': 'site_key_1',
+                                  'address': 'address_1',
+                                  'callback': 'callback_1'},
+                                 {'url': 'url_2',
+                                  # Base64 encoded 'url_sig_2'
+                                  'url_sig': 'dXJsX3NpZ18y',
+                                  'primary': True,
+                                  'sitekey': 'site_key_2',
+                                  'address': 'address_2',
+                                  'callback': 'callback_2'}]
+        if site:
+            info['site'] = {'url': 'site_url',
+                            # Base64 encoded 'site_sig'
+                            'url_sig': 'c2l0ZV9zaWc',
+                            'register_policy': 'register_policy',
+                            'access_policy': 'access_policy',
+                            'directory_mode': 'directory_mode',
+                            'directory_url': 'directory_url',
+                            'version': 'version',
+                            'admin': 'admin'}
         return info
 
     @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
@@ -438,3 +440,48 @@ class TestZot(unittest.TestCase):
         self.assertEqual(site_call_site['directory_url'], 'directory_url')
         self.assertEqual(site_call_site['version'], 'version')
         self.assertEqual(site_call_site['admin'], 'admin')
+
+    @patch('sprezz.zot.zot.Zot.import_site')
+    @patch('sprezz.zot.zot.Zot.import_hub')
+    @patch('sprezz.zot.zot.PersistentRSAKey')
+    def test_import_xchannel_invalid_loc_no_site(self, rsa_mock, imp_hub_mock, imp_site_mock):
+        inst = self._makeOne()
+        inst['xchannel'] = DummyFolder()
+        rsa_mock.verify_message = Mock(return_value=True)
+        ob = Mock()
+        registry = create_single_content_registry(ob)
+        registry.content.create = Mock(return_value=ob)
+        info = self._prepare_import(True, False)
+        imp_hub_mock.side_effect = ValueError
+        inst.import_xchannel(info, registry=registry)
+        call_args = registry.content.create.call_args
+        call_kwargs = call_args[1]
+        self.assertEqual(call_kwargs['guid'], 'guid')
+        self.assertEqual(call_kwargs['signature'], 'Z3VpZF9zaWc')
+        self.assertEqual(call_kwargs['name'], 'name')
+        self.assertEqual(call_kwargs['channel_hash'],
+                         'EHzP3qiafMFrYAZerH4nQsqjqmNhFQfqVxPLoLgWXlH'
+                         'n5RdzNiVWG-qrs8FGKp6NMWbsknzr-HpL_59K4-oLgw'),
+        self.assertEqual(call_kwargs['url'], 'url')
+        self.assertEqual(call_kwargs['address'], 'someone@remote')
+        self.assertEqual(call_kwargs['nickname'], 'someone')
+        self.assertEqual(inst['xchannel']['EHzP3qiafMFrYAZerH4nQsqjqmNhFQfq'
+                                          'VxPLoLgWXlHn5RdzNiVWG-qrs8FGKp6N'
+                                          'MWbsknzr-HpL_59K4-oLgw'], ob)
+        self.assertEqual(imp_hub_mock.call_count, 2)
+        self.assertEqual(imp_site_mock.call_count, 0)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey')
+    def test_import_xchannel_update(self, rsa_mock):
+        inst = self._makeOne()
+        inst['xchannel'] = DummyFolder()
+        rsa_mock.verify_message = Mock(return_value=True)
+        ob = Mock()
+        ob.update = Mock()
+        inst['xchannel'].add('EHzP3qiafMFrYAZerH4nQsqjqmNhFQfqVxPLoLgWXlH'
+                             'n5RdzNiVWG-qrs8FGKp6NMWbsknzr-HpL_59K4-oLgw',
+                             ob)
+        info = self._prepare_import(False, False)
+        info['address'] = 'someone'
+        inst.import_xchannel(info)
+        ob.update.assert_called_once_with(info)
