@@ -37,7 +37,7 @@ class ZotChannelInfo(object):
     pass
 
 
-class ZotInfoProtocol(object):
+class ZotInfoView(object):
     def __init__(self, context, request):
         self.context = context
         self.request = request

@@ -36,7 +36,7 @@ class TestWellKnown(unittest.TestCase):
         self.assertEqual(Z['zot-info'], ob)
 
 
-class TestZotInfoProtocol(unittest.TestCase):
+class TestZotInfoView(unittest.TestCase):
     def setUp(self):
         request = testing.DummyRequest()
         self.config = testing.setUp(request=request)
@@ -45,8 +45,8 @@ class TestZotInfoProtocol(unittest.TestCase):
         testing.tearDown()
 
     def _makeOne(self, context, request):
-        from sprezz.wellknown import ZotInfoProtocol
-        return ZotInfoProtocol(context, request)
+        from sprezz.wellknown import ZotInfoView
+        return ZotInfoView(context, request)
 
     def _makeResourceTree(self, context):
         root = DummyFolder()
