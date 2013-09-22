@@ -494,7 +494,7 @@ class TestZot(unittest.TestCase):
            return_value=False)
     def test_import_hub_invalid(self, rsa_mock):
         inst = self._makeOne()
-        info = self._prepare_import()
+        info = self._prepare_import(True, False)
         location = info['locations'][0]
         with self.assertRaises(ValueError):
             inst.import_hub(info, location)
@@ -505,7 +505,7 @@ class TestZot(unittest.TestCase):
            return_value=True)
     def test_import_hub_not_primary(self, rsa_mock):
         inst = self._makeOne()
-        info = self._prepare_import()
+        info = self._prepare_import(True, False)
         location = info['locations'][0]
         inst.import_hub(info, location)
         # We just check the verify call
@@ -518,7 +518,7 @@ class TestZot(unittest.TestCase):
            return_value=True)
     def test_import_hub_no_sitekey(self, rsa_mock):
         inst = self._makeOne()
-        info = self._prepare_import()
+        info = self._prepare_import(True, False)
         location = info['locations'][1]
         del location['sitekey']
         with self.assertRaises(ValueError):
@@ -537,7 +537,7 @@ class TestZot(unittest.TestCase):
         ob = Mock()
         registry = create_single_content_registry(ob)
         registry.content.create = Mock(return_value=ob)
-        info = self._prepare_import()
+        info = self._prepare_import(True, False)
         location = info['locations'][1]
         inst.import_hub(info, location, registry=registry)
         self.assertEqual(inst['hub']['EHzP3qiafMFrYAZerH4nQsqjqmNhFQfq'
@@ -554,7 +554,44 @@ class TestZot(unittest.TestCase):
         inst['hub'].add('EHzP3qiafMFrYAZerH4nQsqjqmNhFQfqVxPLoLgWXlH'
                         'n5RdzNiVWG-qrs8FGKp6NMWbsknzr-HpL_59K4-oLgw',
                         ob)
-        info = self._prepare_import()
+        info = self._prepare_import(True, False)
         location = info['locations'][1]
         inst.import_hub(info, location)
         ob.update.assert_called_once_with(location)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=False)
+    def test_import_site_invalid(self, rsa_mock):
+        inst = self._makeOne()
+        info = self._prepare_import(False, True)
+        site = info['site']
+        with self.assertRaises(ValueError):
+            inst.import_site(info, site)
+        calls = [call('site_url', b'site_sig')]
+        rsa_mock.assert_has_calls(calls)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_import_site_create(self, rsa_mock):
+        inst = self._makeOne()
+        inst['site'] = DummyFolder()
+        ob = Mock()
+        registry = create_single_content_registry(ob)
+        registry.content.create = Mock(return_value=ob)
+        info = self._prepare_import(False, True)
+        site = info['site']
+        inst.import_site(info, site, registry=registry)
+        self.assertEqual(inst['site']['site_url'], ob)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_import_site_update(self, rsa_mock):
+        inst = self._makeOne()
+        inst['site'] = DummyFolder()
+        ob = Mock()
+        ob.update = Mock()
+        inst['site'].add('site_url', ob)
+        info = self._prepare_import(False, True)
+        site = info['site']
+        inst.import_site(info, site)
+        ob.update.assert_called_once_with(site)

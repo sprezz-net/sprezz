@@ -262,9 +262,9 @@ class Zot(Folder):
 
         site_service = self['site']
         try:
-            site = site_service[url]
+            zot_site = site_service[url]
         except KeyError:
-            site = registry.content.create(
+            zot_site = registry.content.create(
                 'ZotSite',
                 url=url,
                 register_policy=site['register_policy'],
@@ -274,9 +274,9 @@ class Zot(Folder):
                 version=site['version'],
                 admin_email=site['admin'],
                 *arg, **kw)
-            site_service.add(url, site)
+            site_service.add(url, zot_site)
         else:
-            site.update(site)
+            zot_site.update(site)
 
     def zot_finger(self, url, channel_hash=None):
         result = {'success': False}
