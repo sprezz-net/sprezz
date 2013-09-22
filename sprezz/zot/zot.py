@@ -186,9 +186,8 @@ class Zot(Folder):
 
         # TODO import photos and profiles
 
-        site = info.get('site', [])
         try:
-            self.import_site(info, site,
+            self.import_site(info, info['site'],
                              registry=registry, pub_key=pub_key)
         except (KeyError, ValueError):
             pass
