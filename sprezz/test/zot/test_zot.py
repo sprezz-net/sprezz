@@ -357,6 +357,7 @@ class TestZot(unittest.TestCase):
                                   'url_sig': 'dXJsX3NpZ18x',
                                   'primary': False,
                                   'sitekey': 'site_key_1',
+                                  'host': 'host_1',
                                   'address': 'address_1',
                                   'callback': 'callback_1'},
                                  {'url': 'url_2',
@@ -364,7 +365,8 @@ class TestZot(unittest.TestCase):
                                   'url_sig': 'dXJsX3NpZ18y',
                                   'primary': True,
                                   'sitekey': 'site_key_2',
-                                  'address': 'address_2',
+                                  'host': 'host_2',
+                                  'address': 'address_2/site',
                                   'callback': 'callback_2'}]
         if site:
             info['site'] = {'url': 'site_url',
@@ -421,6 +423,7 @@ class TestZot(unittest.TestCase):
         self.assertEqual(hub_call_loc_1['url_sig'], 'dXJsX3NpZ18x')
         self.assertEqual(hub_call_loc_1['primary'], False)
         self.assertEqual(hub_call_loc_1['sitekey'], 'site_key_1')
+        self.assertEqual(hub_call_loc_1['host'], 'host_1')
         self.assertEqual(hub_call_loc_1['address'], 'address_1')
         self.assertEqual(hub_call_loc_1['callback'], 'callback_1')
         hub_call_loc_2 = hub_call_args_list[1][0][1]
@@ -428,7 +431,8 @@ class TestZot(unittest.TestCase):
         self.assertEqual(hub_call_loc_2['url_sig'], 'dXJsX3NpZ18y')
         self.assertEqual(hub_call_loc_2['primary'], True)
         self.assertEqual(hub_call_loc_2['sitekey'], 'site_key_2')
-        self.assertEqual(hub_call_loc_2['address'], 'address_2')
+        self.assertEqual(hub_call_loc_2['host'], 'host_2')
+        self.assertEqual(hub_call_loc_2['address'], 'address_2/site')
         self.assertEqual(hub_call_loc_2['callback'], 'callback_2')
         self.assertEqual(imp_site_mock.call_count, 1)
         site_call_site = imp_site_mock.call_args[0][1]
@@ -485,3 +489,72 @@ class TestZot(unittest.TestCase):
         info['address'] = 'someone'
         inst.import_xchannel(info)
         ob.update.assert_called_once_with(info)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=False)
+    def test_import_hub_invalid(self, rsa_mock):
+        inst = self._makeOne()
+        info = self._prepare_import()
+        location = info['locations'][0]
+        with self.assertRaises(ValueError):
+            inst.import_hub(info, location)
+        calls = [call('url_1', b'url_sig_1')]
+        rsa_mock.assert_has_calls(calls)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_import_hub_not_primary(self, rsa_mock):
+        inst = self._makeOne()
+        info = self._prepare_import()
+        location = info['locations'][0]
+        inst.import_hub(info, location)
+        # We just check the verify call
+        # The hub is not primary and there is no hub service
+        # instantiated, so no hub can be added in this test
+        calls = [call('url_1', b'url_sig_1')]
+        rsa_mock.assert_has_calls(calls)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_import_hub_no_sitekey(self, rsa_mock):
+        inst = self._makeOne()
+        info = self._prepare_import()
+        location = info['locations'][1]
+        del location['sitekey']
+        with self.assertRaises(ValueError):
+            inst.import_hub(info, location)
+        # We just check the verify call
+        # The hub is not primary and there is no hub service
+        # instantiated, so no hub can be added in this test
+        calls = [call('url_2', b'url_sig_2')]
+        rsa_mock.assert_has_calls(calls)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_import_hub_create(self, rsa_mock):
+        inst = self._makeOne()
+        inst['hub'] = DummyFolder()
+        ob = Mock()
+        registry = create_single_content_registry(ob)
+        registry.content.create = Mock(return_value=ob)
+        info = self._prepare_import()
+        location = info['locations'][1]
+        inst.import_hub(info, location, registry=registry)
+        self.assertEqual(inst['hub']['EHzP3qiafMFrYAZerH4nQsqjqmNhFQfq'
+                                     'VxPLoLgWXlHn5RdzNiVWG-qrs8FGKp6N'
+                                     'MWbsknzr-HpL_59K4-oLgw'], ob)
+
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+           return_value=True)
+    def test_import_hub_update(self, rsa_mock):
+        inst = self._makeOne()
+        inst['hub'] = DummyFolder()
+        ob = Mock()
+        ob.update = Mock()
+        inst['hub'].add('EHzP3qiafMFrYAZerH4nQsqjqmNhFQfqVxPLoLgWXlH'
+                        'n5RdzNiVWG-qrs8FGKp6NMWbsknzr-HpL_59K4-oLgw',
+                        ob)
+        info = self._prepare_import()
+        location = info['locations'][1]
+        inst.import_hub(info, location)
+        ob.update.assert_called_once_with(location)
