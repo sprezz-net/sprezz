@@ -4,6 +4,7 @@ from Crypto import Random
 from Crypto.Cipher import AES
 from Crypto.Cipher import PKCS1_v1_5 as Cip_PKCS1_v1_5
 from Crypto.Hash import SHA256
+from Crypto.Padding import pad, unpad
 from Crypto.PublicKey import RSA
 from Crypto.Signature import PKCS1_v1_5 as Sig_PKCS1_v1_5
 from persistent import Persistent
@@ -18,25 +19,6 @@ log = logging.getLogger(__name__)
 AES_KEY_SIZE = 32
 
 
-def pkcs7_pad(m, bs):
-    """Pad message ``m`` according to PKCS7.
-
-    The padding byte is the value represented by the number of bytes needed
-    for the message to be a multiple of block size ``bs``. When message is
-    already a multiple of block size, then the padding byte is block size.
-    """
-    length = bs - (len(m) % bs)
-    return m + length * bytes([length])
-
-
-def pkcs7_unpad(m):
-    """Remove PKCS7 padding bytes from message ``m``.
-
-    The number of bytes to remove is indicated by the value of the last byte.
-    """
-    return m[0:-m[-1]]
-
-
 def aes256_cbc_encrypt(message, randfunc=None):
     """Encrypt message using AES-256 in Cipher-block chaining (CBC) mode.
 
@@ -49,7 +31,7 @@ def aes256_cbc_encrypt(message, randfunc=None):
     key = randfunc(AES_KEY_SIZE)
     iv = randfunc(AES.block_size)
     cipher = AES.new(key, AES.MODE_CBC, iv)
-    cipher_text = cipher.encrypt(pkcs7_pad(message, AES.block_size))
+    cipher_text = cipher.encrypt(pad(message, AES.block_size, 'pkcs7'))
     return (cipher_text, key, iv)
 
 
@@ -59,7 +41,7 @@ def aes256_cbc_decrypt(cipher_text, key, iv):
     using :func:`pkcs7_unpad`.
     """
     cipher = AES.new(key, AES.MODE_CBC, iv)
-    return pkcs7_unpad(cipher.decrypt(cipher_text))
+    return unpad(cipher.decrypt(cipher_text), AES.block_size, 'pkcs7')
 
 
 class PersistentRSAKey(Persistent):
