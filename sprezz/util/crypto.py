@@ -97,9 +97,9 @@ class PersistentRSAKey(Persistent):
 
     def export_public_key(self):
         if self._public_key is None:
-            self._import_key()
-            self._public_key = self._v_key.publickey().exportKey(
-                format='PEM', passphrase=None)
+            key = self._import_key()
+            self._public_key = key.publickey().exportKey(format='PEM',
+                                                         passphrase=None)
         pub_key = self._public_key[:].decode("latin-1")
         pub_key = pub_key.replace('-----BEGIN RSA PUBLIC KEY-----',
                                   '-----BEGIN PUBLIC KEY-----')
@@ -109,48 +109,43 @@ class PersistentRSAKey(Persistent):
 
     def sign(self, message):
         try:
-            if self._v_key is None:
-                self._import_key()
+            key = self._v_key
         except AttributeError:
-            self._import_key()
-        if (self._v_key is not None) and (
-                self._v_key.can_sign() and self._v_key.has_private()):
+            key = self._import_key()
+        if (key is not None) and (key.can_sign() and key.has_private()):
             h = SHA256.new(message)
-            signer = Sig_PKCS1_v1_5.new(self._v_key)
+            signer = Sig_PKCS1_v1_5.new(key)
             return signer.sign(h)
         raise TypeError
 
     def verify(self, message, signature):
         try:
-            if self._v_key is None:
-                self._import_key()
+            key = self._v_key
         except AttributeError:
-            self._import_key()
-        if self._v_key is not None:
+            key = self._import_key()
+        if key is not None:
             h = SHA256.new(message)
-            verifier = Sig_PKCS1_v1_5.new(self._v_key)
+            verifier = Sig_PKCS1_v1_5.new(key)
             return verifier.verify(h, signature)
         raise TypeError
 
     def encrypt(self, message):
         try:
-            if self._v_key is None:
-                self._import_key()
+            key = self._v_key
         except AttributeError:
-            self._import_key()
-        if (self._v_key is not None) and self._v_key.can_encrypt():
-            cipher = Cip_PKCS1_v1_5.new(self._v_key)
+            key = self._import_key()
+        if (key is not None) and key.can_encrypt():
+            cipher = Cip_PKCS1_v1_5.new(key)
             return cipher.encrypt(message)
         raise TypeError
 
     def decrypt(self, cipher_text):
         try:
-            if self._v_key is None:
-                self._import_key()
+            key = self._v_key
         except AttributeError:
-            self._import_key()
-        if (self._v_key is not None) and self._v_key.has_private():
-            cipher = Cip_PKCS1_v1_5.new(self._v_key)
+            key = self._import_key()
+        if (key is not None) and key.has_private():
+            cipher = Cip_PKCS1_v1_5.new(key)
             message = cipher.decrypt(cipher_text, None)
             if message is None:
                 raise ValueError
