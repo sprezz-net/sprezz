@@ -8,6 +8,9 @@ from pyramid_zodbconn import get_connection
 from .util.translogger import TransLogger
 
 
+__version__ = '0.1dev'
+
+
 log = logging.getLogger(__name__)
 
 
@@ -108,6 +111,7 @@ def initialize_sprezz(settings):
 
 
 def include(config):
+    config.include('pyramid_chameleon')
     config.include('pyramid_zodbconn')
     config.include('.content')
     config.include('.folder')
@@ -118,6 +122,7 @@ def scan(config):
     config.scan('.root')
     config.scan('.wellknown')
     config.scan('.zot')
+    config.scan('.views')
 
 
 def includeme(config):
