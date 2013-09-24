@@ -118,7 +118,7 @@ class Zot(Folder):
         return base64_url_encode(wp.digest())
 
     def _create_channel_signature(self, guid, key):
-        return base64_url_encode(key.sign_message(guid))
+        return base64_url_encode(key.sign(guid))
 
     def _create_channel_hash(self, guid, signature):
         """Create base64 encoded channel hash.
@@ -139,8 +139,8 @@ class Zot(Folder):
         log.debug('import xchan: channel_hash = {}'.format(channel_hash))
 
         pub_key = PersistentRSAKey(extern_public_key=info['key'])
-        if not pub_key.verify_message(info['guid'],
-                                      base64_url_decode(info['guid_sig'])):
+        if not pub_key.verify(info['guid'],
+                              base64_url_decode(info['guid_sig'])):
             log.error('import_xchannel: Unable to verify xchannel signature '
                       'for xchannel with hash {}'.format(channel_hash))
             raise ValueError('Unable to verify channel signature')
@@ -205,8 +205,8 @@ class Zot(Folder):
         pub_key = kw.pop('pub_key', None)
         if pub_key is None:
             pub_key = PersistentRSAKey(extern_public_key=info['key'])
-        if not pub_key.verify_message(location['url'],
-                                      base64_url_decode(location['url_sig'])):
+        if not pub_key.verify(location['url'],
+                              base64_url_decode(location['url_sig'])):
             log.error('import_hub: Unable to verify hub signature '
                       'for hub with hash {}'.format(channel_hash))
             raise ValueError('Unable to verify site signature')
@@ -254,8 +254,8 @@ class Zot(Folder):
         pub_key = kw.pop('pub_key', None)
         if pub_key is None:
             pub_key = PersistentRSAKey(extern_public_key=info['key'])
-        if not pub_key.verify_message(url,
-                                      base64_url_decode(site['url_sig'])):
+        if not pub_key.verify(url,
+                              base64_url_decode(site['url_sig'])):
             log.error('import_site: Unable to verify site signature '
                       'for site {}'.format(url))
             raise ValueError('Unable to verify site signature')

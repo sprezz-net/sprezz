@@ -74,7 +74,7 @@ class ZotInfoView(object):
                 result['message'] = 'No key or target signature supplied.'
                 return result
             key = PersistentRSAKey(extern_public_key=zkey)
-            if not key.verify_message(ztarget, base64_url_decode(ztarget_sig)):
+            if not key.verify(ztarget, base64_url_decode(ztarget_sig)):
                 result['message'] = 'Invalid target signature.'
                 return result
 

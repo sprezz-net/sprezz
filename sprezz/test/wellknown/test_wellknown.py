@@ -69,7 +69,7 @@ class TestZotInfoView(unittest.TestCase):
             return bytes('signed %s' % value, 'utf-8')
 
         key = Mock()
-        key.sign_message = Mock(side_effect=sign)
+        key.sign = Mock(side_effect=sign)
         key.export_public_key = Mock(return_value='key')
         site_key = Mock()
         site_key.export_public_key = Mock(return_value='site_key')
@@ -137,7 +137,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertEquals(result['message'],
                           'No key or target signature supplied.')
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=False)
     def test_zot_info_invalid_sig(self, rsa_mock):
         context = testing.DummyResource()
@@ -152,7 +152,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertEquals(result['message'],
                           'Invalid target signature.')
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_hash_not_found(self, rsa_mock):
         context = testing.DummyResource()
@@ -169,7 +169,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertEquals(result['message'],
                           'Item not found.')
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_address_not_found(self, rsa_mock):
         context = testing.DummyResource()
@@ -186,7 +186,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertEquals(result['message'],
                           'Item not found.')
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_guid_not_found(self, rsa_mock):
         context = testing.DummyResource()
@@ -204,7 +204,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertEquals(result['message'],
                           'Item not found.')
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_invalid(self, rsa_mock):
         context = testing.DummyResource()
@@ -220,7 +220,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertEquals(result['message'],
                           'Invalid request.')
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_hash_found(self, rsa_mock):
         context = testing.DummyResource()
@@ -239,7 +239,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertTrue(result['success'])
         self._assertZotInfo(result)
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_address_found(self, rsa_mock):
         context = testing.DummyResource()
@@ -258,7 +258,7 @@ class TestZotInfoView(unittest.TestCase):
         self.assertTrue(result['success'])
         self._assertZotInfo(result)
 
-    @patch('sprezz.wellknown.PersistentRSAKey.verify_message',
+    @patch('sprezz.wellknown.PersistentRSAKey.verify',
            return_value=True)
     def test_zot_info_guid_found(self, rsa_mock):
         context = testing.DummyResource()

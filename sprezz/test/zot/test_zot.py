@@ -18,10 +18,14 @@ log.level = logging.DEBUG
 
 
 class TestZot(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # import sys
+        # stream_handler = logging.StreamHandler(sys.stdout)
+        # log.addHandler(stream_handler)
+        pass
+
     def setUp(self):
-        #import sys
-        #stream_handler = logging.StreamHandler(sys.stdout)
-        #log.addHandler(stream_handler)
         self.config = testing.setUp()
 
     def tearDown(self):
@@ -133,7 +137,7 @@ class TestZot(unittest.TestCase):
             return bytes('signed %s' % value, 'utf-8')
 
         key = Mock()
-        key.sign_message = Mock(side_effect=sign)
+        key.sign = Mock(side_effect=sign)
         sig = inst._create_channel_signature('guid', key)
         # Base64 url encoded 'signed guid'
         self.assertEqual(sig, 'c2lnbmVkIGd1aWQ')
@@ -380,7 +384,7 @@ class TestZot(unittest.TestCase):
                             'admin': 'admin'}
         return info
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=False)
     def test_import_xchannel_invalid(self, rsa_mock):
         inst = self._makeOne()
@@ -398,7 +402,7 @@ class TestZot(unittest.TestCase):
                                           imp_site_mock):
         inst = self._makeOne()
         inst['xchannel'] = DummyFolder()
-        rsa_mock.verify_message = Mock(return_value=True)
+        rsa_mock.verify = Mock(return_value=True)
         ob = Mock()
         registry = create_single_content_registry(ob)
         registry.content.create = Mock(return_value=ob)
@@ -455,7 +459,7 @@ class TestZot(unittest.TestCase):
                                                        imp_site_mock):
         inst = self._makeOne()
         inst['xchannel'] = DummyFolder()
-        rsa_mock.verify_message = Mock(return_value=True)
+        rsa_mock.verify = Mock(return_value=True)
         ob = Mock()
         registry = create_single_content_registry(ob)
         registry.content.create = Mock(return_value=ob)
@@ -483,7 +487,7 @@ class TestZot(unittest.TestCase):
     def test_import_xchannel_update(self, rsa_mock):
         inst = self._makeOne()
         inst['xchannel'] = DummyFolder()
-        rsa_mock.verify_message = Mock(return_value=True)
+        rsa_mock.verify = Mock(return_value=True)
         ob = Mock()
         ob.update = Mock()
         inst['xchannel'].add('EHzP3qiafMFrYAZerH4nQsqjqmNhFQfqVxPLoLgWXlH'
@@ -494,7 +498,7 @@ class TestZot(unittest.TestCase):
         inst.import_xchannel(info)
         ob.update.assert_called_once_with(info)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=False)
     def test_import_hub_invalid(self, rsa_mock):
         inst = self._makeOne()
@@ -505,7 +509,7 @@ class TestZot(unittest.TestCase):
         calls = [call('url_1', b'url_sig_1')]
         rsa_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=True)
     def test_import_hub_not_primary(self, rsa_mock):
         inst = self._makeOne()
@@ -518,7 +522,7 @@ class TestZot(unittest.TestCase):
         calls = [call('url_1', b'url_sig_1')]
         rsa_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=True)
     def test_import_hub_no_sitekey(self, rsa_mock):
         inst = self._makeOne()
@@ -533,7 +537,7 @@ class TestZot(unittest.TestCase):
         calls = [call('url_2', b'url_sig_2')]
         rsa_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=True)
     def test_import_hub_create(self, rsa_mock):
         inst = self._makeOne()
@@ -548,7 +552,7 @@ class TestZot(unittest.TestCase):
                                      'VxPLoLgWXlHn5RdzNiVWG-qrs8FGKp6N'
                                      'MWbsknzr-HpL_59K4-oLgw'], ob)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=True)
     def test_import_hub_update(self, rsa_mock):
         inst = self._makeOne()
@@ -563,7 +567,7 @@ class TestZot(unittest.TestCase):
         inst.import_hub(info, location)
         ob.update.assert_called_once_with(location)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=False)
     def test_import_site_invalid(self, rsa_mock):
         inst = self._makeOne()
@@ -574,7 +578,7 @@ class TestZot(unittest.TestCase):
         calls = [call('site_url', b'site_sig')]
         rsa_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=True)
     def test_import_site_create(self, rsa_mock):
         inst = self._makeOne()
@@ -587,7 +591,7 @@ class TestZot(unittest.TestCase):
         inst.import_site(info, site, registry=registry)
         self.assertEqual(inst['site']['site_url'], ob)
 
-    @patch('sprezz.zot.zot.PersistentRSAKey.verify_message',
+    @patch('sprezz.zot.zot.PersistentRSAKey.verify',
            return_value=True)
     def test_import_site_update(self, rsa_mock):
         inst = self._makeOne()

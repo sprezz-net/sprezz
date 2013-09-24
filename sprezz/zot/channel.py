@@ -154,7 +154,7 @@ class ZotLocalChannel(Folder):
                 'name': self.name}
 
     def sign_url(self, url):
-        return base64_url_encode(self.key.sign_message(url))
+        return base64_url_encode(self.key.sign(url))
 
 
 @content('ZotLocalXChannel')
