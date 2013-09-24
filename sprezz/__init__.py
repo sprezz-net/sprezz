@@ -8,7 +8,12 @@ from pyramid_zodbconn import get_connection
 from .util.translogger import TransLogger
 
 
-__version__ = '0.1dev'
+# Adhere to the rules in disutils.version.StrictVersion
+__version__ = '0.1a0'
+
+
+version = __version__
+server = 'Sprezz Matrix'
 
 
 log = logging.getLogger(__name__)

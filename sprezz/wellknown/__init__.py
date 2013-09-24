@@ -6,6 +6,7 @@ from pyramid.view import view_config
 
 from ..content import content, service
 from ..folder import Folder
+from .. import version, server
 from ..util.base64 import base64_url_decode
 from ..util.crypto import PersistentRSAKey
 from ..util.folder import find_service
@@ -156,11 +157,11 @@ class ZotInfoView(object):
         # TODO Site mode and policies
         site = {'url': zot_service.site_url,
                 'url_sig': channel.sign_url(zot_service.site_url),
-                'directory_mode': 0x0100,
+                'directory_mode': 'standalone',
                 'directory_url': '',
-                'register_policy': 0,
-                'access_policy': 0,
-                'version': 'Sprezz Matrix 0.1',
+                'register_policy': 'closed',
+                'access_policy': 'private',
+                'version': '{} {}'.format(server, version),
                 'admin': self.request.registry.settings['sprezz.admin.email']}
         result['site'] = site
 
