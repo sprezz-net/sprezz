@@ -139,6 +139,8 @@ class ZotInfoView(object):
         result['connections_url'] = xchannel.connections_url
         result['target'] = ztarget
         result['target_sig'] = ztarget_sig
+        result['special_channel'] = False
+        result['adult_channel'] = False
         result['searchable'] = False
 
         # TODO permissions and hub locations
