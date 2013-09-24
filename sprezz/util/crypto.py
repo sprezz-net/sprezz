@@ -112,46 +112,46 @@ class PersistentRSAKey(Persistent):
             key = self._v_key
         except AttributeError:
             key = self._import_key()
-        if (key is not None) and (key.can_sign() and key.has_private()):
-            h = SHA256.new(message)
-            signer = Sig_PKCS1_v1_5.new(key)
-            return signer.sign(h)
-        raise TypeError
+        if key is None:
+            raise TypeError('No key')
+        h = SHA256.new(message)
+        signer = Sig_PKCS1_v1_5.new(key)
+        return signer.sign(h)
 
     def verify(self, message, signature):
         try:
             key = self._v_key
         except AttributeError:
             key = self._import_key()
-        if key is not None:
-            h = SHA256.new(message)
-            verifier = Sig_PKCS1_v1_5.new(key)
-            return verifier.verify(h, signature)
-        raise TypeError
+        if key is None:
+            raise TypeError('No key')
+        h = SHA256.new(message)
+        verifier = Sig_PKCS1_v1_5.new(key)
+        return verifier.verify(h, signature)
 
     def encrypt(self, message):
         try:
             key = self._v_key
         except AttributeError:
             key = self._import_key()
-        if (key is not None) and key.can_encrypt():
-            cipher = Cip_PKCS1_v1_5.new(key)
-            return cipher.encrypt(message)
-        raise TypeError
+        if key is None:
+            raise TypeError('No key')
+        cipher = Cip_PKCS1_v1_5.new(key)
+        return cipher.encrypt(message)
 
     def decrypt(self, cipher_text):
         try:
             key = self._v_key
         except AttributeError:
             key = self._import_key()
-        if (key is not None) and key.has_private():
-            cipher = Cip_PKCS1_v1_5.new(key)
-            message = cipher.decrypt(cipher_text, None)
-            if message is None:
-                raise ValueError
-            else:
-                return message
-        raise TypeError
+        if key is None:
+            raise TypeError('No key')
+        cipher = Cip_PKCS1_v1_5.new(key)
+        message = cipher.decrypt(cipher_text, None)
+        if message is None:
+            raise ValueError
+        else:
+            return message
 
     def aes_encapsulate(self, data):
         result = {}
