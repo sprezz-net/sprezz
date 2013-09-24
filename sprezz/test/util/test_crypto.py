@@ -177,20 +177,3 @@ oyr/Td7jZsSQXOSJyFG3k+T36OQ03981b3YL+RdibxM7Tbj9q9q/BUxBVRQufw==
         self.assertIn('iv', data)
         result = key.aes_decapsulate(data)
         self.assertEqual(result, message)
-
-    def test_pkcs7_pad_unpad(self):
-        from sprezz.util.crypto import pkcs7_pad, pkcs7_unpad
-        data = {b'message': b'message\x09\x09\x09\x09\x09\x09\x09\x09\x09',
-                b'0123456789ABCDE': b'0123456789ABCDE\x01',
-                b'0123456789ABCDEF': b'0123456789ABCDEF'
-                                     b'\x10\x10\x10\x10\x10\x10\x10\x10'
-                                     b'\x10\x10\x10\x10\x10\x10\x10\x10'}
-        for k,v in data.items():
-            result = pkcs7_pad(k, 16)
-            self.assertEqual(result, v)
-            # last byte is padding byte and padding length
-            n = result[-1]
-            # check that the last byte before padding length is different
-            self.assertNotEqual(result[-n-1], n)
-            self.assertEqual(result.rstrip(bytes([n])), k)
-            self.assertEqual(pkcs7_unpad(v), k)
