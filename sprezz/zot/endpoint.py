@@ -7,6 +7,7 @@ from pyramid.traversal import resource_path
 from pyramid.view import view_config
 
 from ..content import content
+from ..util.folder import find_service
 
 
 log = logging.getLogger(__name__)
@@ -40,18 +41,45 @@ class ZotEndpointView(object):
     @view_config(context=ZotEndpoint,
                  renderer='json')
     def post(self):
-        log.debug('post: request params = {}'.format(
-            pformat(self.request.params)))
         result = {'success': False}
         data = self.request.params.get('data', {})
+        log.debug('post: request data = {}'.format(pformat(data)))
         try:
-            data = json.loads(data)
+            data = json.loads(data, encoding=self.request.charset)
         except ValueError:
-            log.error('post: No valid JSON data received')
+            log.error('post: No valid JSON data received.')
+            # We haven't reached the crypto part yet,
+            # so it's safe to return here.
             return result
+
+        zot_service = find_service(self.context, 'zot')
+        try:
+            data = zot_service.decapsulate_data(data)
+        except KeyError:
+            # Data is not AES encapsulated
+            pass
+        except TypeError as e:
+            log.exception(e)
+            pass
+        except ValueError as e:
+            log.error('post: Could not decrypt received data.')
+            log.exception(e)
+            # To prevent Bleichenbacher's attack, don't
+            # inform the sender that we received malformed
+            # data.
+            pass
+        else:
+            try:
+                data = json.loads(data.decode('utf-8'), encoding='utf-8')
+            except ValueError:
+                log.error('post: No valid JSON data received')
+                # To prevent Bleichenbacher's attack, don't
+                # inform the sender that we received malformed
+                # data. Continue with bogus data.
+                data = {'type': 'bogus'}
         log.debug('post: data = {}'.format(pformat(data)))
 
-        result['success'] = False  # True
+        result['success'] = True
         log.debug('post: result = {}'.format(pformat(result)))
         return result
 

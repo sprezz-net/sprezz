@@ -144,6 +144,6 @@ class PersistentRSAKey(Persistent):
         return result
 
     def aes_decapsulate(self, data):
-        key = self.decrypt(base64_url_decode(data['key']))
         iv = self.decrypt(base64_url_decode(data['iv']))
+        key = self.decrypt(base64_url_decode(data['key']))
         return aes256_cbc_decrypt(base64_url_decode(data['data']), key, iv)

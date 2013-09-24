@@ -41,10 +41,6 @@ class Zot(Folder):
         self.add('poco', poco_service, registry=registry)
 
     @property
-    def public_site_key(self):
-        return self._public_site_key
-
-    @property
     def site_url(self):
         try:
             return self._v_site_url
@@ -52,6 +48,13 @@ class Zot(Folder):
             root = find_root(self)
             self._v_site_url = root.app_url
             return root.app_url
+
+    @property
+    def public_site_key(self):
+        return self._public_site_key
+
+    def decapsulate_data(self, data):
+        return self._private_site_key.aes_decapsulate(data)
 
     def add_channel(self, nickname, name, *arg, **kw):
         registry = kw.pop('registry', None)
