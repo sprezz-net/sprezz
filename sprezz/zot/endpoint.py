@@ -59,20 +59,22 @@ class ZotEndpointView(object):
             # Data is not AES encapsulated
             pass
         except TypeError as e:
+            # Either the private key is None or some other
+            # TypeError occured during decryption.
             log.exception(e)
-            pass
+            data = {'type': 'bogus'}
         except ValueError as e:
             log.error('post: Could not decrypt received data.')
             log.exception(e)
             # To prevent Bleichenbacher's attack, don't
             # inform the sender that we received malformed
             # data.
-            pass
+            data = {'type': 'bogus'}
         else:
             try:
                 data = json.loads(data.decode('utf-8'), encoding='utf-8')
             except ValueError:
-                log.error('post: No valid JSON data received')
+                log.error('post: No valid JSON data received.')
                 # To prevent Bleichenbacher's attack, don't
                 # inform the sender that we received malformed
                 # data. Continue with bogus data.
