@@ -50,10 +50,20 @@ class Zot(Folder):
             return root.app_url
 
     @property
+    def site_signature(self):
+        try:
+            return self._v_site_signature
+        except AttributeError:
+            signature = base64_url_encode(
+                self._private_site_key.sign(self.site_url))
+            self._v_site_signature = signature
+            return signature
+
+    @property
     def public_site_key(self):
         return self._public_site_key
 
-    def decapsulate_data(self, data):
+    def aes_decapsulate(self, data):
         return self._private_site_key.aes_decapsulate(data)
 
     def add_channel(self, nickname, name, *arg, **kw):

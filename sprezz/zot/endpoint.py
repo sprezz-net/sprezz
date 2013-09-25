@@ -54,7 +54,7 @@ class ZotEndpointView(object):
 
         zot_service = find_service(self.context, 'zot')
         try:
-            data = zot_service.decapsulate_data(data)
+            data = zot_service.aes_decapsulate(data)
         except KeyError:
             # Data is not AES encapsulated
             pass
@@ -69,7 +69,6 @@ class ZotEndpointView(object):
             # To prevent Bleichenbacher's attack, don't
             # inform the sender that we received malformed
             # data.
-            data = {'type': 'bogus'}
         else:
             try:
                 data = json.loads(data.decode('utf-8'), encoding='utf-8')
@@ -77,12 +76,30 @@ class ZotEndpointView(object):
                 log.error('post: No valid JSON data received.')
                 # To prevent Bleichenbacher's attack, don't
                 # inform the sender that we received malformed
-                # data. Continue with bogus data.
-                data = {'type': 'bogus'}
+                # data. Will continue as bogus data.
         log.debug('post: data = {}'.format(pformat(data)))
+
+        # Default to bogus data in case one of the above steps failed.
+        type = data.get('type', 'bogus')
+        # TODO Use the ZCA registry to register post adapters
+        if type == 'ping':
+            return self.post_ping()
 
         result['success'] = True
         log.debug('post: result = {}'.format(pformat(result)))
+        return result
+
+    def post_ping(self):
+        # TODO Allow for extendable components using ZCA adapters
+        zot_service = find_service(self.context, 'zot')
+        result = {
+            'success': True,
+            'site': {
+                'url': zot_service.site_url,
+                'url_sig': zot_service.site_signature,
+                'sitekey': zot_service.public_site_key.export_public_key()
+                }
+            }
         return result
 
     @view_config(context=ZotMagicAuth,
