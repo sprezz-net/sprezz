@@ -303,7 +303,7 @@ class Zot(Folder):
             nickname = url
             netloc = root.netloc
 
-        if (not nickname) or (not netloc):
+        if not nickname or not netloc:
             log.error('zot_finger: No valid address in URL %s' % url)
             raise ValueError('No valid address in URL %s' % url)
 

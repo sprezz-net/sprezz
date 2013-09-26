@@ -71,7 +71,7 @@ class ZotInfoView(object):
         zkey = self.request.params.get('key', None)
 
         if ztarget is not '':
-            if (zkey is None) or (ztarget_sig is None):
+            if zkey is None or ztarget_sig is None:
                 result['message'] = 'No key or target signature supplied.'
                 return result
             key = PersistentRSAKey(extern_public_key=zkey)
