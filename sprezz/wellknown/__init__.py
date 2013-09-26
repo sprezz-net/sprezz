@@ -98,15 +98,15 @@ class ZotInfoView(object):
             except KeyError:
                 result['message'] = 'Item not found.'
                 return result
-        elif (zguid is not None) and (zguid_sig is not None):
+        elif zguid is not None and zguid_sig is not None:
             xchannel = None
-            for xchan in xchannel_service.values():
-                if (xchan.guid == zguid) and (
-                        xchan.signature == zguid_sig):
-                    zhash = xchan.channel_hash
-                    xchannel = xchannel_service[zhash]
-                    channel = channel_service[xchannel.nickname]
-                    break
+            filter_guid = (xchan for xchan in xchannel_service.values() if (
+                xchan.guid == zguid and xchan.signature == zguid_sig))
+            for xchan in filter_guid:
+                zhash = xchan.channel_hash
+                xchannel = xchannel_service[zhash]
+                channel = channel_service[xchannel.nickname]
+                break
             if xchannel is None:
                 result['message'] = 'Item not found.'
                 return result
