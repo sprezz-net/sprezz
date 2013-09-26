@@ -417,9 +417,10 @@ class TestZot(unittest.TestCase):
     @patch('sprezz.zot.zot.Zot.import_site')
     @patch('sprezz.zot.zot.Zot.import_hub')
     @patch('sprezz.zot.zot.PersistentRSAKey')
-    def test_import_xchannel_create(self, rsa_mock,
-                                          imp_hub_mock,
-                                          imp_site_mock):
+    def test_import_xchannel_create(self,
+                                    rsa_mock,
+                                    imp_hub_mock,
+                                    imp_site_mock):
         inst = self._makeOne()
         inst['xchannel'] = DummyFolder()
         rsa_mock.verify = Mock(return_value=True)
@@ -474,9 +475,10 @@ class TestZot(unittest.TestCase):
     @patch('sprezz.zot.zot.Zot.import_site')
     @patch('sprezz.zot.zot.Zot.import_hub')
     @patch('sprezz.zot.zot.PersistentRSAKey')
-    def test_import_xchannel_invalid_loc_no_site(self, rsa_mock,
-                                                       imp_hub_mock,
-                                                       imp_site_mock):
+    def test_import_xchannel_invalid_loc_no_site(self,
+                                                 rsa_mock,
+                                                 imp_hub_mock,
+                                                 imp_site_mock):
         inst = self._makeOne()
         inst['xchannel'] = DummyFolder()
         rsa_mock.verify = Mock(return_value=True)
