@@ -143,3 +143,15 @@ class IZotSite(Interface):
 
     def update(self, data):
         """Update site with data"""
+
+
+class IPostEndpoint(Interface):
+    """Interface to define post endpoint methods."""
+    context = Attribute('Context of request')
+    request = Attribute('Request')
+
+    def __init__(self, context, request):
+        """Initialize endpoint with request data"""
+
+    def post(self, data):
+        """Handle request with parameter data"""

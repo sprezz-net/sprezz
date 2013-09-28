@@ -3,8 +3,10 @@ import logging
 
 from pprint import pformat
 from pyramid.view import view_config
+from zope.component import ComponentLookupError
 
 from ..endpoint import ZotEndpoint, ZotMagicAuth
+from sprezz.interfaces import IPostEndpoint
 from sprezz.util.folder import find_service
 
 
@@ -59,27 +61,18 @@ class ZotEndpointView(object):
         log.debug('post: data = {}'.format(pformat(data)))
 
         # Default to bogus data in case one of the above steps failed.
-        type = data.get('type', 'bogus')
-        # TODO Use the ZCA registry to register post adapters
-        if type == 'ping':
-            return self.post_ping()
-
-        result['success'] = True
-        log.debug('post: result = {}'.format(pformat(result)))
-        return result
-
-    def post_ping(self):
-        # TODO Allow for extendable components using ZCA adapters
-        zot_service = find_service(self.context, 'zot')
-        result = {
-            'success': True,
-            'site': {
-                'url': zot_service.site_url,
-                'url_sig': zot_service.site_signature,
-                'sitekey': zot_service.public_site_key.export_public_key()
-                }
-            }
-        return result
+        post_type = data.get('type', 'bogus').lower()
+        post_utility = 'post_{}'.format(post_type)
+        try:
+            PostUtility = self.request.registry.getUtility(IPostEndpoint,
+                                                      post_utility)
+        except ComponentLookupError:
+            log.error('post: No post endpoint found for type {}.'.format(
+                post_type))
+            return result
+        else:
+            post_dispatch = PostUtility(self.context, self.request)
+            return post_dispatch.post(data)
 
     @view_config(context=ZotMagicAuth,
                  renderer='json')
