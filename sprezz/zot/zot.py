@@ -30,6 +30,7 @@ class Zot(Folder):
         hub_service = registry.content.create('ZotHubs')
         channel_service = registry.content.create('ZotChannels')
         xchannel_service = registry.content.create('ZotXChannels')
+        message_service = registry.content.create('Messages')
         endpoint_service = registry.content.create('ZotEndpoint')
         poco_service = registry.content.create('ZotPoco')
 
@@ -37,6 +38,7 @@ class Zot(Folder):
         self.add('hub', hub_service, registry=registry)
         self.add('channel', channel_service, registry=registry)
         self.add('xchannel', xchannel_service, registry=registry)
+        self.add('message', message_service, registry=registry)
         self.add('post', endpoint_service, registry=registry)
         self.add('poco', poco_service, registry=registry)
 

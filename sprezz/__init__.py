@@ -127,6 +127,7 @@ def scan(config):
     config.scan('.root')
     config.scan('.wellknown')
     config.scan('.zot')
+    config.scan('.message')
     config.scan('.views')
 
 
