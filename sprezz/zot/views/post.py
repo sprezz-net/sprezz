@@ -1,8 +1,13 @@
+import logging
+
 from zope.interface import implementer
 
 from sprezz.interfaces import IPostEndpoint
 from sprezz.util.base64 import base64_url_decode
 from sprezz.util.folder import find_service
+
+
+log = logging.getLogger(__name__)
 
 
 class AbstractPost(object):
@@ -23,8 +28,9 @@ class PostPing(AbstractPost):
                 'sitekey': zot_service.public_site_key.export_public_key()
                 }
             }
-        log.debug('post_ping: Received ping from {} at site {}.'.format(
-            data['guid'], data['url']))
+        log.debug('post_ping: Received ping from '
+                  'channel {} at site {}.'.format(data['sender']['guid'],
+                                                  data['sender']['url']))
         return result
 
 
