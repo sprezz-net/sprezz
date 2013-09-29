@@ -65,7 +65,7 @@ class ZotEndpointView(object):
         post_utility = 'post_{}'.format(post_type)
         try:
             PostUtility = self.request.registry.getUtility(IPostEndpoint,
-                                                      post_utility)
+                                                           post_utility)
         except ComponentLookupError:
             log.error('post: No post endpoint found for type {}.'.format(
                 post_type))
