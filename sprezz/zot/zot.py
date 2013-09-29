@@ -10,6 +10,7 @@ from urllib.parse import urlparse, urlunparse
 
 from ..content import service
 from ..folder import Folder
+from ..interfaces import IZotChannel
 from ..util.base64 import base64_url_encode, base64_url_decode
 from ..util.crypto import PersistentRSAKey
 
@@ -291,36 +292,65 @@ class Zot(Folder):
         else:
             zot_site.update(site)
 
-    def zot_finger(self, url, channel_hash=None):
+    def zot_finger(self, address=None,
+                   channel_hash=None, site_url=None,
+                   target=None):
+        """Finger a local or remote channel.
+
+        ``address``, if passed, can be a local channel nickname or a remote
+        channel address. Remote address are in the form ``nickname@host`` or
+        ``nickname@host:port``.
+
+        When ``channel_hash`` is passed, finger request is sent to site
+        ``site_url``.
+
+        ``target`` is optional when querying addresses and represents the
+        requesting channel.
+        """
         result = {'success': False}
-
-        if '@' in url:
-            parts = url.split(sep='@')
-            nickname = parts[0]
-            netloc = parts[1]
-        else:
-            root = find_root(self)
-            nickname = url
-            netloc = root.netloc
-
-        if not nickname or not netloc:
-            log.error('zot_finger: No valid address in URL %s' % url)
-            raise ValueError('No valid address in URL %s' % url)
-
-        xchannel_address = '@'.join([nickname, netloc])
-        log.debug('zot_finger: xchannel_address = %s' % xchannel_address)
-
-        hub_service = self['hub']
-        xchannel_service = self['xchannel']
-
         scheme = 'https'
         well_known = '/.well-known/zot-info'
         query = ''
         payload = None
         request_method = requests.post
+        if address is None and channel_hash is None:
+            log.error('zot_finger: No channel address or hash')
+            raise ValueError('No channel address or hash')
 
-        for xchannel in xchannel_service.values():
-            if xchannel.address == xchannel_address:
+        if channel_hash is not None:
+            if site_url is None:
+                log.error('zot_finger: No site URL')
+                raise ValueError('No site URL')
+            else:
+                url_parts = urlparse(site_url)
+                scheme = url_parts.scheme
+                netloc = url_parts.netloc
+                query = 'guid_hash={}'.format(channel_hash)
+                request_method = requests.get
+                if not netloc:
+                    log.error('zot_finger: Invalid site URL %s' % site_url)
+                    raise ValueError('Invalid site URL %s' % site_url)
+        else:
+            if '@' in address:
+                parts = address.split(sep='@')
+                nickname = parts[0]
+                netloc = parts[1]
+            else:
+                root = find_root(self)
+                nickname = address
+                netloc = root.netloc
+            if not nickname or not netloc:
+                log.error('zot_finger: Invalid address %s' % address)
+                raise ValueError('Invalid address %s' % address)
+
+            xchannel_address = '@'.join([nickname, netloc])
+            log.debug('zot_finger: xchannel_address = %s' % xchannel_address)
+
+            xchannel_service = self['xchannel']
+            hub_service = self['hub']
+            filter_xchan = (xchan for xchan in xchannel_service.values() if (
+                xchan.address == xchannel_address))
+            for xchannel in filter_xchan:
                 try:
                     # Every xchannel should have a hub, but just in
                     # case something went wrong, no need to error out.
@@ -328,23 +358,22 @@ class Zot(Folder):
                     hub = hub_service[xchannel.channel_hash]
                 except KeyError:
                     break
-                url = urlparse(hub.url)
-                scheme = url.scheme
-                netloc = url.netloc
+                url_parts = urlparse(hub.url)
+                scheme = url_parts.scheme
+                netloc = url_parts.netloc
                 log.debug('zot_finger: Found known hub using '
                           'scheme=%s, netloc=%s' % (scheme, netloc))
                 break
 
-        try:
-            my_channel = xchannel_service[channel_hash]
-            payload = {'address': nickname,
-                       'target': my_channel.guid,
-                       'target_sig': my_channel.signature,
-                       'key': my_channel.key.export_public_key()}
-            log.debug('zot_finger: payload = %s' % payload)
-        except (KeyError, TypeError):
-            request_method = requests.get
-            query = 'address={}'.format(nickname)
+            if IZotChannel.providedBy(target):
+                payload = {'address': nickname,
+                           'target': target.guid,
+                           'target_sig': target.signature,
+                           'key': target.key.export_public_key()}
+                log.debug('zot_finger: payload = %s' % payload)
+            else:
+                request_method = requests.get
+                query = 'address={}'.format(nickname)
 
         url = urlunparse((scheme, netloc, well_known, '', query, '',))
         log.debug('zot_finger: url = %s' % url)

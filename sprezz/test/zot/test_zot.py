@@ -6,6 +6,7 @@ from requests.exceptions import HTTPError
 from requests.models import Response
 from unittest.mock import patch, call, Mock
 
+from sprezz.interfaces import IZotChannel
 from ..testing import (
     create_single_content_registry,
     create_dict_content_registry,
@@ -169,6 +170,15 @@ class TestZot(unittest.TestCase):
         self.assertEqual(hashed, 'EtDtUr7cPtjoXQjDq_d68-AIFRNetS-KudlogIffsYy'
                                  'kH66_LwsOKee3dtoV7KDg1V08s_6K4TVIgo2O5KvNiQ')
 
+    def test_zot_finger_no_arg(self):
+        """Test finger without arguments"""
+        inst = self._makeOne()
+        root = testing.DummyResource()
+        root.netloc = 'netloc:8080'
+        inst.__parent__ = root
+        with self.assertRaises(ValueError):
+            inst.zot_finger()
+
     def test_local_empty_zot_finger(self):
         """Test finger with invalid address"""
         inst = self._makeOne()
@@ -176,15 +186,24 @@ class TestZot(unittest.TestCase):
         root.netloc = 'netloc:8080'
         inst.__parent__ = root
         with self.assertRaises(ValueError):
-            inst.zot_finger('')
+            inst.zot_finger(address='')
 
     def _prepare_zot_finger(self):
         inst = self._makeOne()
         root = testing.DummyResource()
         root.netloc = 'netloc:8080'
         inst.__parent__ = root
+        inst['channel'] = DummyFolder()
         inst['xchannel'] = DummyFolder()
         inst['hub'] = DummyFolder()
+
+        my_channel = testing.DummyResource(__provides__=IZotChannel)
+        my_channel.channel_hash = 'me_hash'
+        my_channel.guid = 'me_guid'
+        my_channel.signature = 'me_signature'
+        my_channel.key = Mock()
+        my_channel.key.export_public_key = Mock(return_value='me_key')
+        inst['channel'].add(my_channel.channel_hash, my_channel)
 
         my_xchannel = testing.DummyResource()
         my_xchannel.address = 'me@netloc:8080'
@@ -220,7 +239,7 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': True})
         req_get_mock.return_value = resp
-        result = inst.zot_finger('admin')
+        result = inst.zot_finger(address='admin')
         calls = [call('http://hubloc:8080/.well-known/zot-info?address=admin',
                       data=None,
                       verify=True, allow_redirects=True, timeout=3)]
@@ -235,13 +254,45 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': True})
         req_get_mock.return_value = resp
-        result = inst.zot_finger('me@netloc:8080')
+        result = inst.zot_finger(address='me@netloc:8080')
         calls = [call('https://netloc:8080/.well-known/zot-info?'
                       'address=me',
                       data=None,
                       verify=True, allow_redirects=True, timeout=3)]
         req_get_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
+
+    @patch('sprezz.zot.zot.requests.get')
+    def test_local_get_zot_finger_hash(self, req_get_mock):
+        """Test succesful finger for channel hash using HTTP GET"""
+        inst = self._prepare_zot_finger()
+        resp = Response()
+        resp.status_code = 200
+        resp.json = Mock(return_value={'success': True})
+        req_get_mock.return_value = resp
+        result = inst.zot_finger(channel_hash='remote_hash',
+                                 site_url='https://remoteloc:6543')
+        calls = [call('https://remoteloc:6543/.well-known/zot-info?'
+                      'guid_hash=remote_hash',
+                      data=None,
+                      verify=True, allow_redirects=True, timeout=3)]
+        req_get_mock.assert_has_calls(calls)
+        self.assertTrue(result['success'])
+
+    def test_remote_get_zot_finger_hash_no_site(self):
+        """Test succesful finger for channel hash using HTTPS GET
+        without a known hub"""
+        inst = self._prepare_zot_finger()
+        with self.assertRaises(ValueError):
+            inst.zot_finger(channel_hash='remote_hash')
+
+    def test_remote_get_zot_finger_hash_invalid_site(self):
+        """Test succesful finger for channel hash using HTTPS GET
+        without a known hub"""
+        inst = self._prepare_zot_finger()
+        with self.assertRaises(ValueError):
+            inst.zot_finger(channel_hash='remote_hash',
+                            site_url='http://')
 
     @patch('sprezz.zot.zot.requests.post')
     def test_local_post_zot_finger(self, req_post_mock):
@@ -251,7 +302,8 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': True})
         req_post_mock.return_value = resp
-        result = inst.zot_finger('admin', 'me_hash')
+        target = inst['channel']['me_hash']
+        result = inst.zot_finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
@@ -269,8 +321,9 @@ class TestZot(unittest.TestCase):
         resp.json = Mock(return_value={'success': False,
                                        'message': 'Item not found.'})
         req_post_mock.return_value = resp
+        target = inst['channel']['me_hash']
         with self.assertRaises(ValueError):
-            inst.zot_finger('admin', 'me_hash')
+            inst.zot_finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
@@ -286,8 +339,9 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': False})
         req_post_mock.return_value = resp
+        target = inst['channel']['me_hash']
         with self.assertRaises(ValueError):
-            inst.zot_finger('admin', 'me_hash')
+            inst.zot_finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
@@ -312,7 +366,9 @@ class TestZot(unittest.TestCase):
             return resp
 
         req_post_mock.side_effect = response_side_effect
-        result = inst.zot_finger('remote@remoteloc:6543', 'me_hash')
+        target = inst['channel']['me_hash']
+        result = inst.zot_finger(address='remote@remoteloc:6543',
+                                 target=target)
         calls = [call('https://remoteloc:6543/.well-known/zot-info',
                       data={'address': 'remote', 'key': 'me_key',
                             'target': 'me_guid',
@@ -334,8 +390,9 @@ class TestZot(unittest.TestCase):
         resp.status_code = 404
         resp.reason = 'Not Found'
         req_post_mock.return_value = resp
+        target = inst['channel']['me_hash']
         with self.assertRaises(HTTPError):
-            inst.zot_finger('remote@remoteloc:6543', 'me_hash')
+            inst.zot_finger(address='remote@remoteloc:6543', target=target)
         calls = [call('https://remoteloc:6543/.well-known/zot-info',
                       data={'address': 'remote', 'key': 'me_key',
                             'target': 'me_guid',
@@ -356,8 +413,9 @@ class TestZot(unittest.TestCase):
         resp.status_code = 404
         resp.reason = 'Not Found'
         req_post_mock.return_value = resp
+        target = inst['channel']['me_hash']
         with self.assertRaises(HTTPError):
-            inst.zot_finger('admin', 'me_hash')
+            inst.zot_finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
