@@ -173,9 +173,6 @@ class TestZot(unittest.TestCase):
     def test_zot_finger_no_arg(self):
         """Test finger without arguments"""
         inst = self._makeOne()
-        root = testing.DummyResource()
-        root.netloc = 'netloc:8080'
-        inst.__parent__ = root
         with self.assertRaises(ValueError):
             inst.zot_finger()
 
