@@ -466,6 +466,16 @@ class Zot(Folder):
 
     def zot_zot(self, url, data):
         data = {'data': data}
-        response = requests.post(url, data=data, verify=True,
-                                 allow_redirects=True, timeout=3)
-        return response.json()
+        try:
+            response = requests.post(url, data=data, verify=True,
+                                     allow_redirects=True, timeout=3)
+            log.debug('zot_zot: Response status code {} '
+                      'from url {}.'.format(response.status_code, url))
+            if 300 <= response.status_code < 600:
+                response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            log.error('zot_zot: Caught RequestException %s' % (
+                      str(e)))
+            raise
+        else:
+            return response.json()
