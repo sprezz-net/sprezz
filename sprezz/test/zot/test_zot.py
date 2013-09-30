@@ -111,8 +111,8 @@ class TestZot(unittest.TestCase):
         inst['hub'] = DummyFolder()
         inst._create_channel_guid = Mock(name='create_channel_guid')
         inst._create_channel_signature = Mock(name='create_channel_signature')
-        inst._create_channel_hash = Mock(name='create_channel_hash',
-                                         return_value='hash')
+        inst.create_channel_hash = Mock(name='create_channel_hash',
+                                        return_value='hash')
         inst._public_site_key = Mock(name='public_site_key',
                                      return_value='key')
 
@@ -132,7 +132,7 @@ class TestZot(unittest.TestCase):
         # Check helpers
         self.assertEqual(inst._create_channel_guid.call_count, 1)
         self.assertEqual(inst._create_channel_signature.call_count, 1)
-        self.assertEqual(inst._create_channel_hash.call_count, 1)
+        self.assertEqual(inst.create_channel_hash.call_count, 1)
 
         # Check that the objects are added to the containers
         self.assertEqual(inst['channel']['admin'], ob_chan)
@@ -165,7 +165,7 @@ class TestZot(unittest.TestCase):
 
     def test_create_channel_hash(self):
         inst = self._makeOne()
-        hashed = inst._create_channel_hash('guid', 'signature')
+        hashed = inst.create_channel_hash('guid', 'signature')
         # Base64 url encoded Whirlpool hashed 'guidsignature'
         self.assertEqual(hashed, 'EtDtUr7cPtjoXQjDq_d68-AIFRNetS-KudlogIffsYy'
                                  'kH66_LwsOKee3dtoV7KDg1V08s_6K4TVIgo2O5KvNiQ')

@@ -1,11 +1,13 @@
+import json
 import logging
 import random
 import requests
 import sys
 import whirlpool
 
+from pprint import pformat
 from pyramid.threadlocal import get_current_registry
-from pyramid.traversal import find_root
+from pyramid.traversal import find_root, resource_path
 from urllib.parse import urlparse, urlunparse
 
 from ..content import service
@@ -61,6 +63,26 @@ class Zot(Folder):
             return signature
 
     @property
+    def site_callback(self):
+        try:
+            return self._v_site_callback
+        except AttributeError:
+            url = '{0}{1}'.format(self.site_url,
+                                  resource_path(self['post']))
+            self._v_site_callback = url
+            return url
+
+    @property
+    def site_callback_signature(self):
+        try:
+            return self._v_site_callback_signature
+        except AttributeError:
+            signature = base64_url_encode(
+                self._private_site_key.sign(self.site_callback))
+            self._v_site_callback_signature = signature
+            return signature
+
+    @property
     def public_site_key(self):
         return self._public_site_key
 
@@ -78,7 +100,7 @@ class Zot(Folder):
 
         guid = self._create_channel_guid(nickname)
         signature = self._create_channel_signature(guid, prv_key)
-        channel_hash = self._create_channel_hash(guid, signature)
+        channel_hash = self.create_channel_hash(guid, signature)
 
         xchannel = registry.content.create('ZotLocalXChannel',
                                            nickname=nickname,
@@ -134,7 +156,7 @@ class Zot(Folder):
     def _create_channel_signature(self, guid, key):
         return base64_url_encode(key.sign(guid))
 
-    def _create_channel_hash(self, guid, signature):
+    def create_channel_hash(self, guid, signature):
         """Create base64 encoded channel hash.
 
         Arguments 'guid' and 'signature' must be base64 encoded.
@@ -148,8 +170,8 @@ class Zot(Folder):
         if registry is None:
             registry = get_current_registry()
 
-        channel_hash = self._create_channel_hash(info['guid'],
-                                                 info['guid_sig'])
+        channel_hash = self.create_channel_hash(info['guid'],
+                                                info['guid_sig'])
         log.debug('import xchan: channel_hash = {}'.format(channel_hash))
 
         pub_key = PersistentRSAKey(extern_public_key=info['key'])
@@ -213,8 +235,8 @@ class Zot(Folder):
 
         channel_hash = kw.pop('channel_hash', None)
         if channel_hash is None:
-            channel_hash = self._create_channel_hash(info['guid'],
-                                                     info['guid_sig'])
+            channel_hash = self.create_channel_hash(info['guid'],
+                                                    info['guid_sig'])
 
         pub_key = kw.pop('pub_key', None)
         if pub_key is None:
@@ -424,3 +446,26 @@ class Zot(Folder):
             else:
                 raise ValueError('No results')
         return result
+
+    def zot_fetch(self, data, hub):
+        secret = data['secret']
+        secret_signature = base64_url_encode(
+            self._private_site_key.sign(secret))
+        pickup = {'type': 'pickup',
+                  'url': self.site_url,
+                  'callback': self.site_callback,
+                  'callback_sig': self.site_callback_signature,
+                  'secret': secret,
+                  'secret_sig': secret_signature}
+        pickup_data = json.dumps(pickup).encode('utf-8')
+        pickup_data = json.dumps(hub.key.aes_encapsulate(pickup_data))
+        result = self.zot_zot(hub.callback, pickup_data)
+        # TODO import resulting messages
+        log.debug('zot_fetch: result = {}'.format(pformat(result)))
+        return result
+
+    def zot_zot(self, url, data):
+        data = {'data': data}
+        response = requests.post(url, data=data, verify=True,
+                                 allow_redirects=True, timeout=3)
+        return response.json()

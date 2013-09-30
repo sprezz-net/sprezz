@@ -15,6 +15,32 @@ class AbstractPost(object):
         self.context = context
         self.request = request
 
+    def get_primary_hub(self, sender):
+        hub_service = find_service(self.context, 'zot', 'hub')
+        filter_hub = (hub for hub in hub_service.values() if all([
+            hub.url == sender['url'],
+            hub.url_signature == sender['url_sig'],
+            hub.guid == sender['guid'],
+            hub.signature == sender['guid_sig']]))
+        for hub in filter_hub:
+            return hub
+        raise ValueError('No primary hub found')
+
+    def verify_sender(self, sender):
+        try:
+            hub = self.get_primary_hub(sender)
+        except ValueError:
+            # No primary hub found, register one
+            zot_service = find_service(self.context, 'zot')
+            channel_hash = zot_service.create_channel_hash(sender['guid'],
+                                                           sender['guid_sig'])
+            # FIXME try except around zot_finger
+            info = zot_service.zot_finger(channel_hash=channel_hash,
+                                          site_url=sender['url'])
+            zot_service.import_xchannel(info)
+            hub = self.get_primary_hub(sender)
+        return hub
+
 
 @implementer(IPostEndpoint)
 class PostPing(AbstractPost):
@@ -28,9 +54,13 @@ class PostPing(AbstractPost):
                 'sitekey': zot_service.public_site_key.export_public_key()
                 }
             }
-        log.debug('post_ping: Received ping from '
-                  'channel {} at site {}.'.format(data['sender']['guid'],
-                                                  data['sender']['url']))
+        # Sender verification not required for ping, use it when available
+        try:
+            log.debug('post_ping: Received ping from '
+                      'channel {} at site {}.'.format(data['sender']['guid'],
+                                                      data['sender']['url']))
+        except KeyError:
+            log.debug('post_ping: Received ping.')
         return result
 
 
@@ -72,9 +102,31 @@ class PostPickup(AbstractPost):
         return result
 
 
+@implementer(IPostEndpoint)
+class PostNotify(AbstractPost):
+    def post(self, data):
+        result = {'success': False}
+        zot_service = find_service(self.context, 'zot')
+        try:
+            sender = data['sender']
+        except KeyError:
+            log.error('post_notify: No sender.')
+            result['message'] = 'No sender.'
+            return result
+        hub = self.verify_sender(sender)
+        # TODO update hub with current date to show when we last communicated
+        # successfully with this hub
+        # TODO add ability for asynchronous fetch using a queue
+        result['delivery_report'] = zot_service.zot_fetch(data, hub)
+        result['success'] = True
+        return result
+
+
 def includeme(config):
     config.registry.registerUtility(PostPing, IPostEndpoint,
                                     name='post_ping')
     config.registry.registerUtility(PostPickup, IPostEndpoint,
                                     name='post_pickup')
+    config.registry.registerUtility(PostNotify, IPostEndpoint,
+                                    name='post_notify')
     config.hook_zca()
