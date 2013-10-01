@@ -116,10 +116,9 @@ class Zot(Folder):
                     log.error('aes_decapsulate_json: No valid JSON data received.')
                     log.exception(e)
                     raise
-        else:
-            # Data is not AES encapsulated
-            return data
-        return result
+            return result
+        # Data is not AES encapsulated
+        return data
 
     def add_channel(self, nickname, name, *arg, **kw):
         registry = kw.pop('registry', None)
@@ -491,9 +490,7 @@ class Zot(Folder):
             log.error('fetch: Caught network exception %s' % (
                       str(e)))
             return
-        log.debug('fetch: result = {}'.format(pformat(result)))
-        result = self.import_messages(result)
-        return result
+        return self.import_messages(result)
 
     def zot(self, url, data):
         data = {'data': data}

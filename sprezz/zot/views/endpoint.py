@@ -37,10 +37,10 @@ class ZotEndpointView(object):
         try:
             data = zot_service.aes_decapsulate_json(data)
         except (KeyError, TypeError, ValueError):
-            # Either the private key is None or some other
-            # TypeError occured during decryption.
+            # To prevent Bleichenbacher's attack, don't inform the sender that
+            # the received data is malformed and for which reason.
+            # It will fail later looking for a post utility.
             log.exception(e)
-            data = {'type': 'bogus'}
         log.debug('post: data = {}'.format(pformat(data)))
 
         # Default to bogus data in case one of the above steps failed.
