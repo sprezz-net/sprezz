@@ -42,7 +42,7 @@ class ChannelView(object):
         url = self.request.params['url'].strip()
         zot_service = find_service(self.context, 'zot')
         #try:
-        info = zot_service.zot_finger(address=url, target=self.context)
+        info = zot_service.finger(address=url, target=self.context)
         #except Exception as e:
             # TODO Check for the various exception classes like HTTP
             # exeception, etc.

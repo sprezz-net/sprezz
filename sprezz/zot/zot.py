@@ -1,7 +1,6 @@
 import json
 import logging
 import random
-import requests
 import sys
 import whirlpool
 
@@ -13,6 +12,7 @@ from urllib.parse import urlparse, urlunparse
 from ..content import service
 from ..folder import Folder
 from ..interfaces import IZotChannel
+from ..util import network
 from ..util.base64 import base64_url_encode, base64_url_decode
 from ..util.crypto import PersistentRSAKey
 
@@ -88,6 +88,38 @@ class Zot(Folder):
 
     def aes_decapsulate(self, data):
         return self._private_site_key.aes_decapsulate(data)
+
+    def aes_decapsulate_json(self, data):
+        result = {}
+        if 'iv' in data:
+            try:
+                result = self.aes_decapsulate(data)
+            except KeyError as e:
+                # Data might not contain mandatory keys 'data' or 'key'
+                log.error('aes_decapsulate_json: Missing keys in data.')
+                log.exception(e)
+                raise
+            except TypeError as e:
+                # Either the private key is None or some other
+                # TypeError occured during decryption.
+                log.error('aes_decapsulate_json: TypeError occured.')
+                log.exception(e)
+                raise
+            except ValueError as e:
+                log.error('aes_decapsulate_json: Could not decrypt received data.')
+                log.exception(e)
+                raise
+            else:
+                try:
+                    result = json.loads(result.decode('utf-8'), encoding='utf-8')
+                except ValueError as e:
+                    log.error('aes_decapsulate_json: No valid JSON data received.')
+                    log.exception(e)
+                    raise
+        else:
+            # Data is not AES encapsulated
+            return data
+        return result
 
     def add_channel(self, nickname, name, *arg, **kw):
         registry = kw.pop('registry', None)
@@ -314,14 +346,14 @@ class Zot(Folder):
         else:
             zot_site.update(site)
 
-    def zot_finger(self, address=None,
+    def finger(self, address=None,
                    channel_hash=None, site_url=None,
                    target=None):
         """Finger a local or remote channel.
 
         ``address``, if passed, can be a local channel nickname or a remote
-        channel address. Remote address are in the form ``nickname@host`` or
-        ``nickname@host:port``.
+        channel address. Remote addresses are in the form ``nickname@host``
+        or ``nickname@host:port``.
 
         When ``channel_hash`` is passed, finger request is sent to site
         ``site_url``.
@@ -332,26 +364,29 @@ class Zot(Folder):
         result = {'success': False}
         scheme = 'https'
         well_known = '/.well-known/zot-info'
-        query = ''
-        payload = None
-        request_method = requests.post
+        query = {}
+        payload = {}
+        request_method = network.post
         if address is None and channel_hash is None:
-            log.error('zot_finger: No channel address or hash')
-            raise ValueError('No channel address or hash')
+            message = 'No channel address or hash supplied.'
+            log.error('finger: {}'.format(message))
+            raise ValueError(message)
 
         if channel_hash is not None:
             if site_url is None:
-                log.error('zot_finger: No site URL')
-                raise ValueError('No site URL')
+                message = 'No site URL specified.'
+                log.error('finger: {}'.format(message))
+                raise ValueError(message)
             else:
                 url_parts = urlparse(site_url)
                 scheme = url_parts.scheme
                 netloc = url_parts.netloc
-                query = 'guid_hash={}'.format(channel_hash)
-                request_method = requests.get
+                query['guid_hash'] = channel_hash
+                request_method = network.get
                 if not netloc:
-                    log.error('zot_finger: Invalid site URL %s' % site_url)
-                    raise ValueError('Invalid site URL %s' % site_url)
+                    message = 'Invalid site URL {}.'.format(site_url)
+                    log.error('finger: {}'.format(message))
+                    raise ValueError(message)
         else:
             if '@' in address:
                 parts = address.split(sep='@')
@@ -362,11 +397,13 @@ class Zot(Folder):
                 nickname = address
                 netloc = root.netloc
             if not nickname or not netloc:
-                log.error('zot_finger: Invalid address %s' % address)
-                raise ValueError('Invalid address %s' % address)
+                message = 'Invalid address {}.'.format(address)
+                log.error('finger: {}'.format(message))
+                raise ValueError(message)
 
             xchannel_address = '@'.join([nickname, netloc])
-            log.debug('zot_finger: xchannel_address = %s' % xchannel_address)
+            log.debug('finger: Query for address '
+                      '{}.'.format(xchannel_address))
 
             xchannel_service = self['xchannel']
             hub_service = self['hub']
@@ -383,8 +420,8 @@ class Zot(Folder):
                 url_parts = urlparse(hub.url)
                 scheme = url_parts.scheme
                 netloc = url_parts.netloc
-                log.debug('zot_finger: Found known hub using '
-                          'scheme=%s, netloc=%s' % (scheme, netloc))
+                log.debug('finger: Found known hub '
+                          'with URL {}.'.format(hub.url))
                 break
 
             if IZotChannel.providedBy(target):
@@ -392,62 +429,48 @@ class Zot(Folder):
                            'target': target.guid,
                            'target_sig': target.signature,
                            'key': target.key.export_public_key()}
-                log.debug('zot_finger: payload = %s' % payload)
+                log.debug('finger: Payload {}.'.format(pformat(payload)))
             else:
-                request_method = requests.get
-                query = 'address={}'.format(nickname)
+                query['address'] = nickname
+                request_method = network.get
 
-        url = urlunparse((scheme, netloc, well_known, '', query, '',))
-        log.debug('zot_finger: url = %s' % url)
+        # Assemble the URL parts again.
+        url = urlunparse((scheme, netloc, well_known, '', '', '',))
+        log.debug('finger: Destination URL {}.'.format(url))
         try:
-            response = request_method(url, data=payload, verify=True,
-                                      allow_redirects=True, timeout=3)
-            log.debug('zot_finger: Response status code = %d' % (
-                      response.status_code))
-            if 400 <= response.status_code < 600:
-                response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            log.error('zot_finger: Caught RequestException = %s' % str(e))
-            if scheme != 'http':
-                scheme = 'http'
-                url = urlunparse((scheme, netloc, well_known, '', query, '',))
-                log.debug('zot_finger: Falling back to HTTP at URL %s' % url)
-                try:
-                    response = request_method(url, data=payload, verify=True,
-                                              allow_redirects=True, timeout=3)
-                    log.debug('zot_finger: Response status code = %d' % (
-                              response.status_code))
-                    if 400 <= response.status_code < 600:
-                        response.raise_for_status()
-                except requests.exceptions.RequestException as f:
-                    log.error('zot_finger: Caught RequestException = %s' % (
-                              str(f)))
-                    raise
-                else:
-                    log.debug('zot_finger: Inner request history = %s' % (
-                              response.history))
-                    if 200 <= response.status_code < 300:
-                        result = response.json()
-            else:
-                # No need to retry if scheme was already HTTP
+            response = request_method(url, params=query, data=payload)
+        except (network.RequestException,
+                network.ConnectionError) as e:
+            log.error('finger: Caught outer network exception '
+                      '{}.'.format(str(e)))
+            if scheme.lower() == 'http':
                 raise
-        else:
-            log.debug('zot_finger: Outer request history = %s' % (
-                      response.history))
-            if 200 <= response.status_code < 300:
-                result = response.json()
+            else:
+                # Fall back to HTTP and assemble the URL parts again.
+                scheme = 'http'
+                url = urlunparse((scheme, netloc, well_known, '', '', '',))
+                try:
+                    response = request_method(url, params=query, data=payload)
+                except (network.RequestException,
+                        network.ConnectionError) as f:
+                    log.error('finger: Caught inner network exception '
+                              '{}.'.format(str(f)))
+                    raise
 
-        # We only reach this point when we received a response with a 2xx
-        # success status code
-        log.debug('zot_finger: result =  %s' % result)
+        result = response.json()
+        log.debug('finger: Result {}.'.format(pformat(result)))
         if not result['success']:
             if 'message' in result:
+                log.error('finger: Response message is '
+                          '{}.'.format(result['message']))
                 raise ValueError(result['message'])
             else:
-                raise ValueError('No results')
+                message = 'No results.'
+                log.error('finger: {}.'.format(message))
+                raise ValueError(message)
         return result
 
-    def zot_fetch(self, data, hub):
+    def fetch(self, data, hub):
         secret = data['secret']
         secret_signature = base64_url_encode(
             self._private_site_key.sign(secret))
@@ -457,25 +480,24 @@ class Zot(Folder):
                   'callback_sig': self.site_callback_signature,
                   'secret': secret,
                   'secret_sig': secret_signature}
+        log.debug('fetch: Sending pickup for secret {} to endpoint {}.'.format(
+            secret, hub.callback))
         pickup_data = json.dumps(pickup).encode('utf-8')
         pickup_data = json.dumps(hub.key.aes_encapsulate(pickup_data))
-        result = self.zot_zot(hub.callback, pickup_data)
-        # TODO import resulting messages
-        log.debug('zot_fetch: result = {}'.format(pformat(result)))
+        try:
+            result = self.zot(hub.callback, pickup_data)
+        except (network.RequestException,
+                network.ConnectionError) as e:
+            log.error('fetch: Caught network exception %s' % (
+                      str(e)))
+            return
+        log.debug('fetch: result = {}'.format(pformat(result)))
+        result = self.import_messages(result)
         return result
 
-    def zot_zot(self, url, data):
+    def zot(self, url, data):
         data = {'data': data}
-        try:
-            response = requests.post(url, data=data, verify=True,
-                                     allow_redirects=True, timeout=3)
-            log.debug('zot_zot: Response status code {} '
-                      'from url {}.'.format(response.status_code, url))
-            if 300 <= response.status_code < 600:
-                response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            log.error('zot_zot: Caught RequestException %s' % (
-                      str(e)))
-            raise
-        else:
-            return response.json()
+        response = network.post(url, data=data)
+        log.debug('zot: Response status code {} '
+                  'from url {}.'.format(response.status_code, url))
+        return response.json()

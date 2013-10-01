@@ -24,7 +24,7 @@ requires = ['pyramid_chameleon',
             'ZODB>=4.0.0b3',
             'rdflib==4.1-dev',
             'rdflib_zodb',
-            'requests>=1.2.3',
+            'requests>=2.0.0',
             'whirlpool>0.3',  # devel
             'pycrypto>=2.6',  # devel
             'zope.copy',

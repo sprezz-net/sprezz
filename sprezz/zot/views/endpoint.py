@@ -35,29 +35,12 @@ class ZotEndpointView(object):
 
         zot_service = find_service(self.context, 'zot')
         try:
-            data = zot_service.aes_decapsulate(data)
-        except KeyError:
-            # Data is not AES encapsulated
-            pass
-        except TypeError as e:
+            data = zot_service.aes_decapsulate_json(data)
+        except (KeyError, TypeError, ValueError):
             # Either the private key is None or some other
             # TypeError occured during decryption.
             log.exception(e)
             data = {'type': 'bogus'}
-        except ValueError as e:
-            log.error('post: Could not decrypt received data.')
-            log.exception(e)
-            # To prevent Bleichenbacher's attack, don't
-            # inform the sender that we received malformed
-            # data.
-        else:
-            try:
-                data = json.loads(data.decode('utf-8'), encoding='utf-8')
-            except ValueError:
-                log.error('post: No valid JSON data received.')
-                # To prevent Bleichenbacher's attack, don't
-                # inform the sender that we received malformed
-                # data. Will continue as bogus data.
         log.debug('post: data = {}'.format(pformat(data)))
 
         # Default to bogus data in case one of the above steps failed.

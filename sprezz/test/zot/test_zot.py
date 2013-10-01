@@ -2,11 +2,11 @@ import logging
 import unittest
 
 from pyramid import testing
-from requests.exceptions import HTTPError
 from requests.models import Response
 from unittest.mock import patch, call, Mock
 
 from sprezz.interfaces import IZotChannel
+from sprezz.util.network import HTTPError
 from ..testing import (
     create_single_content_registry,
     create_dict_content_registry,
@@ -174,7 +174,7 @@ class TestZot(unittest.TestCase):
         """Test finger without arguments"""
         inst = self._makeOne()
         with self.assertRaises(ValueError):
-            inst.zot_finger()
+            inst.finger()
 
     def test_local_empty_zot_finger(self):
         """Test finger with invalid address"""
@@ -183,7 +183,7 @@ class TestZot(unittest.TestCase):
         root.netloc = 'netloc:8080'
         inst.__parent__ = root
         with self.assertRaises(ValueError):
-            inst.zot_finger(address='')
+            inst.finger(address='')
 
     def _prepare_zot_finger(self):
         inst = self._makeOne()
@@ -228,7 +228,7 @@ class TestZot(unittest.TestCase):
         inst['hub'].add(remote_xchannel.channel_hash, remote_hub)
         return inst
 
-    @patch('sprezz.zot.zot.requests.get')
+    @patch('sprezz.util.network.get')
     def test_local_get_zot_finger(self, req_get_mock):
         """Test succesful finger using HTTP GET"""
         inst = self._prepare_zot_finger()
@@ -236,14 +236,14 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': True})
         req_get_mock.return_value = resp
-        result = inst.zot_finger(address='admin')
-        calls = [call('http://hubloc:8080/.well-known/zot-info?address=admin',
-                      data=None,
-                      verify=True, allow_redirects=True, timeout=3)]
+        result = inst.finger(address='admin')
+        calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      params={'address': 'admin'},
+                      data={})]
         req_get_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
 
-    @patch('sprezz.zot.zot.requests.get')
+    @patch('sprezz.util.network.get')
     def test_remote_get_zot_finger_no_hub(self, req_get_mock):
         """Test succesful finger using HTTPS GET without a known hub"""
         inst = self._prepare_zot_finger()
@@ -251,15 +251,14 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': True})
         req_get_mock.return_value = resp
-        result = inst.zot_finger(address='me@netloc:8080')
-        calls = [call('https://netloc:8080/.well-known/zot-info?'
-                      'address=me',
-                      data=None,
-                      verify=True, allow_redirects=True, timeout=3)]
+        result = inst.finger(address='me@netloc:8080')
+        calls = [call('https://netloc:8080/.well-known/zot-info',
+                      params={'address': 'me'},
+                      data={})]
         req_get_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
 
-    @patch('sprezz.zot.zot.requests.get')
+    @patch('sprezz.util.network.get')
     def test_local_get_zot_finger_hash(self, req_get_mock):
         """Test succesful finger for channel hash using HTTP GET"""
         inst = self._prepare_zot_finger()
@@ -267,12 +266,11 @@ class TestZot(unittest.TestCase):
         resp.status_code = 200
         resp.json = Mock(return_value={'success': True})
         req_get_mock.return_value = resp
-        result = inst.zot_finger(channel_hash='remote_hash',
+        result = inst.finger(channel_hash='remote_hash',
                                  site_url='https://remoteloc:6543')
-        calls = [call('https://remoteloc:6543/.well-known/zot-info?'
-                      'guid_hash=remote_hash',
-                      data=None,
-                      verify=True, allow_redirects=True, timeout=3)]
+        calls = [call('https://remoteloc:6543/.well-known/zot-info',
+                      params={'guid_hash': 'remote_hash'},
+                      data={})]
         req_get_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
 
@@ -281,17 +279,17 @@ class TestZot(unittest.TestCase):
         without a known hub"""
         inst = self._prepare_zot_finger()
         with self.assertRaises(ValueError):
-            inst.zot_finger(channel_hash='remote_hash')
+            inst.finger(channel_hash='remote_hash')
 
     def test_remote_get_zot_finger_hash_invalid_site(self):
         """Test succesful finger for channel hash using HTTPS GET
         without a known hub"""
         inst = self._prepare_zot_finger()
         with self.assertRaises(ValueError):
-            inst.zot_finger(channel_hash='remote_hash',
+            inst.finger(channel_hash='remote_hash',
                             site_url='http://')
 
-    @patch('sprezz.zot.zot.requests.post')
+    @patch('sprezz.util.network.post')
     def test_local_post_zot_finger(self, req_post_mock):
         """Test succesful remote finger from own channel"""
         inst = self._prepare_zot_finger()
@@ -300,16 +298,16 @@ class TestZot(unittest.TestCase):
         resp.json = Mock(return_value={'success': True})
         req_post_mock.return_value = resp
         target = inst['channel']['me_hash']
-        result = inst.zot_finger(address='admin', target=target)
+        result = inst.finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      params={},
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3)]
+                            'target_sig': 'me_signature'})]
         req_post_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
 
-    @patch('sprezz.zot.zot.requests.post')
+    @patch('sprezz.util.network.post')
     def test_local_post_zot_finger_item_not_found(self, req_post_mock):
         """Test unknown remote finger from own channel"""
         inst = self._prepare_zot_finger()
@@ -320,15 +318,15 @@ class TestZot(unittest.TestCase):
         req_post_mock.return_value = resp
         target = inst['channel']['me_hash']
         with self.assertRaises(ValueError):
-            inst.zot_finger(address='admin', target=target)
+            inst.finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      params={},
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3)]
+                            'target_sig': 'me_signature'})]
         req_post_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.requests.post')
+    @patch('sprezz.util.network.post')
     def test_local_post_zot_finger_invalid(self, req_post_mock):
         """Test invalid remote finger from own channel"""
         inst = self._prepare_zot_finger()
@@ -338,15 +336,15 @@ class TestZot(unittest.TestCase):
         req_post_mock.return_value = resp
         target = inst['channel']['me_hash']
         with self.assertRaises(ValueError):
-            inst.zot_finger(address='admin', target=target)
+            inst.finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      params={},
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3)]
+                            'target_sig': 'me_signature'})]
         req_post_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.requests.post')
+    @patch('sprezz.util.network.post')
     def test_remote_post_zot_finger_fallback(self, req_post_mock):
         """Test HTTPS with fallback to HTTP. HTTPS fails with 404, fallback
         succeeds"""
@@ -355,8 +353,7 @@ class TestZot(unittest.TestCase):
         def response_side_effect(url, **kw):
             resp = Response()
             if url.startswith('https'):
-                resp.status_code = 404
-                resp.reason = 'Not Found'
+                raise HTTPError
             else:
                 resp.status_code = 200
                 resp.json = Mock(return_value={'success': True})
@@ -364,60 +361,53 @@ class TestZot(unittest.TestCase):
 
         req_post_mock.side_effect = response_side_effect
         target = inst['channel']['me_hash']
-        result = inst.zot_finger(address='remote@remoteloc:6543',
+        result = inst.finger(address='remote@remoteloc:6543',
                                  target=target)
         calls = [call('https://remoteloc:6543/.well-known/zot-info',
+                      params={},
                       data={'address': 'remote', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3),
+                            'target_sig': 'me_signature'}),
                  call('http://remoteloc:6543/.well-known/zot-info',
+                      params={},
                       data={'address': 'remote', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3)]
+                            'target_sig': 'me_signature'})]
         req_post_mock.assert_has_calls(calls)
         self.assertTrue(result['success'])
 
-    @patch('sprezz.zot.zot.requests.post')
+    @patch('sprezz.util.network.post', side_effect=HTTPError)
     def test_remote_post_zot_finger_fallback_notfound(self, req_post_mock):
         """Test HTTPS with fallback to HTTP. Both return 404."""
         inst = self._prepare_zot_finger()
-        resp = Response()
-        resp.status_code = 404
-        resp.reason = 'Not Found'
-        req_post_mock.return_value = resp
         target = inst['channel']['me_hash']
         with self.assertRaises(HTTPError):
-            inst.zot_finger(address='remote@remoteloc:6543', target=target)
+            inst.finger(address='remote@remoteloc:6543', target=target)
         calls = [call('https://remoteloc:6543/.well-known/zot-info',
+                      params={},
                       data={'address': 'remote', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3),
+                            'target_sig': 'me_signature'}),
                  call('http://remoteloc:6543/.well-known/zot-info',
+                      params={},
                       data={'address': 'remote', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3)]
+                            'target_sig': 'me_signature'})]
         req_post_mock.assert_has_calls(calls)
 
-    @patch('sprezz.zot.zot.requests.post')
+    @patch('sprezz.util.network.post', side_effect=HTTPError)
     def test_local_post_zot_finger_no_fallback(self, req_post_mock):
         """Test local finger which fails on HTTP, so no fallback"""
         inst = self._prepare_zot_finger()
         resp = Response()
-        resp.status_code = 404
-        resp.reason = 'Not Found'
-        req_post_mock.return_value = resp
         target = inst['channel']['me_hash']
         with self.assertRaises(HTTPError):
-            inst.zot_finger(address='admin', target=target)
+            inst.finger(address='admin', target=target)
         calls = [call('http://hubloc:8080/.well-known/zot-info',
+                      params={},
                       data={'address': 'admin', 'key': 'me_key',
                             'target': 'me_guid',
-                            'target_sig': 'me_signature'},
-                      verify=True, allow_redirects=True, timeout=3)]
+                            'target_sig': 'me_signature'})]
         req_post_mock.assert_has_calls(calls)
         self.assertEqual(req_post_mock.call_count, 1)
 

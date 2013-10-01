@@ -35,8 +35,12 @@ class AbstractPost(object):
             channel_hash = zot_service.create_channel_hash(sender['guid'],
                                                            sender['guid_sig'])
             # FIXME try except around zot_finger
-            info = zot_service.zot_finger(channel_hash=channel_hash,
+            try:
+                info = zot_service.finger(channel_hash=channel_hash,
                                           site_url=sender['url'])
+            except ValueError as e:
+                log.error('post_verify_sender: Caught exception '
+                          '{}.'.format(str(e)))
             zot_service.import_xchannel(info)
             hub = self.get_primary_hub(sender)
         return hub
@@ -117,7 +121,7 @@ class PostNotify(AbstractPost):
         # TODO update hub with current date to show when we last communicated
         # successfully with this hub
         # TODO add ability for asynchronous fetch using a queue
-        result['delivery_report'] = zot_service.zot_fetch(data, hub)
+        result['delivery_report'] = zot_service.fetch(data, hub)
         result['success'] = True
         return result
 
