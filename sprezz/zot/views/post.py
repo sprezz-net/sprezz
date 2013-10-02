@@ -15,26 +15,26 @@ class AbstractPost(object):
         self.context = context
         self.request = request
 
-    def get_primary_hub(self, sender):
+    def get_hub(self, channel_hash, sender):
         hub_service = find_service(self.context, 'zot', 'hub')
-        filter_hub = (hub for hub in hub_service.values() if all([
-            hub.url == sender['url'],
-            hub.url_signature == sender['url_sig'],
-            hub.guid == sender['guid'],
-            hub.signature == sender['guid_sig']]))
-        for hub in filter_hub:
-            return hub
+        try:
+            hub = hub_service[channel_hash]
+        except KeyError:
+            raise
+        else:
+            if hub.url == sender['url'] and \
+               hub.url_signature == sender['url_sig']:
+                    return hub
         raise ValueError('No primary hub found')
 
     def verify_sender(self, sender):
+        zot_service = find_service(self.context, 'zot')
+        channel_hash = zot_service.create_channel_hash(sender['guid'],
+                                                       sender['guid_sig'])
         try:
-            hub = self.get_primary_hub(sender)
-        except ValueError:
-            # No primary hub found, register one
-            zot_service = find_service(self.context, 'zot')
-            channel_hash = zot_service.create_channel_hash(sender['guid'],
-                                                           sender['guid_sig'])
-            # FIXME try except around zot_finger
+            hub = self.get_hub(channel_hash, sender)
+        except (KeyError, ValueError):
+            # No hub found, register one
             try:
                 info = zot_service.finger(channel_hash=channel_hash,
                                           site_url=sender['url'])
@@ -42,7 +42,7 @@ class AbstractPost(object):
                 log.error('post_verify_sender: Caught exception '
                           '{}.'.format(str(e)))
             zot_service.import_xchannel(info)
-            hub = self.get_primary_hub(sender)
+            hub = self.get_hub(channel_hash, sender)
         return hub
 
 
