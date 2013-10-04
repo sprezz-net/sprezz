@@ -155,3 +155,9 @@ class IPostEndpoint(Interface):
 
     def post(self, data):
         """Handle request with parameter data"""
+
+
+class IDeliverMessage(Interface):
+    """Interface to define message delivery methods."""
+    def deliver(self, sender, message, recipients):
+        """Deliver message from sender to recipients"""
