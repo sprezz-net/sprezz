@@ -36,7 +36,7 @@ class ZotEndpointView(object):
         zot_service = find_service(self.context, 'zot')
         try:
             data = zot_service.aes_decapsulate_json(data)
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError) as e:
             # To prevent Bleichenbacher's attack, don't inform the sender that
             # the received data is malformed and for which reason.
             # It will fail later looking for a post utility.
