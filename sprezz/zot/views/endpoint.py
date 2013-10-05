@@ -3,8 +3,10 @@ import logging
 
 from pprint import pformat
 from pyramid.view import view_config
+from zope.component import ComponentLookupError
 
 from ..endpoint import ZotEndpoint, ZotMagicAuth
+from sprezz.interfaces import IPostEndpoint
 from sprezz.util.folder import find_service
 
 
@@ -33,53 +35,27 @@ class ZotEndpointView(object):
 
         zot_service = find_service(self.context, 'zot')
         try:
-            data = zot_service.aes_decapsulate(data)
-        except KeyError:
-            # Data is not AES encapsulated
-            pass
-        except TypeError as e:
-            # Either the private key is None or some other
-            # TypeError occured during decryption.
+            data = zot_service.aes_decapsulate_json(data)
+        except (KeyError, TypeError, ValueError) as e:
+            # To prevent Bleichenbacher's attack, don't inform the sender that
+            # the received data is malformed and for which reason.
+            # It will fail later looking for a post utility.
             log.exception(e)
-            data = {'type': 'bogus'}
-        except ValueError as e:
-            log.error('post: Could not decrypt received data.')
-            log.exception(e)
-            # To prevent Bleichenbacher's attack, don't
-            # inform the sender that we received malformed
-            # data.
-        else:
-            try:
-                data = json.loads(data.decode('utf-8'), encoding='utf-8')
-            except ValueError:
-                log.error('post: No valid JSON data received.')
-                # To prevent Bleichenbacher's attack, don't
-                # inform the sender that we received malformed
-                # data. Will continue as bogus data.
         log.debug('post: data = {}'.format(pformat(data)))
 
         # Default to bogus data in case one of the above steps failed.
-        type = data.get('type', 'bogus')
-        # TODO Use the ZCA registry to register post adapters
-        if type == 'ping':
-            return self.post_ping()
-
-        result['success'] = True
-        log.debug('post: result = {}'.format(pformat(result)))
-        return result
-
-    def post_ping(self):
-        # TODO Allow for extendable components using ZCA adapters
-        zot_service = find_service(self.context, 'zot')
-        result = {
-            'success': True,
-            'site': {
-                'url': zot_service.site_url,
-                'url_sig': zot_service.site_signature,
-                'sitekey': zot_service.public_site_key.export_public_key()
-                }
-            }
-        return result
+        post_type = data.get('type', 'bogus').lower()
+        post_utility = 'post_{}'.format(post_type)
+        try:
+            PostUtility = self.request.registry.getUtility(IPostEndpoint,
+                                                           post_utility)
+        except ComponentLookupError:
+            log.error('post: No post endpoint found for type {}.'.format(
+                post_type))
+            return result
+        else:
+            post_dispatch = PostUtility(self.context, self.request)
+            return post_dispatch.post(data)
 
     @view_config(context=ZotMagicAuth,
                  renderer='json')

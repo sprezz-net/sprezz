@@ -120,6 +120,7 @@ def include(config):
     config.include('pyramid_zodbconn')
     config.include('.content')
     config.include('.folder')
+    config.include('.zot.views.post')
 
 
 def scan(config):

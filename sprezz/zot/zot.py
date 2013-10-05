@@ -1,15 +1,19 @@
+import json
 import logging
 import random
-import requests
 import sys
 import whirlpool
 
+from pprint import pformat
 from pyramid.threadlocal import get_current_registry
-from pyramid.traversal import find_root
+from pyramid.traversal import find_root, resource_path
 from urllib.parse import urlparse, urlunparse
+from zope.component import ComponentLookupError
 
 from ..content import service
 from ..folder import Folder
+from ..interfaces import IZotChannel, IDeliverMessage
+from ..util import network
 from ..util.base64 import base64_url_encode, base64_url_decode
 from ..util.crypto import PersistentRSAKey
 
@@ -62,11 +66,62 @@ class Zot(Folder):
             return signature
 
     @property
+    def site_callback(self):
+        try:
+            return self._v_site_callback
+        except AttributeError:
+            url = '{0}{1}'.format(self.site_url,
+                                  resource_path(self['post']))
+            self._v_site_callback = url
+            return url
+
+    @property
+    def site_callback_signature(self):
+        try:
+            return self._v_site_callback_signature
+        except AttributeError:
+            signature = base64_url_encode(
+                self._private_site_key.sign(self.site_callback))
+            self._v_site_callback_signature = signature
+            return signature
+
+    @property
     def public_site_key(self):
         return self._public_site_key
 
     def aes_decapsulate(self, data):
         return self._private_site_key.aes_decapsulate(data)
+
+    def aes_decapsulate_json(self, data):
+        result = {}
+        if 'iv' in data:
+            try:
+                result = self.aes_decapsulate(data)
+            except KeyError as e:
+                # Data might not contain mandatory keys 'data' or 'key'
+                log.error('aes_decapsulate_json: Missing keys in data.')
+                log.exception(e)
+                raise
+            except TypeError as e:
+                # Either the private key is None or some other
+                # TypeError occured during decryption.
+                log.error('aes_decapsulate_json: TypeError occured.')
+                log.exception(e)
+                raise
+            except ValueError as e:
+                log.error('aes_decapsulate_json: Could not decrypt received data.')
+                log.exception(e)
+                raise
+            else:
+                try:
+                    result = json.loads(result.decode('utf-8'), encoding='utf-8')
+                except ValueError as e:
+                    log.error('aes_decapsulate_json: No valid JSON data received.')
+                    log.exception(e)
+                    raise
+            return result
+        # Data is not AES encapsulated
+        return data
 
     def add_channel(self, nickname, name, *arg, **kw):
         registry = kw.pop('registry', None)
@@ -79,7 +134,7 @@ class Zot(Folder):
 
         guid = self._create_channel_guid(nickname)
         signature = self._create_channel_signature(guid, prv_key)
-        channel_hash = self._create_channel_hash(guid, signature)
+        channel_hash = self.create_channel_hash(guid, signature)
 
         xchannel = registry.content.create('ZotLocalXChannel',
                                            nickname=nickname,
@@ -135,7 +190,7 @@ class Zot(Folder):
     def _create_channel_signature(self, guid, key):
         return base64_url_encode(key.sign(guid))
 
-    def _create_channel_hash(self, guid, signature):
+    def create_channel_hash(self, guid, signature):
         """Create base64 encoded channel hash.
 
         Arguments 'guid' and 'signature' must be base64 encoded.
@@ -149,15 +204,15 @@ class Zot(Folder):
         if registry is None:
             registry = get_current_registry()
 
-        channel_hash = self._create_channel_hash(info['guid'],
-                                                 info['guid_sig'])
+        channel_hash = self.create_channel_hash(info['guid'],
+                                                info['guid_sig'])
         log.debug('import xchan: channel_hash = {}'.format(channel_hash))
 
         pub_key = PersistentRSAKey(extern_public_key=info['key'])
         if not pub_key.verify(info['guid'],
                               base64_url_decode(info['guid_sig'])):
             log.error('import_xchannel: Unable to verify xchannel signature '
-                      'for xchannel with hash {}'.format(channel_hash))
+                      'for xchannel with hash {}.'.format(channel_hash))
             raise ValueError('Unable to verify channel signature')
 
         if '/' in info['address']:
@@ -214,8 +269,8 @@ class Zot(Folder):
 
         channel_hash = kw.pop('channel_hash', None)
         if channel_hash is None:
-            channel_hash = self._create_channel_hash(info['guid'],
-                                                     info['guid_sig'])
+            channel_hash = self.create_channel_hash(info['guid'],
+                                                    info['guid_sig'])
 
         pub_key = kw.pop('pub_key', None)
         if pub_key is None:
@@ -223,7 +278,7 @@ class Zot(Folder):
         if not pub_key.verify(location['url'],
                               base64_url_decode(location['url_sig'])):
             log.error('import_hub: Unable to verify hub signature '
-                      'for hub with hash {}'.format(channel_hash))
+                      'for hub with hash {}.'.format(channel_hash))
             raise ValueError('Unable to verify site signature')
 
         # TODO Allow channel clones
@@ -272,7 +327,7 @@ class Zot(Folder):
         if not pub_key.verify(url,
                               base64_url_decode(site['url_sig'])):
             log.error('import_site: Unable to verify site signature '
-                      'for site {}'.format(url))
+                      'for site {}.'.format(url))
             raise ValueError('Unable to verify site signature')
 
         site_service = self['site']
@@ -293,36 +348,176 @@ class Zot(Folder):
         else:
             zot_site.update(site)
 
-    def zot_finger(self, url, channel_hash=None):
+    def import_messages(self, data, hub):
+        report = []
+        try:
+            data = self.aes_decapsulate_json(data)
+        except (KeyError, TypeError, ValueError):
+            return report
+        log.debug('import_messages: data = {}'.format(pformat(data)))
+        try:
+            incoming = data['pickup']
+        except KeyError:
+            log.error('import_messages: No pickup data available.')
+            return report
+
+        channel_service = self['channel']
+        for item in incoming:
+            try:
+                notify = item['notify']
+            except KeyError:
+                log.error('import_messages: Invalid incoming message.')
+                continue
+
+            if 'iv' in notify:
+                try:
+                    notify = self.aes_decapsulate_json(notify)
+                except (KeyError, TypeError, ValueError):
+                    log.error('import_messages: Rejected invalid AES '
+                              'encapsulated message.')
+                    continue
+
+            try:
+                sender = notify['sender']
+            except KeyError:
+                log.error('import_messages: No sender for incoming message '
+                          'with secret {}.'.format(notify['secret']))
+                continue
+            if sender['url'] != hub.url:
+                log.error('import_messages: Potential forgery, '
+                          'site {} is delivering as a sender with '
+                          'guid {} from hub {}.'.format(sender['url'],
+                                                        hub.url,
+                                                        pformat(sender)))
+                continue
+            sender['hash'] = self.create_channel_hash(sender['guid'],
+                                                      sender['guid_sig'])
+
+            try:
+                message = item['message']
+            except KeyError:
+                log.error('import_messages: No message received in notify '
+                          'with secret {} from channel {}.'.format(
+                              notify['secret'], sender['hash']))
+                continue
+
+            try:
+                message_type = message['type']
+            except KeyError:
+                log.error('import_messages: No message type received in '
+                          'message with secret {} from channel {}.'.format(
+                              notify['secret'], sender['hash']))
+                continue
+
+            try:
+                recipients = notify['recipients']
+            except KeyError:
+                try:
+                    if 'private' in message['flags']:
+                        log.error('import_messages: Rejected private '
+                                  'message without any recipients '
+                                  'from channel {}.'.format(sender['hash']))
+                        continue
+                except KeyError:
+                    pass
+                log.info('import_messages: Received public message '
+                         'from channel {}.'.format(sender['hash']))
+                # TODO Check which local channels allow public messages
+                filter_deliveries = (chan.channel_hash for chan in
+                                     channel_service)  # if (
+                                         # chan.allow_public))
+            else:
+                recipient_hashes = [self.create_channel_hash(
+                    r['guid'], r['guid_sig']) for r in recipients]
+                log.debug('import_messages: recipient_hashes = {}'.format(
+                    recipient_hashes))
+                filter_deliveries = (r_hash
+                                     for chan in channel_service
+                                     for r_hash in recipient_hashes
+                                     if chan.channel_hash == r_hash)
+
+            deliver_utility = 'deliver_{}'.format(message_type)
+            registry = get_current_registry()
+            try:
+                DeliverUtility = registry.getUtility(IDeliverMessage,
+                                                     deliver_utility)
+            except ComponentLookupError:
+                log.error('import_messages: No delivery method found '
+                          'for message type {} from channel {}.'.format(
+                              message_type, sender['hash']))
+                continue
+            message_dispatch = DeliverUtility()
+            try:
+                result = message_dispatch.deliver(sender, message,
+                                                  filter_deliveries)
+            except ValueError:
+                continue
+            report = report + result
+        return report
+
+    def finger(self, address=None, channel_hash=None, site_url=None,
+               target=None):
+        """Finger a local or remote channel.
+
+        ``address``, if passed, can be a local channel nickname or a remote
+        channel address. Remote addresses are in the form ``nickname@host``
+        or ``nickname@host:port``.
+
+        When ``channel_hash`` is passed, finger request is sent to site
+        ``site_url``.
+
+        ``target`` is optional when querying addresses and represents the
+        requesting channel.
+        """
         result = {'success': False}
-
-        if '@' in url:
-            parts = url.split(sep='@')
-            nickname = parts[0]
-            netloc = parts[1]
-        else:
-            root = find_root(self)
-            nickname = url
-            netloc = root.netloc
-
-        if not nickname or not netloc:
-            log.error('zot_finger: No valid address in URL %s' % url)
-            raise ValueError('No valid address in URL %s' % url)
-
-        xchannel_address = '@'.join([nickname, netloc])
-        log.debug('zot_finger: xchannel_address = %s' % xchannel_address)
-
-        hub_service = self['hub']
-        xchannel_service = self['xchannel']
-
         scheme = 'https'
         well_known = '/.well-known/zot-info'
-        query = ''
-        payload = None
-        request_method = requests.post
+        query = {}
+        payload = {}
+        request_method = network.post
+        if address is None and channel_hash is None:
+            message = 'No channel address or hash supplied.'
+            log.error('finger: {}'.format(message))
+            raise ValueError(message)
 
-        for xchannel in xchannel_service.values():
-            if xchannel.address == xchannel_address:
+        if channel_hash is not None:
+            if site_url is None:
+                message = 'No site URL specified.'
+                log.error('finger: {}'.format(message))
+                raise ValueError(message)
+            else:
+                url_parts = urlparse(site_url)
+                scheme = url_parts.scheme
+                netloc = url_parts.netloc
+                query['guid_hash'] = channel_hash
+                request_method = network.get
+                if not netloc:
+                    message = 'Invalid site URL {}.'.format(site_url)
+                    log.error('finger: {}'.format(message))
+                    raise ValueError(message)
+        else:
+            if '@' in address:
+                parts = address.split(sep='@')
+                nickname = parts[0]
+                netloc = parts[1]
+            else:
+                root = find_root(self)
+                nickname = address
+                netloc = root.netloc
+            if not nickname or not netloc:
+                message = 'Invalid address {}.'.format(address)
+                log.error('finger: {}'.format(message))
+                raise ValueError(message)
+
+            xchannel_address = '@'.join([nickname, netloc])
+            log.debug('finger: Query for address '
+                      '{}.'.format(xchannel_address))
+
+            xchannel_service = self['xchannel']
+            hub_service = self['hub']
+            filter_xchan = (xchan for xchan in xchannel_service.values() if (
+                xchan.address == xchannel_address))
+            for xchannel in filter_xchan:
                 try:
                     # Every xchannel should have a hub, but just in
                     # case something went wrong, no need to error out.
@@ -330,70 +525,85 @@ class Zot(Folder):
                     hub = hub_service[xchannel.channel_hash]
                 except KeyError:
                     break
-                url = urlparse(hub.url)
-                scheme = url.scheme
-                netloc = url.netloc
-                log.debug('zot_finger: Found known hub using '
-                          'scheme=%s, netloc=%s' % (scheme, netloc))
+                url_parts = urlparse(hub.url)
+                scheme = url_parts.scheme
+                netloc = url_parts.netloc
+                log.debug('finger: Found known hub '
+                          'with URL {}.'.format(hub.url))
                 break
 
-        try:
-            my_channel = xchannel_service[channel_hash]
-            payload = {'address': nickname,
-                       'target': my_channel.guid,
-                       'target_sig': my_channel.signature,
-                       'key': my_channel.key.export_public_key()}
-            log.debug('zot_finger: payload = %s' % payload)
-        except (KeyError, TypeError):
-            request_method = requests.get
-            query = 'address={}'.format(nickname)
-
-        url = urlunparse((scheme, netloc, well_known, '', query, '',))
-        log.debug('zot_finger: url = %s' % url)
-        try:
-            response = request_method(url, data=payload, verify=True,
-                                      allow_redirects=True, timeout=3)
-            log.debug('zot_finger: Response status code = %d' % (
-                      response.status_code))
-            if 400 <= response.status_code < 600:
-                response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            log.error('zot_finger: Caught RequestException = %s' % str(e))
-            if scheme != 'http':
-                scheme = 'http'
-                url = urlunparse((scheme, netloc, well_known, '', query, '',))
-                log.debug('zot_finger: Falling back to HTTP at URL %s' % url)
-                try:
-                    response = request_method(url, data=payload, verify=True,
-                                              allow_redirects=True, timeout=3)
-                    log.debug('zot_finger: Response status code = %d' % (
-                              response.status_code))
-                    if 400 <= response.status_code < 600:
-                        response.raise_for_status()
-                except requests.exceptions.RequestException as f:
-                    log.error('zot_finger: Caught RequestException = %s' % (
-                              str(f)))
-                    raise
-                else:
-                    log.debug('zot_finger: Inner request history = %s' % (
-                              response.history))
-                    if 200 <= response.status_code < 300:
-                        result = response.json()
+            if IZotChannel.providedBy(target):
+                payload = {'address': nickname,
+                           'target': target.guid,
+                           'target_sig': target.signature,
+                           'key': target.key.export_public_key()}
+                log.debug('finger: Payload {}.'.format(pformat(payload)))
             else:
-                # No need to retry if scheme was already HTTP
-                raise
-        else:
-            log.debug('zot_finger: Outer request history = %s' % (
-                      response.history))
-            if 200 <= response.status_code < 300:
-                result = response.json()
+                query['address'] = nickname
+                request_method = network.get
 
-        # We only reach this point when we received a response with a 2xx
-        # success status code
-        log.debug('zot_finger: result =  %s' % result)
+        # Assemble the URL parts again.
+        url = urlunparse((scheme, netloc, well_known, '', '', '',))
+        log.debug('finger: Destination URL {}.'.format(url))
+        try:
+            response = request_method(url, params=query, data=payload)
+        except (network.RequestException,
+                network.ConnectionError) as e:
+            log.error('finger: Caught outer network exception '
+                      '{}.'.format(str(e)))
+            if scheme.lower() == 'http':
+                raise
+            else:
+                # Fall back to HTTP and assemble the URL parts again.
+                scheme = 'http'
+                url = urlunparse((scheme, netloc, well_known, '', '', '',))
+                try:
+                    response = request_method(url, params=query, data=payload)
+                except (network.RequestException,
+                        network.ConnectionError) as f:
+                    log.error('finger: Caught inner network exception '
+                              '{}.'.format(str(f)))
+                    raise
+
+        result = response.json()
+        log.debug('finger: Result {}.'.format(pformat(result)))
         if not result['success']:
             if 'message' in result:
+                log.error('finger: Response message is '
+                          '{}.'.format(result['message']))
                 raise ValueError(result['message'])
             else:
-                raise ValueError('No results')
+                message = 'No results.'
+                log.error('finger: {}.'.format(message))
+                raise ValueError(message)
         return result
+
+    def fetch(self, data, hub):
+        secret = data['secret']
+        secret_signature = base64_url_encode(
+            self._private_site_key.sign(secret))
+        pickup = {'type': 'pickup',
+                  'url': self.site_url,
+                  'callback': self.site_callback,
+                  'callback_sig': self.site_callback_signature,
+                  'secret': secret,
+                  'secret_sig': secret_signature}
+        log.debug('fetch: Sending pickup for secret {} to endpoint {}.'.format(
+            secret, hub.callback))
+        pickup_data = json.dumps(pickup).encode('utf-8')
+        pickup_data = json.dumps(hub.key.aes_encapsulate(pickup_data))
+        try:
+            result = self.zot(hub.callback, pickup_data)
+        except (network.RequestException,
+                network.ConnectionError) as e:
+            log.error('fetch: Caught network exception %s' % (
+                      str(e)))
+            return
+        return self.import_messages(result, hub)
+
+    def zot(self, url, data):
+        data = {'data': data}
+        response = network.post(url, data=data)
+        log.debug('zot: Response status code {} '
+                  'from url {}.'.format(response.status_code, url))
+        return response.json()

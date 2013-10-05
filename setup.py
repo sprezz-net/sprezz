@@ -21,10 +21,10 @@ requires = ['pyramid_chameleon',
             'pyramid_tm',
             'pyramid_debugtoolbar>=1.0.8',
             'waitress',
-            'ZODB>=4.0.0b3',
+            'ZODB>=4.0.0',
             'rdflib==4.1-dev',
             'rdflib_zodb',
-            'requests>=1.2.3',
+            'requests>=2.0.0',
             'whirlpool>0.3',  # devel
             'pycrypto>=2.6',  # devel
             'zope.copy',
