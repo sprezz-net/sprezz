@@ -347,17 +347,17 @@ class Zot(Folder):
             zot_site.update(site)
 
     def import_messages(self, data, hub):
-        result = []
+        report = []
         try:
             data = self.aes_decapsulate_json(data)
         except (KeyError, TypeError, ValueError):
-            return result
+            return report
         log.debug('import_messages: data = {}'.format(pformat(data)))
         try:
             incoming = data['pickup']
         except KeyError:
             log.error('import_messages: No pickup data available.')
-            return result
+            return report
 
         channel_service = self['channel']
         for item in incoming:
@@ -444,12 +444,14 @@ class Zot(Folder):
                           'for message type {} from channel {}.'.format(
                               message_type, sender['hash']))
                 continue
-            else:
-                message_dispatch = DeliverUtility()
-                result = result + message_dispatch.deliver(sender,
-                                                           message,
-                                                           filter_deliveries)
-        return result
+            message_dispatch = DeliverUtility()
+            try:
+                result = message_dispatch.deliver(sender, message,
+                                                  filter_deliveries)
+            except ValueError:
+                continue
+            report = report + result
+        return report
 
     def finger(self, address=None, channel_hash=None, site_url=None,
                target=None):
