@@ -3,6 +3,7 @@ import logging
 from zope.interface import implementer
 
 from sprezz.interfaces import IPostEndpoint
+from sprezz.util import network
 from sprezz.util.base64 import base64_url_decode
 from sprezz.util.folder import find_service
 
@@ -114,19 +115,21 @@ class PostNotify(AbstractPost):
         try:
             sender = data['sender']
         except KeyError:
-            log.error('post_notify: No sender.')
-            result['message'] = 'No sender.'
+            message = 'No sender in notification'
+            log.error('post_notify: {}.'.format(message))
+            result['message'] = message
             return result
         hub = self.verify_sender(sender)
         # TODO update hub with current date to show when we last communicated
         # successfully with this hub
         # TODO add ability for asynchronous fetch using a queue
-        #try:
-        result['delivery_report'] = zot_service.fetch(data, hub,
+        try:
+            result['delivery_report'] = zot_service.fetch(data, hub,
                 context=self.context, request=self.request)
-        #except:
-            # TODO Filter for all possible exceptions
-        #    return result
+        except (ValueError,
+                network.RequestException,
+                network.ConnectionError):
+            return result
         result['success'] = True
         return result
 
