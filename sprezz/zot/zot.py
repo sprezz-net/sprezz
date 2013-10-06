@@ -437,9 +437,9 @@ class Zot(Folder):
                 log.debug('import_messages: recipient_hashes = {}'.format(
                     recipient_hashes))
                 filter_deliveries = (chan
-                                     for chan in channel_service.values())
-                                   #  for r_hash in recipient_hashes
-                                   #  if chan.channel_hash == r_hash)
+                                     for chan in channel_service.values()
+                                     for r_hash in recipient_hashes
+                                     if chan.channel_hash == r_hash)
 
             try:
                 registry = kw['request'].registry
