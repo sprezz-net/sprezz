@@ -93,6 +93,8 @@ class IZotChannel(Interface):
     signature = Attribute('Signature of guid')
     key = Attribute('Public private keypair')
 
+    address = Attribute('Channel address')
+
 
 class IZotXChannel(Interface):
     """Interface for Zot xchannels."""
@@ -159,5 +161,5 @@ class IPostEndpoint(Interface):
 
 class IDeliverMessage(Interface):
     """Interface to define message delivery methods."""
-    def deliver(self, sender, message, recipients):
+    def deliver(self, sender, message, recipients, **kw):
         """Deliver message from sender to recipients"""

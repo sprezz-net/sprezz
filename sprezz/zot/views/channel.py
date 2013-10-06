@@ -34,6 +34,16 @@ class ChannelView(object):
                              self.context.values()]}
 
     @view_config(context=ZotLocalChannel,
+                 request_method='GET',
+                 name='matrix',
+                 renderer='json')
+    def list_matrix_messages(self):
+        # TODO Filter messages based on owner
+        message_service = find_service(self.context, 'zot', 'message')
+        return {'messages': [m.__json__(self.request) for m in
+                             message_service.values()]}
+
+    @view_config(context=ZotLocalChannel,
                  request_method='POST',
                  name='connection',
                  renderer='json')

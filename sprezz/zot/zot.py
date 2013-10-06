@@ -348,20 +348,24 @@ class Zot(Folder):
         else:
             zot_site.update(site)
 
-    def import_messages(self, data, hub):
+    def import_messages(self, data, hub, **kw):
         report = []
-        try:
-            data = self.aes_decapsulate_json(data)
-        except (KeyError, TypeError, ValueError):
-            return report
+        if 'iv' in data:
+            try:
+                data = self.aes_decapsulate_json(data)
+            except (KeyError, TypeError, ValueError):
+                log.error('import_messages: Rejected invalid AES '
+                          'encapsulated pickup response.')
+                raise ValueError('Invalid AES encapsulated pickup response')
         log.debug('import_messages: data = {}'.format(pformat(data)))
         try:
             incoming = data['pickup']
         except KeyError:
-            log.error('import_messages: No pickup data available.')
-            return report
+            log.error('import_messages: No pickup data available in response.')
+            raise ValueError('No pickup data available in response')
 
         channel_service = self['channel']
+        xchannel_service = self['xchannel']
         for item in incoming:
             try:
                 notify = item['notify']
@@ -378,27 +382,28 @@ class Zot(Folder):
                     continue
 
             try:
-                sender = notify['sender']
+                notify_sender = notify['sender']
             except KeyError:
                 log.error('import_messages: No sender for incoming message '
                           'with secret {}.'.format(notify['secret']))
                 continue
-            if sender['url'] != hub.url:
+            if notify_sender['url'] != hub.url:
                 log.error('import_messages: Potential forgery, '
                           'site {} is delivering as a sender with '
-                          'guid {} from hub {}.'.format(sender['url'],
+                          'guid {} from hub {}.'.format(notify_sender['url'],
                                                         hub.url,
                                                         pformat(sender)))
                 continue
-            sender['hash'] = self.create_channel_hash(sender['guid'],
-                                                      sender['guid_sig'])
+            sender_hash = self.create_channel_hash(notify_sender['guid'],
+                                                   notify_sender['guid_sig'])
+            sender = xchannel_service[sender_hash]
 
             try:
                 message = item['message']
             except KeyError:
                 log.error('import_messages: No message received in notify '
                           'with secret {} from channel {}.'.format(
-                              notify['secret'], sender['hash']))
+                              notify['secret'], sender.channel_hash))
                 continue
 
             try:
@@ -406,7 +411,7 @@ class Zot(Folder):
             except KeyError:
                 log.error('import_messages: No message type received in '
                           'message with secret {} from channel {}.'.format(
-                              notify['secret'], sender['hash']))
+                              notify['secret'], sender.channel_hash))
                 continue
 
             try:
@@ -415,44 +420,50 @@ class Zot(Folder):
                 try:
                     if 'private' in message['flags']:
                         log.error('import_messages: Rejected private '
-                                  'message without any recipients '
-                                  'from channel {}.'.format(sender['hash']))
+                                  'message without any recipients from '
+                                  'channel {}.'.format(sender.channel_hash))
                         continue
                 except KeyError:
                     pass
-                log.info('import_messages: Received public message '
-                         'from channel {}.'.format(sender['hash']))
+                log.info('import_messages: Received public message from '
+                         'channel {}.'.format(sender.channel_hash))
                 # TODO Check which local channels allow public messages
-                filter_deliveries = (chan.channel_hash for chan in
-                                     channel_service)  # if (
+                filter_deliveries = (chan for chan in
+                                     channel_service.values())  # if (
                                          # chan.allow_public))
             else:
                 recipient_hashes = [self.create_channel_hash(
                     r['guid'], r['guid_sig']) for r in recipients]
                 log.debug('import_messages: recipient_hashes = {}'.format(
                     recipient_hashes))
-                filter_deliveries = (r_hash
-                                     for chan in channel_service
-                                     for r_hash in recipient_hashes
-                                     if chan.channel_hash == r_hash)
+                filter_deliveries = (chan
+                                     for chan in channel_service.values())
+                                   #  for r_hash in recipient_hashes
+                                   #  if chan.channel_hash == r_hash)
+
+            try:
+                registry = kw['request'].registry
+            except KeyError:
+                registry = get_current_registry()
 
             deliver_utility = 'deliver_{}'.format(message_type)
-            registry = get_current_registry()
             try:
                 DeliverUtility = registry.getUtility(IDeliverMessage,
                                                      deliver_utility)
             except ComponentLookupError:
                 log.error('import_messages: No delivery method found '
                           'for message type {} from channel {}.'.format(
-                              message_type, sender['hash']))
+                              message_type, sender.channel_hash))
                 continue
             message_dispatch = DeliverUtility()
             try:
                 result = message_dispatch.deliver(sender, message,
-                                                  filter_deliveries)
+                                                  filter_deliveries, **kw)
             except ValueError:
                 continue
             report = report + result
+        log.debug('import_messages: Delivery report '
+                  '{}'.format(pformat(report)))
         return report
 
     def finger(self, address=None, channel_hash=None, site_url=None,
@@ -578,7 +589,7 @@ class Zot(Folder):
                 raise ValueError(message)
         return result
 
-    def fetch(self, data, hub):
+    def fetch(self, data, hub, **kw):
         secret = data['secret']
         secret_signature = base64_url_encode(
             self._private_site_key.sign(secret))
@@ -598,8 +609,8 @@ class Zot(Folder):
                 network.ConnectionError) as e:
             log.error('fetch: Caught network exception %s' % (
                       str(e)))
-            return
-        return self.import_messages(result, hub)
+            raise
+        return self.import_messages(result, hub, **kw)
 
     def zot(self, url, data):
         data = {'data': data}

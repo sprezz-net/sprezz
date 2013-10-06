@@ -155,6 +155,16 @@ class ZotLocalChannel(Folder):
     def sign_url(self, url):
         return base64_url_encode(self.key.sign(url))
 
+    @property
+    def address(self):
+        try:
+            return self._v_address
+        except AttributeError:
+            xchannel_service = find_service(self, 'zot', 'xchannel')
+            address = xchannel_service[self.channel_hash].address
+            self._v_address = address
+            return address
+
 
 @content('ZotLocalXChannel')
 @implementer(IZotXChannel)

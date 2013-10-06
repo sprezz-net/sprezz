@@ -121,7 +121,12 @@ class PostNotify(AbstractPost):
         # TODO update hub with current date to show when we last communicated
         # successfully with this hub
         # TODO add ability for asynchronous fetch using a queue
-        result['delivery_report'] = zot_service.fetch(data, hub)
+        #try:
+        result['delivery_report'] = zot_service.fetch(data, hub,
+                context=self.context, request=self.request)
+        #except:
+            # TODO Filter for all possible exceptions
+        #    return result
         result['success'] = True
         return result
 
