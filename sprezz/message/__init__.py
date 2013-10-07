@@ -3,12 +3,11 @@ import whirlpool
 
 from Crypto import Random
 from pyramid.traversal import find_root
-from zope.interface import Interface, Attribute
 from zope.interface import implementer
 
 from ..content import content
 from ..folder import Folder
-from ..util.base64 import base64_url_encode
+from ..interfaces import IMessage
 
 
 log = logging.getLogger(__name__)
@@ -52,19 +51,6 @@ class Messages(Folder):
         error_message = 'No available message id found'
         log.error('add: {}.'.format(error_message))
         raise KeyError(error_message)
-
-
-class IMessage(Interface):
-    message_id = Attribute("Unique message ID")
-    title = Attribute("Title of message")
-    body = Attribute("Body of message")
-    mimetype = Attribute("Mimetype of body")
-
-    def __init__(self, data):
-        """Initialize message with data"""
-
-    def update(self, data):
-        """Update message"""
 
 
 @content('TextMessage')

@@ -125,7 +125,8 @@ class PostNotify(AbstractPost):
         # TODO add ability for asynchronous fetch using a queue
         try:
             result['delivery_report'] = zot_service.fetch(data, hub,
-                context=self.context, request=self.request)
+                                                          context=self.context,
+                                                          request=self.request)
         except (ValueError,
                 network.RequestException,
                 network.ConnectionError):

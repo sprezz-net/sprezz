@@ -163,3 +163,17 @@ class IDeliverMessage(Interface):
     """Interface to define message delivery methods."""
     def deliver(self, sender, message, recipients, **kw):
         """Deliver message from sender to recipients"""
+
+
+class IMessage(Interface):
+    """Interface for messages."""
+    message_id = Attribute('Unique message ID')
+    title = Attribute('Title of message')
+    body = Attribute('Body of message')
+    mimetype = Attribute('Mimetype of body')
+
+    def __init__(self, data):
+        """Initialize message with data"""
+
+    def update(self, data):
+        """Update message"""

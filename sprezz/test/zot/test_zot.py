@@ -399,7 +399,6 @@ class TestZot(unittest.TestCase):
     def test_local_post_zot_finger_no_fallback(self, req_post_mock):
         """Test local finger which fails on HTTP, so no fallback"""
         inst = self._prepare_zot_finger()
-        resp = Response()
         target = inst['channel']['me_hash']
         with self.assertRaises(HTTPError):
             inst.finger(address='admin', target=target)

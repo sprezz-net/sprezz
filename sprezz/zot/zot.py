@@ -391,8 +391,8 @@ class Zot(Folder):
                 log.error('import_messages: Potential forgery, '
                           'site {} is delivering as a sender with '
                           'guid {} from hub {}.'.format(notify_sender['url'],
-                                                        hub.url,
-                                                        pformat(sender)))
+                                                        notify_sender['guid'],
+                                                        hub.url))
                 continue
             sender_hash = self.create_channel_hash(notify_sender['guid'],
                                                    notify_sender['guid_sig'])
