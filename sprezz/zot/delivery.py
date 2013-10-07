@@ -1,5 +1,6 @@
 import logging
 
+from pyramid.threadlocal import get_current_registry
 from zope.interface import implementer
 
 from sprezz.interfaces import IDeliverMessage
@@ -44,8 +45,18 @@ class DeliverActivity(object):
         try:
             item = message_service[message['message_id']]
         except KeyError:
+            # Either array message does not contain a message_id or
+            # no message with given message_id exists.
+            # Either way, create a new message object.
             item = registry.content.create('TextMessage', data=message)
-            message_service.add(message['message_id'], item)
+            if item.message_id is None:
+                # Create a unique message id during add
+                message_service.add(None, item)
+                # Change the incoming message array so it can be read
+                # from the calling method.
+                message['message_id'] = item.message_id
+            else:
+                message_service.add(item.message_id, item)
             action = 'posted'
         else:
             item.update(message)
