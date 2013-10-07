@@ -14,7 +14,12 @@ from ..util.base64 import base64_url_encode
 log = logging.getLogger(__name__)
 
 
+# Truncate message_id at 64 characters.
 MID_SIZE = 64
+
+
+# Maximum iterations allowed to find an available message_id.
+MID_LOOP = 1000
 
 
 @content('Messages')
@@ -25,7 +30,7 @@ class Messages(Folder):
         root = find_root(self)
         mid = randfunc(MID_SIZE)
         wp = whirlpool.new(mid)
-        mid = base64_url_encode(wp.digest()).replace('\n', '')
+        mid = wp.hexdigest().lower()
         mid = '{}@{}'.format(mid[0:MID_SIZE], root.netloc)
         return mid
 
@@ -34,7 +39,7 @@ class Messages(Folder):
             return super().add(message_id, message)
         i = 0
         # Prevent infinite loop
-        while i < 10:
+        while i < MID_LOOP:
             i += 1
             message_id = self.generate_id()
             try:
