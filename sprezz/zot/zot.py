@@ -21,6 +21,9 @@ from ..util.crypto import PersistentRSAKey
 log = logging.getLogger(__name__)
 
 
+ZOT_REVISION = 1
+
+
 @service('Zot', service_name='zot', after_create='after_create')
 class Zot(Folder):
     def after_create(self, inst, registry):
@@ -618,3 +621,36 @@ class Zot(Folder):
         log.debug('zot: Response status code {} '
                   'from url {}.'.format(response.status_code, url))
         return response.json()
+
+    def build_packet(self, channel, packet_type='notify',
+                     recipients=None, hub=None, secret=None):
+        data = {'type': packet_type,
+                'sender': {
+                    'guid': channel.guid,
+                    'guid_sig': channel.signature,
+                    'url': self.site_url,
+                    'url_sig': channel.sign_url(self.site_url),
+                    },
+                'callback': self['post'].get_callback_path(),
+                'version': ZOT_REVISION,
+                }
+
+        if recipients is not None:
+            recipients_data = []
+            for recipient in recipients:
+                recipients_data.append({'guid': recipient.guid,
+                                        'guid_sig': recipient.signature})
+            data['recipients'] = recipients_data
+
+        if secret is not None:
+            data['secret'] = secret
+            data['secret_sig'] = base64_url_encode(channel.key.sign(secret))
+
+        log.debug('build_packet: Preparing packet {}.'.format(pformat(data)))
+
+        if hub is not None:
+            data = json.dumps(data).encode('utf-8')
+            data = hub.key.aes_encapsulate(data)
+
+        data = json.dumps(data)
+        return data

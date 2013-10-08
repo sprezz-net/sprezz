@@ -177,3 +177,7 @@ class IMessage(Interface):
 
     def update(self, data):
         """Update message"""
+
+
+class IQueueMessage(Interface):
+    """Interface for queued messages"""

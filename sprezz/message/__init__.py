@@ -46,6 +46,9 @@ class Messages(Folder):
             except ValueError:
                 continue
             else:
+                if i > 1:
+                    log.debug('add: Found available message id after {} '
+                              'iterations.'.format(i))
                 message.message_id = message_id
                 return message_id
         error_message = 'No available message id found'
