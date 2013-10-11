@@ -6,6 +6,7 @@ from sprezz.interfaces import IPostEndpoint
 from sprezz.util import network
 from sprezz.util.base64 import base64_url_decode
 from sprezz.util.folder import find_service
+from sprezz.util.zot import create_channel_hash
 
 
 log = logging.getLogger(__name__)
@@ -30,8 +31,8 @@ class AbstractPost(object):
 
     def verify_sender(self, sender):
         zot_service = find_service(self.context, 'zot')
-        channel_hash = zot_service.create_channel_hash(sender['guid'],
-                                                       sender['guid_sig'])
+        channel_hash = create_channel_hash(sender['guid'],
+                                           sender['guid_sig'])
         try:
             hub = self.get_hub(channel_hash, sender)
         except (KeyError, ValueError):

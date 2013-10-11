@@ -41,9 +41,9 @@ class ChannelView(object):
                  renderer='json')
     def list_matrix_messages(self):
         # TODO Filter messages based on owner
-        message_service = find_service(self.context, 'zot', 'message')
-        return {'messages': [m.__json__(self.request) for m in
-                             message_service.values()]}
+        item_service = find_service(self.context, 'zot', 'item')
+        return {'items': [item.__json__(self.request) for item in
+                          item_service.values()]}
 
     @view_config(context=ZotLocalChannel,
                  request_method='POST',

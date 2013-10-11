@@ -12,57 +12,47 @@ log = logging.getLogger(__name__)
 
 @implementer(IDeliverMessage)
 class DeliverActivity(object):
-    def deliver(self, sender, message, recipients, **kw):
-        """Deliver activity.
-
-        ``sender`` is the sending xchannel.
-        ``message`` is an array.
-        ``recipients`` is a generator for channels that should receive the
-        message.
-        """
+    def deliver(self, message, **kw):
+        """Deliver activity."""
         result = []
         try:
             registry = kw['request'].registry
         except KeyError:
             registry = get_current_registry()
-        zot_service = find_service(sender, 'zot')
 
-        author_hash = zot_service.create_channel_hash(
-            message['author']['guid'], message['author']['guid_sig'])
-        owner_hash = zot_service.create_channel_hash(
-            message['owner']['guid'], message['owner']['guid_sig'])
-
-        if sender.channel_hash not in [author_hash, owner_hash]:
+        if not message.check_sender():
             error_message = 'Sender is not owner or author'
             log.error('deliver_activity: {}.'.format(error_message))
             raise ValueError(error_message)
+        zot_service = find_service(message.sender, 'zot')
 
         # TODO Check if message author and owner are known xchannels.
         # If not call refresh to import them
 
-        # TODO Validate message using Colander
-        message_service = zot_service['message']
+        # TODO Validate message using Colander, or maybe move this up
+        # the chain when creating the message.
+        item_service = zot_service['item']
         try:
-            item = message_service[message['message_id']]
+            item = item_service[message.message_id]
         except KeyError:
             # Either array message does not contain a message_id or
             # no message with given message_id exists.
             # Either way, create a new message object.
-            item = registry.content.create('TextMessage', data=message)
+            item = registry.content.create('ItemMessage', message=message)
             if item.message_id is None:
                 # Create a unique message id during add
-                message_service.add(None, item)
+                item_service.add(None, item)
                 # Change the incoming message array so it can be read
                 # from the calling method.
-                message['message_id'] = item.message_id
+                item['message_id'] = item.message_id
             else:
-                message_service.add(item.message_id, item)
+                item_service.add(item.message_id, item)
             action = 'posted'
         else:
             item.update(message)
             action = 'updated'
 
-        for channel in recipients:
+        for channel in message.recipients:
             # TODO Add local actions to add owner
             recipient = '{0} <{1}>'.format(channel.name,
                                            channel.address)

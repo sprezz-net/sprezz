@@ -103,16 +103,15 @@ class TestZot(unittest.TestCase):
         inst._v_site_signature = 'cached'
         self.assertEqual(inst.site_signature, 'cached')
 
+    @patch('sprezz.zot.zot.create_channel_hash', return_value='hash')
     @patch('sprezz.zot.zot.PersistentRSAKey', spec=True)
-    def test_add_channel(self, rsa_mock):
+    def test_add_channel(self, rsa_mock, hash_mock):
         inst = self._makeOne()
         inst['channel'] = DummyFolder()
         inst['xchannel'] = DummyFolder()
         inst['hub'] = DummyFolder()
         inst._create_channel_guid = Mock(name='create_channel_guid')
         inst._create_channel_signature = Mock(name='create_channel_signature')
-        inst.create_channel_hash = Mock(name='create_channel_hash',
-                                        return_value='hash')
         inst._public_site_key = Mock(name='public_site_key',
                                      return_value='key')
 
@@ -132,7 +131,7 @@ class TestZot(unittest.TestCase):
         # Check helpers
         self.assertEqual(inst._create_channel_guid.call_count, 1)
         self.assertEqual(inst._create_channel_signature.call_count, 1)
-        self.assertEqual(inst.create_channel_hash.call_count, 1)
+        self.assertEqual(hash_mock.call_count, 1)
 
         # Check that the objects are added to the containers
         self.assertEqual(inst['channel']['admin'], ob_chan)
@@ -162,13 +161,6 @@ class TestZot(unittest.TestCase):
         sig = inst._create_channel_signature('guid', key)
         # Base64 url encoded 'signed guid'
         self.assertEqual(sig, 'c2lnbmVkIGd1aWQ')
-
-    def test_create_channel_hash(self):
-        inst = self._makeOne()
-        hashed = inst.create_channel_hash('guid', 'signature')
-        # Base64 url encoded Whirlpool hashed 'guidsignature'
-        self.assertEqual(hashed, 'EtDtUr7cPtjoXQjDq_d68-AIFRNetS-KudlogIffsYy'
-                                 'kH66_LwsOKee3dtoV7KDg1V08s_6K4TVIgo2O5KvNiQ')
 
     def test_zot_finger_no_arg(self):
         """Test finger without arguments"""
@@ -267,7 +259,7 @@ class TestZot(unittest.TestCase):
         resp.json = Mock(return_value={'success': True})
         req_get_mock.return_value = resp
         result = inst.finger(channel_hash='remote_hash',
-                                 site_url='https://remoteloc:6543')
+                             site_url='https://remoteloc:6543')
         calls = [call('https://remoteloc:6543/.well-known/zot-info',
                       params={'guid_hash': 'remote_hash'},
                       data={})]
@@ -286,8 +278,7 @@ class TestZot(unittest.TestCase):
         without a known hub"""
         inst = self._prepare_zot_finger()
         with self.assertRaises(ValueError):
-            inst.finger(channel_hash='remote_hash',
-                            site_url='http://')
+            inst.finger(channel_hash='remote_hash', site_url='http://')
 
     @patch('sprezz.util.network.post')
     def test_local_post_zot_finger(self, req_post_mock):
@@ -361,8 +352,7 @@ class TestZot(unittest.TestCase):
 
         req_post_mock.side_effect = response_side_effect
         target = inst['channel']['me_hash']
-        result = inst.finger(address='remote@remoteloc:6543',
-                                 target=target)
+        result = inst.finger(address='remote@remoteloc:6543', target=target)
         calls = [call('https://remoteloc:6543/.well-known/zot-info',
                       params={},
                       data={'address': 'remote', 'key': 'me_key',

@@ -159,14 +159,8 @@ class IPostEndpoint(Interface):
         """Handle request with parameter data"""
 
 
-class IDeliverMessage(Interface):
-    """Interface to define message delivery methods."""
-    def deliver(self, sender, message, recipients, **kw):
-        """Deliver message from sender to recipients"""
-
-
-class IMessage(Interface):
-    """Interface for messages."""
+class IItem(Interface):
+    """Interface for storing items."""
     message_id = Attribute('Unique message ID')
     title = Attribute('Title of message')
     body = Attribute('Body of message')
@@ -177,6 +171,22 @@ class IMessage(Interface):
 
     def update(self, data):
         """Update message"""
+
+
+class IMessage(Interface):
+    """Interface for storing internal messages that can be modified"""
+
+    def __init__(self, sender, data, recipients, **kw):
+        """Create a new message"""
+
+    def check_sender(self):
+        """Check if sender is one of author or owner"""
+
+
+class IDeliverMessage(Interface):
+    """Interface to define message delivery methods."""
+    def deliver(self, sender, message, recipients, **kw):
+        """Deliver message from sender to recipients"""
 
 
 class IQueueMessage(Interface):

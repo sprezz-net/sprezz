@@ -7,7 +7,7 @@ from zope.interface import implementer
 
 from ..content import content
 from ..folder import Folder
-from ..interfaces import IMessage
+from ..interfaces import IItem
 
 
 log = logging.getLogger(__name__)
@@ -21,8 +21,8 @@ MID_SIZE = 64
 MID_LOOP = 1000
 
 
-@content('Messages')
-class Messages(Folder):
+@content('Items')
+class Items(Folder):
     def generate_id(self, randfunc=None):
         if randfunc is None:
             randfunc = Random.new().read
@@ -33,38 +33,38 @@ class Messages(Folder):
         mid = '{}@{}'.format(mid[0:MID_SIZE], root.netloc)
         return mid
 
-    def add(self, message_id, message):
+    def add(self, message_id, item):
         if message_id is not None:
-            return super().add(message_id, message)
+            return super().add(message_id, item)
         i = 0
         # Prevent infinite loop
         while i < MID_LOOP:
             i += 1
             message_id = self.generate_id()
             try:
-                super().add(message_id, message)
+                super().add(message_id, item)
             except ValueError:
                 continue
             else:
                 if i > 1:
                     log.debug('add: Found available message id after {} '
                               'iterations.'.format(i))
-                message.message_id = message_id
+                item.message_id = message_id
                 return message_id
         error_message = 'No available message id found'
         log.error('add: {}.'.format(error_message))
         raise KeyError(error_message)
 
 
-@content('TextMessage')
-@implementer(IMessage)
-class TextMessage(Folder):
-    def __init__(self, data):
+@content('ItemMessage')
+@implementer(IItem)
+class TextItem(Folder):
+    def __init__(self, message):
         super().__init__()
-        self.message_id = data.get('message_id', None)
-        self.title = data.get('title', '')
-        self.body = data.get('body', '')
-        self.mimetype = data.get('mimetype', 'text/bbcode')
+        self.message_id = getattr(message, 'message_id', None)
+        self.title = getattr(message, 'title', '')
+        self.body = getattr(message, 'body', '')
+        self.mimetype = getattr(message, 'mimetype', 'text/bbcode')
 
     def __json__(self, request):
         return {'message_id': self.message_id,
@@ -72,12 +72,13 @@ class TextMessage(Folder):
                 'body': self.body,
                 'mimetype': self.mimetype}
 
-    def update(self, data):
+    def update(self, message):
         keys = ['title', 'body', 'mimetype']
         for x in keys:
-            if x in data and getattr(self, x) != data[x]:
-                log.debug('message.update() attr={0}, '
+            value = getattr(message, x)
+            if getattr(self, x) != value:
+                log.debug('update: attr={0}, '
                           'old={1}, new={2}'.format(x,
                                                     getattr(self, x),
-                                                    data[x]))
-                setattr(self, x, data[x])
+                                                    value))
+                setattr(self, x, value)

@@ -16,6 +16,7 @@ from ..interfaces import IZotChannel, IDeliverMessage
 from ..util import network
 from ..util.base64 import base64_url_encode, base64_url_decode
 from ..util.crypto import PersistentRSAKey
+from ..util.zot import create_channel_hash
 
 
 log = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ class Zot(Folder):
         hub_service = registry.content.create('ZotHubs')
         channel_service = registry.content.create('ZotChannels')
         xchannel_service = registry.content.create('ZotXChannels')
-        message_service = registry.content.create('Messages')
+        item_service = registry.content.create('Items')
         endpoint_service = registry.content.create('ZotEndpoint')
         poco_service = registry.content.create('ZotPoco')
 
@@ -45,7 +46,7 @@ class Zot(Folder):
         self.add('hub', hub_service, registry=registry)
         self.add('channel', channel_service, registry=registry)
         self.add('xchannel', xchannel_service, registry=registry)
-        self.add('message', message_service, registry=registry)
+        self.add('item', item_service, registry=registry)
         self.add('post', endpoint_service, registry=registry)
         self.add('poco', poco_service, registry=registry)
 
@@ -137,7 +138,7 @@ class Zot(Folder):
 
         guid = self._create_channel_guid(nickname)
         signature = self._create_channel_signature(guid, prv_key)
-        channel_hash = self.create_channel_hash(guid, signature)
+        channel_hash = create_channel_hash(guid, signature)
 
         xchannel = registry.content.create('ZotLocalXChannel',
                                            nickname=nickname,
@@ -193,22 +194,13 @@ class Zot(Folder):
     def _create_channel_signature(self, guid, key):
         return base64_url_encode(key.sign(guid))
 
-    def create_channel_hash(self, guid, signature):
-        """Create base64 encoded channel hash.
-
-        Arguments 'guid' and 'signature' must be base64 encoded.
-        """
-        message = '{0}{1}'.format(guid, signature).encode('ascii')
-        wp = whirlpool.new(message)
-        return base64_url_encode(wp.digest())
-
     def import_xchannel(self, info, *arg, **kw):
         registry = kw.pop('registry', None)
         if registry is None:
             registry = get_current_registry()
 
-        channel_hash = self.create_channel_hash(info['guid'],
-                                                info['guid_sig'])
+        channel_hash = create_channel_hash(info['guid'],
+                                           info['guid_sig'])
         log.debug('import xchan: channel_hash = {}'.format(channel_hash))
 
         pub_key = PersistentRSAKey(extern_public_key=info['key'])
@@ -272,8 +264,8 @@ class Zot(Folder):
 
         channel_hash = kw.pop('channel_hash', None)
         if channel_hash is None:
-            channel_hash = self.create_channel_hash(info['guid'],
-                                                    info['guid_sig'])
+            channel_hash = create_channel_hash(info['guid'],
+                                               info['guid_sig'])
 
         pub_key = kw.pop('pub_key', None)
         if pub_key is None:
@@ -397,12 +389,13 @@ class Zot(Folder):
                                                         notify_sender['guid'],
                                                         hub.url))
                 continue
-            sender_hash = self.create_channel_hash(notify_sender['guid'],
-                                                   notify_sender['guid_sig'])
+
+            sender_hash = create_channel_hash(notify_sender['guid'],
+                                              notify_sender['guid_sig'])
             sender = xchannel_service[sender_hash]
 
             try:
-                message = item['message']
+                message_item = item['message']
             except KeyError:
                 log.error('import_messages: No message received in notify '
                           'with secret {} from channel {}.'.format(
@@ -410,8 +403,15 @@ class Zot(Folder):
                 continue
 
             try:
-                message_type = message['type']
+                registry = kw['request'].registry
             except KeyError:
+                registry = get_current_registry()
+
+            message = registry.content.create('Message',
+                                              sender=sender,
+                                              data=message_item)
+
+            if message.message_type is None:
                 log.error('import_messages: No message type received in '
                           'message with secret {} from channel {}.'.format(
                               notify['secret'], sender.channel_hash))
@@ -421,7 +421,7 @@ class Zot(Folder):
                 recipients = notify['recipients']
             except KeyError:
                 try:
-                    if 'private' in message['flags']:
+                    if 'private' in message.flags:
                         log.error('import_messages: Rejected private '
                                   'message without any recipients from '
                                   'channel {}.'.format(sender.channel_hash))
@@ -435,33 +435,29 @@ class Zot(Folder):
                                      channel_service.values())  # if (
                                          # chan.allow_public))
             else:
-                recipient_hashes = [self.create_channel_hash(
-                    r['guid'], r['guid_sig']) for r in recipients]
+                recipient_hashes = [create_channel_hash(r['guid'],
+                                                        r['guid_sig']) for
+                                    r in recipients]
                 log.debug('import_messages: recipient_hashes = {}'.format(
                     recipient_hashes))
                 filter_deliveries = (chan
                                      for chan in channel_service.values()
                                      for r_hash in recipient_hashes
                                      if chan.channel_hash == r_hash)
+            message.recipients = filter_deliveries
 
-            try:
-                registry = kw['request'].registry
-            except KeyError:
-                registry = get_current_registry()
-
-            deliver_utility = 'deliver_{}'.format(message_type)
+            deliver_utility = 'deliver_{}'.format(message.message_type)
             try:
                 DeliverUtility = registry.getUtility(IDeliverMessage,
                                                      deliver_utility)
             except ComponentLookupError:
                 log.error('import_messages: No delivery method found '
                           'for message type {} from channel {}.'.format(
-                              message_type, sender.channel_hash))
+                              message.message_type, sender.channel_hash))
                 continue
             message_dispatch = DeliverUtility()
             try:
-                result = message_dispatch.deliver(sender, message,
-                                                  filter_deliveries, **kw)
+                result = message_dispatch.deliver(message, **kw)
             except ValueError:
                 continue
             report = report + result
