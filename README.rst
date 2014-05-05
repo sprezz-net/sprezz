@@ -1,5 +1,5 @@
-Sprezz README
-=============
+Sprezz
+======
 
 Sprezzatura is a certain nonchalance, so as to conceal all art and make
 whatever one does or say appear to be without effort and almost without any
