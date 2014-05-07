@@ -5,6 +5,7 @@ parts
 src
 bin
 develop-eggs
+Data.fs*
 __pycache__
 *.egg-info
 *.py[co]

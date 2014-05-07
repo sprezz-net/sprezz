@@ -10,8 +10,8 @@ CHANGES = open(os.path.join(here, 'CHANGES.rst')).read()
 
 requires = ['reg',
             'morepath',
+            'more.zodb',
             'more.transaction',
-            'zodburi',
             'rdflib',
             'rdflib_zodb']
 
