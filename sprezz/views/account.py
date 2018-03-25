@@ -36,7 +36,6 @@ class AccountListView(web.View):
             async with conn.transaction() as tx:
                 service = AccountService(tx.connection)
                 async for account in service.list_all_accounts():
-                    # async for account in tx.connection.iterate(Account.query):
                     data.append(account.to_json())
         return web.json_response(data, dumps=json_dumps)
         # TODO look into streaming collections?

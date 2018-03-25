@@ -93,5 +93,5 @@ class AccountService:
         else:
             raise InvalidAccountOrPassword('Invalid account and/or password')
 
-    async def list_all_accounts(self):
-        await self.connection.iterate(Account.query)
+    def list_all_accounts(self):
+        return self.connection.iterate(Account.query)
