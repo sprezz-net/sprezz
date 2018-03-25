@@ -1,0 +1,8 @@
+[BASIC]
+good-names=log,db
+
+[TYPECHECK]
+ignored-classes=Gino
+
+[IMPORTS]
+allow-wildcard-with-all=yes

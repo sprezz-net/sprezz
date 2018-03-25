@@ -1,11 +1,5 @@
-.installed.cfg
-.mr.developer.cfg
-eggs
-parts
-src
-bin
-develop-eggs
-Data.fs*
+.mypy_cache/
+venv/
 __pycache__
 *.egg-info
 *.py[co]
