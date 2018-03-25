@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from gino import GinoConnection
 from passlib.context import CryptContext
 
 from sprezz.models import Account
@@ -21,12 +22,15 @@ pwd_context = CryptContext(schemes=['bcrypt', 'pbkdf2_sha512'],
 
 
 class AccountService:
-    def __init__(self, account: Account = None) -> None:
+    def __init__(self,
+                 connection: GinoConnection,
+                 account: Account = None) -> None:
+        self.connection = connection
         self.account = account
 
     async def get_account(self, username: str) -> Account:
-        self.account = await Account.query.where(
-            Account.username == username).gino.first()
+        self.account = await self.connection.first(
+            Account.query.where(Account.username == username))
         return self.account
 
     def _set_password(self, password: str)-> None:
@@ -90,4 +94,4 @@ class AccountService:
             raise InvalidAccountOrPassword('Invalid account and/or password')
 
     async def list_all_accounts(self):
-        await Account.query.gino.iterate()
+        await self.connection.iterate(Account.query)

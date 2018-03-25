@@ -8,6 +8,7 @@ import aiofiles
 
 from aiohttp import web
 
+from sprezz.models import Account
 from sprezz.services import AccountService
 
 
@@ -29,12 +30,14 @@ json_dumps = partial(json.dumps, default=json_serialize)
 
 class AccountListView(web.View):
     async def get(self):
-        service = AccountService()
         data = []
         engine = self.request.app['engine']
-        async with engine.transaction():
-            async for account in service.list_all_accounts():
-                data.append(account.to_json())
+        async with engine.acquire() as conn:
+            async with conn.transaction() as tx:
+                service = AccountService(tx.connection)
+                async for account in service.list_all_accounts():
+                    # async for account in tx.connection.iterate(Account.query):
+                    data.append(account.to_json())
         return web.json_response(data, dumps=json_dumps)
         # TODO look into streaming collections?
         # https://gist.github.com/jbn/fc90e3ddbc5c60c698d07b3df30004c8
@@ -43,8 +46,11 @@ class AccountListView(web.View):
 class GetAccountView(web.View):
     async def get(self):
         username = self.request.match_info.get('username')
-        service = AccountService()
-        account = await service.get_account(username)
+        engine = self.request.app['engine']
+        async with engine.acquire() as conn:
+            async with conn.transaction() as tx:
+                service = AccountService(tx.connection)
+                account = await service.get_account(username)
         return web.json_response(account, dumps=json_dumps)
 
 
@@ -60,9 +66,12 @@ class CreateAccountView(web.View):
     async def post(self):
         if self.request.can_read_body:
             data = await self.request.post()
-            service = AccountService()
-            await service.create_account(username=data['username'],
-                                         email=data['email'],
-                                         password=data['password'])
+            engine = self.request.app['engine']
+            async with engine.acquire() as conn:
+                async with conn.transaction() as tx:
+                    service = AccountService(tx.connection)
+                    await service.create_account(username=data['username'],
+                                                 email=data['email'],
+                                                 password=data['password'])
             return web.Response(text="Account created")
         return web.Response(text="Can't read body")

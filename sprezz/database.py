@@ -13,4 +13,5 @@ async def init_database(app: Application) -> None:
 
 
 async def close_database(app: Application) -> None:
+    db.bind = None
     await app['engine'].close()
