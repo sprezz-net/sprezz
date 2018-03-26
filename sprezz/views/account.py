@@ -8,7 +8,6 @@ import aiofiles
 
 from aiohttp import web
 
-from sprezz.models import Account
 from sprezz.services import AccountService
 
 
@@ -35,7 +34,7 @@ class AccountListView(web.View):
         async with engine.acquire() as conn:
             async with conn.transaction() as tx:
                 service = AccountService(tx.connection)
-                async for account in service.list_all_accounts():
+                async for account in service.iterate_all_accounts():
                     data.append(account.to_json())
         return web.json_response(data, dumps=json_dumps)
         # TODO look into streaming collections?

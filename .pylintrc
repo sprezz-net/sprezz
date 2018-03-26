@@ -1,5 +1,5 @@
 [BASIC]
-good-names=log,db
+good-names=log,db,tx
 
 [TYPECHECK]
 ignored-classes=Gino

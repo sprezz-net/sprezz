@@ -31,15 +31,17 @@ class Account(db.Model):  # type: ignore
     def expired(self) -> bool:
         if self.expires is None:
             return False
-        elif self.expires <= datetime.utcnow():
+        if self.expires <= datetime.utcnow():
             return True
         return False
 
     @hybrid_method
     def password_expired(self, expire_date: datetime) -> bool:
+        if self.password_hash is None:
+            return True
         if self.password_changed is None:
             return False
-        elif self.password_changed <= expire_date:
+        if self.password_changed <= expire_date:
             return True
         return False
 
@@ -47,10 +49,10 @@ class Account(db.Model):  # type: ignore
     def locked(self, threshold_count: int, threshold_time: datetime) -> bool:
         if self.password_attempts is None:
             return False
-        elif self.password_attempts < threshold_count:
+        if self.password_attempts < threshold_count:
             return False
-        elif self.last_attempt < threshold_time:
-            self.password_attempts = None
+        if self.last_attempt < threshold_time:
+            self.password_attempts = 0
             return False
         return True
 
