@@ -56,7 +56,7 @@ class CreateAccountView(web.View):
     async def get(self):
         # TODO For testing purposes only a simple file based template
         async with aiofiles.open(os.path.normpath(HERE + '/../template/'
-                                                  'create.html'),
+                                                  'create_account.html'),
                                  encoding='utf-8') as template:
             body = await template.read()
         return web.Response(body=body, content_type='text/html')
