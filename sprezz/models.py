@@ -79,14 +79,30 @@ class Application(db.Model):  # type: ignore
     id = db.Column(db.BigInteger(), primary_key=True)
     name = db.Column(db.Unicode())
     client_id = db.Column(db.Unicode(), nullable=False, unique=True)
+    # TODO Hash the secret
     client_secret = db.Column(db.Unicode(), nullable=False, unique=True)
     client_type = db.Column(db.Enum(ClientType), nullable=False,
                             default=ClientType.CONFIDENTIAL)
     grant_type = db.Column(db.Enum(GrantType), nullable=False,
                            default=GrantType.AUTHORIZATION_CODE)
-    redirect_uris = db.Column(db.Unicode())
     owner_id = db.Column(db.ForeignKey('account.id', ondelete='CASCADE'))
     created = db.Column(db.DateTime(), nullable=False,
                         default=datetime.utcnow)
     expires = db.Column(db.DateTime())
     changed = db.Column(db.DateTime(), onupdate=datetime.utcnow)
+
+    def to_json(self):
+        return {'name': self.name,
+                'client_id': self.client_id,
+                'client_secret': self.client_secret,  # TODO Debug only
+                'client_type': self.client_type.value,
+                'grant_type': self.grant_type.value,
+                'owner_id': self.owner_id}
+
+
+class ApplicationRedirect(db.Model):  # type: ignore
+    __tablename__ = 'appredirect'
+
+    id = db.Column(db.BigInteger(), primary_key=True)
+    app_id = db.Column(db.ForeignKey('application.id', ondelete='CASCADE'))
+    redirect_uri = db.Column(db.Unicode())

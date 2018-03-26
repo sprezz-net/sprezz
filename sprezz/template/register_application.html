@@ -1,0 +1,34 @@
+<html>
+    <head>
+        <title>Register Application</title>
+    </head>
+    <body>
+        <form action="/application/register" method="post" accept-charset="utf-8"
+              enctype="application/x-www-form-urlencoded">
+            <label for="name">Application Name</label>
+            <input id="name" name="name" type="text" value="" autofocus/>
+            <br/>
+            <label for="client_type">Client Type</label>
+            <select id="client_type" name="client_type">
+                <option value="" selected="selected">--</option>
+                <option value="confidential">Confidential</option>
+                <option value="public">Public</option>
+            </select>
+            <br/>
+            <label for="grant_type">Grant Type</label>
+            <select id="grant_type" name="grant_type">
+                <option value="" selected="selected">--</option>
+                <option value="authorization_code">Authorization Code</option>
+                <option value="implicit">Implicit</option>
+                <option value="password">Password</option>
+                <option value="client_credentials">Client Credentials</option>
+            </select>
+            <br/>
+            <label for="redirect_uris">Redirect URIs</label>
+            <textarea cols="40" id="redirect_uris" name="redirect_uris"
+                      rows="10"></textarea>
+            <br/>
+            <button type="submit">Register</button>
+        </form>
+    </body>
+</html>
