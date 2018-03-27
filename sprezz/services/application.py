@@ -34,8 +34,11 @@ class ApplicationService:
         # TODO Make both lengths configurable
         client_id = generate_client_id(length=40,
                                        chars=UNICODE_ASCII_CHARACTER_SET)
-        client_secret = generate_client_id(length=128,
-                                           chars=UNICODE_ASCII_CHARACTER_SET)
+        if client_type is ClientType.PUBLIC:
+            client_secret = None
+        else:
+            client_secret = generate_client_id(length=128,
+                                               chars=UNICODE_ASCII_CHARACTER_SET)
         self.application = await Application.create(bind=self.connection,
                                                     name=name,
                                                     client_id=client_id,
