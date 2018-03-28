@@ -73,14 +73,13 @@ class GrantType(Enum):
     CLIENT_CREDENTIALS = 'client_credentials'
 
 
-class Application(db.Model):  # type: ignore
-    __tablename__ = 'application'
+class Client(db.Model):  # type: ignore
+    __tablename__ = 'client'
 
-    id = db.Column(db.BigInteger(), primary_key=True)
+    id = db.Column(db.Unicode(), primary_key=True)
     name = db.Column(db.Unicode())
-    client_id = db.Column(db.Unicode(), nullable=False, unique=True)
-    # TODO Hash the secret
-    client_secret = db.Column(db.Unicode(), nullable=False, unique=True)
+    # TODO Hash the secret?
+    secret = db.Column(db.Unicode(), nullable=False, unique=True)
     client_type = db.Column(db.Enum(ClientType), nullable=False,
                             default=ClientType.CONFIDENTIAL)
     grant_type = db.Column(db.Enum(GrantType), nullable=False,
@@ -93,16 +92,16 @@ class Application(db.Model):  # type: ignore
 
     def to_json(self):
         return {'name': self.name,
-                'client_id': self.client_id,
-                'client_secret': self.client_secret,  # TODO Debug only
+                'client_id': self.id,
+                'client_secret': self.secret,  # TODO Debug only
                 'client_type': self.client_type.value,
                 'grant_type': self.grant_type.value,
                 'owner_id': self.owner_id}
 
 
-class ApplicationRedirect(db.Model):  # type: ignore
-    __tablename__ = 'appredirect'
+class ClientRedirect(db.Model):  # type: ignore
+    __tablename__ = 'client_redirect'
 
     id = db.Column(db.BigInteger(), primary_key=True)
-    app_id = db.Column(db.ForeignKey('application.id', ondelete='CASCADE'))
+    client_id = db.Column(db.ForeignKey('client.id', ondelete='CASCADE'))
     redirect_uri = db.Column(db.Unicode())
