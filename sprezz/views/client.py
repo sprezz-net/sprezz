@@ -37,10 +37,10 @@ class ClientListView(web.View):
                 service = ClientService(tx.connection)
                 async for client in service.iterate_all_clients():
                     item = client.to_json()
-                    item['redirect_uri'] = []
-                    async for uri in service.iterate_client_redirect(
-                                     client.id):
-                        item['redirect_uri'].append(uri.redirect_uri)
+                    item['redirect_uris'] = []
+                    async for client_uri in service.iterate_client_redirect(
+                                            client.id):
+                        item['redirect_uris'].append(client_uri.to_json())
                     data.append(item)
         return web.json_response(data, dumps=json_dumps)
         # TODO look into streaming collections?

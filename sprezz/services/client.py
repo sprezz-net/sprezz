@@ -2,11 +2,12 @@ from datetime import datetime
 from typing import List
 
 from gino import GinoConnection
-from oauthlib.common import (generate_client_id,
-                             UNICODE_ASCII_CHARACTER_SET)
+from sqlalchemy.sql.expression import exists, and_
 
 from sprezz.models import (Client, ClientRedirect,
                            ClientType, GrantType)
+from sprezz.utils.oauth.common import (generate_client_id,
+                                       UNICODE_ASCII_CHARACTER_SET)
 
 
 __all__ = (
@@ -45,11 +46,22 @@ class ClientService:
                                           client_type=client_type,
                                           grant_type=grant_type,
                                           owner_id=owner_id)
+        i = 0
         for uri in redirect_uri:
             await ClientRedirect.create(bind=self.connection,
                                         client_id=self.client.id,
-                                        redirect_uri=uri)
+                                        redirect_uri=uri,
+                                        default=(i == 0))
+            i += 1
         return self.client
+
+    def validate_client(self):
+        return self.client.validate
+
+    async def validate_redirect_uri(self, redirect_uri: str) -> bool:
+        return await self.connection.first(ClientRedirect.query.where(
+                and_(ClientRedirect.client_id == self.client.id,
+                ClientRedirect.redirect_uri == redirect_uri))) is not None
 
     def iterate_all_clients(self):
         return self.connection.iterate(Client.query)

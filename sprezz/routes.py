@@ -15,8 +15,8 @@ PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 
 
 def setup_routes(app: web.Application) -> None:
-    app.add_routes([web.view('/authorize', AuthorizeView),
-                    web.view('/token', TokenView),
+    app.add_routes([web.view('/connect/authorize', AuthorizeView),
+                    web.view('/connect/token', TokenView),
                     web.view('/client', ClientListView),
                     web.view('/client/register', RegisterClientView),
                     web.view('/account', AccountListView),

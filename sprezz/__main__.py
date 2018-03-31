@@ -12,7 +12,7 @@ from trafaret_config import commandline
 from sprezz.database import init_database, close_database
 from sprezz.remotes import init_remotes
 from sprezz.routes import setup_routes
-from sprezz.utils import TRAFARET
+from sprezz.utils.config import TRAFARET
 
 
 def attempt_use_uvloop() -> None:

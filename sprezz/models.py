@@ -85,10 +85,27 @@ class Client(db.Model):  # type: ignore
     grant_type = db.Column(db.Enum(GrantType), nullable=False,
                            default=GrantType.AUTHORIZATION_CODE)
     owner_id = db.Column(db.ForeignKey('account.id', ondelete='CASCADE'))
+    disabled = db.Column(db.Boolean(), nullable=False, default=False)
     created = db.Column(db.DateTime(), nullable=False,
                         default=datetime.utcnow)
     expires = db.Column(db.DateTime())
     changed = db.Column(db.DateTime(), onupdate=datetime.utcnow)
+
+    @hybrid_property
+    def expired(self) -> bool:
+        if self.expires is None:
+            return False
+        if self.expires <= datetime.utcnow():
+            return True
+        return False
+
+    @hybrid_property
+    def valid(self) -> bool:
+        if self.disabled:
+            return False
+        if self.expired:
+            return False
+        return True
 
     def to_json(self):
         return {'name': self.name,
@@ -104,4 +121,9 @@ class ClientRedirect(db.Model):  # type: ignore
 
     id = db.Column(db.BigInteger(), primary_key=True)
     client_id = db.Column(db.ForeignKey('client.id', ondelete='CASCADE'))
-    redirect_uri = db.Column(db.Unicode())
+    redirect_uri = db.Column(db.Unicode(), nullable=False)
+    default = db.Column(db.Boolean(), nullable=False, default=False)
+
+    def to_json(self):
+        return {'redirect_uri': self.redirect_uri,
+                'default': self.default}
