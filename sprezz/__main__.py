@@ -9,10 +9,13 @@ from typing import List
 from aiohttp.web import Application, run_app
 from trafaret_config import commandline
 
-from sprezz.database import init_database, close_database
+from sprezz.models import db
 from sprezz.remotes import init_remotes
 from sprezz.routes import setup_routes
 from sprezz.utils.config import TRAFARET
+
+
+log = logging.getLogger(__name__)
 
 
 def attempt_use_uvloop() -> None:
@@ -32,11 +35,10 @@ def init(loop: AbstractEventLoop, argv: List[str]) -> Application:
         default_config='./config/sprezz.yaml')
     options = arg_parser.parse_args(argv)
     config = commandline.config_from_options(options, TRAFARET)
-    app = Application(loop=loop)
+    app = Application(loop=loop, middlewares=[db])
     app['config'] = config
     app.on_startup.append(init_remotes)
-    app.on_startup.append(init_database)
-    app.on_cleanup.append(close_database)
+    db.init_app(app)
     setup_routes(app)
     return app
 

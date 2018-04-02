@@ -1,4 +1,6 @@
 port: 8888
 reverse_proxy_hosts:
   - 127.0.0.0/8
-dsn: postgres://sprezz@localhost/sprezz
+gino:
+  database: sprezz
+  user: sprezz

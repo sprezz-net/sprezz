@@ -1,8 +1,7 @@
-from datetime import datetime
 from typing import List
 
 from gino import GinoConnection
-from sqlalchemy.sql.expression import exists, and_
+from sqlalchemy.sql.expression import and_
 
 from sprezz.models import (Client, ClientRedirect,
                            ClientType, GrantType)
@@ -38,8 +37,9 @@ class ClientService:
         if client_type is ClientType.PUBLIC:
             client_secret = None
         else:
-            client_secret = generate_client_id(length=128,
-                                               chars=UNICODE_ASCII_CHARACTER_SET)
+            client_secret = generate_client_id(
+                length=128,
+                chars=UNICODE_ASCII_CHARACTER_SET)
         self.client = await Client.create(bind=self.connection,
                                           name=name, id=client_id,
                                           secret=client_secret,
@@ -59,12 +59,19 @@ class ClientService:
         return self.client.validate
 
     async def validate_redirect_uri(self, redirect_uri: str) -> bool:
-        return await self.connection.first(ClientRedirect.query.where(
-                and_(ClientRedirect.client_id == self.client.id,
-                ClientRedirect.redirect_uri == redirect_uri))) is not None
+        return await self.connection.first(ClientRedirect.query.where(and_(
+            ClientRedirect.client_id == self.client.id,
+            ClientRedirect.redirect_uri == redirect_uri))) is not None
+
+    async def query_all_clients(self) -> Client:
+        return await self.connection.all(Client.query)
 
     def iterate_all_clients(self):
         return self.connection.iterate(Client.query)
+
+    async def query_client_redirect(self, client_id: str) -> ClientRedirect:
+        return await self.connection.all(
+            ClientRedirect.query.where(ClientRedirect.client_id == client_id))
 
     def iterate_client_redirect(self, client_id: str) -> ClientRedirect:
         return self.connection.iterate(

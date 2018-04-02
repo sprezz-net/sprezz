@@ -41,5 +41,14 @@ TRAFARET = T.Dict({
     T.Key('host', default='0.0.0.0'): IPAddressString,
     T.Key('port', default=8080): T.Int,
     T.Key('reverse_proxy_hosts', optional=True): T.List(IPAddressNetwork),
-    T.Key('dsn'): T.String,
+    T.Key('gino'): T.Dict({
+        T.Key('driver', default='asyncpg', optional=True): T.String,
+        T.Key('host', default='localhost', optional=True): T.String,
+        T.Key('port', default=5432, optional=True): T.Int,
+        T.Key('user', default='postgres', optional=True): T.String,
+        T.Key('password', optional=True): T.String,
+        T.Key('database', default='postgres', optional=True): T.String,
+        T.Key('pool_min_size', default=5, optional=True): T.Int,
+        T.Key('pool_max_size', default=10, optional=True): T.Int
+    })
 })

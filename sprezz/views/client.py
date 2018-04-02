@@ -31,20 +31,15 @@ json_dumps = partial(json.dumps, default=json_serialize)
 class ClientListView(web.View):
     async def get(self):
         data = []
-        engine = self.request.app['engine']
-        async with engine.acquire() as conn:
-            async with conn.transaction() as tx:
-                service = ClientService(tx.connection)
-                async for client in service.iterate_all_clients():
-                    item = client.to_json()
-                    item['redirect_uris'] = []
-                    async for client_uri in service.iterate_client_redirect(
-                                            client.id):
-                        item['redirect_uris'].append(client_uri.to_json())
-                    data.append(item)
+        connection = self.request['connection']
+        service = ClientService(connection)
+        for client in await service.query_all_clients():
+            item = client.to_json()
+            item['redirect_uris'] = []
+            for client_uri in await service.query_client_redirect(client.id):
+                item['redirect_uris'].append(client_uri.to_json())
+            data.append(item)
         return web.json_response(data, dumps=json_dumps)
-        # TODO look into streaming collections?
-        # https://gist.github.com/jbn/fc90e3ddbc5c60c698d07b3df30004c8
 
 
 class RegisterClientView(web.View):
@@ -59,18 +54,17 @@ class RegisterClientView(web.View):
     async def post(self):
         if self.request.can_read_body:
             data = await self.request.post()
-            engine = self.request.app['engine']
-            async with engine.acquire() as conn:
-                async with conn.transaction() as tx:
-                    service = ClientService(tx.connection)
-                    client_type = ClientType[data['client_type'].upper()]
-                    grant_type = GrantType[data['grant_type'].upper()]
-                    redirect_uri = data['redirect_uris'].splitlines()
-                    await service.register_client(
-                        name=data['name'],
-                        client_type=client_type,
-                        grant_type=grant_type,
-                        owner_id=1,  # TODO Link to real owner
-                        redirect_uri=redirect_uri)
+            connection = self.request['connection']
+            async with connection.transaction() as tx:
+                service = ClientService(tx.connection)
+                client_type = ClientType[data['client_type'].upper()]
+                grant_type = GrantType[data['grant_type'].upper()]
+                redirect_uri = data['redirect_uris'].splitlines()
+                await service.register_client(name=data['name'],
+                                              client_type=client_type,
+                                              grant_type=grant_type,
+                                              # TODO Link to real owner
+                                              owner_id=1,
+                                              redirect_uri=redirect_uri)
             return web.Response(text="Client registered")
         return web.Response(text="Can't read body")

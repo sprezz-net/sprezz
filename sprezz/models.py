@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from gino import Gino
+from gino.ext.aiohttp import Gino
 from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 
 

@@ -27,7 +27,7 @@ PROJECT_REQUIRES = [
     'aiohttp_remotes',
     'aiofiles',
     'asyncpg',
-    'gino>=0.6.1',
+    'gino>=0.6.2',
     'passlib[bcrypt]',
     'trafaret-config']
 PROJECT_PACKAGES = find_packages(exclude=('tests',))
