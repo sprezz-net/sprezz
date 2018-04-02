@@ -1,0 +1,68 @@
+# This file must be used with "source activate" *from bash*
+# you cannot run it directly
+
+deactivate_node () {
+    # reset old environment variables
+    if [ -n "${_OLD_VIRTUAL_NODE_PATH:-}" ] ; then
+        PATH="${_OLD_VIRTUAL_NODE_PATH:-}"
+        export PATH
+        unset _OLD_VIRTUAL_NODE_PATH
+    fi
+
+    # This should detect bash and zsh, which have a hash command that must
+    # be called to get it to forget past commands.  Without forgetting
+    # past commands the $PATH changes we made may not be respected
+    if [ -n "${BASH:-}" -o -n "${ZSH_VERSION:-}" ] ; then
+        hash -r
+    fi
+
+    if [ -n "${_OLD_VIRTUAL_NODE_PS1:-}" ] ; then
+        PS1="${_OLD_VIRTUAL_NODE_PS1:-}"
+        export PS1
+        unset _OLD_VIRTUAL_NODE_PS1
+    fi
+
+    unset VIRTUAL_NODE_ENV
+    if [ ! "$1" = "nondestructive" ] ; then
+    # Self destruct!
+        unset -f deactivate
+    fi
+}
+
+# unset irrelevant variables
+deactivate_node nondestructive
+
+get_script_dir () {
+     SOURCE="${BASH_SOURCE[0]}"
+     # While $SOURCE is a symlink, resolve it
+     while [ -h "$SOURCE" ]; do
+          DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+          SOURCE="$( readlink "$SOURCE" )"
+          # If $SOURCE was a relative symlink (so no "/" as prefix, need to resolve it relative to the symlink base directory
+          [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+     done
+     DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"
+     echo "$DIR"
+}
+
+VIRTUAL_NODE_ENV="$(get_script_dir)"
+export VIRTUAL_NODE_ENV
+
+_OLD_VIRTUAL_NODE_PATH="$PATH"
+PATH="$VIRTUAL_NODE_ENV/node_modules/.bin:$PATH"
+export PATH
+
+if [ -z "${VIRTUAL_NODE_ENV_DISABLE_PROMPT:-}" ] ; then
+    _OLD_VIRTUAL_NODE_PS1="${PS1:-}"
+    if [ "x(node) " != x ] ; then
+	PS1="(node) ${PS1:-}"
+    fi
+    export PS1
+fi
+
+# This should detect bash and zsh, which have a hash command that must
+# be called to get it to forget past commands.  Without forgetting
+# past commands the $PATH changes we made may not be respected
+if [ -n "${BASH:-}" -o -n "${ZSH_VERSION:-}" ] ; then
+    hash -r
+fi

@@ -5,3 +5,6 @@ __pycache__
 *.py[co]
 *.swp
 *~
+client/node_modules
+client/yarn*.log
+client/yarn.lock
