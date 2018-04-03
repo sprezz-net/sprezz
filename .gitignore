@@ -7,5 +7,7 @@ __pycache__
 *.swp
 *~
 client/node_modules
-client/yarn*.log
+client/test/unit/coverage/
+client/npm-*.log
+client/yarn-*.log
 client/yarn.lock
