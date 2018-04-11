@@ -14,7 +14,7 @@
           value="true"
           v-for="(item, i) in items"
           :key="i"
-          :to="item.path == '#' ? '' : item.path"
+          :to="item.name == '#' || item.name == '' ? '' : { name: item.name }"
         >
           <v-list-tile-action>
             <v-icon v-html="item.icon"></v-icon>
@@ -51,42 +51,42 @@ export default {
         {
           icon: "people",
           title: "Timeline",
-          path: "/timeline"
+          name: "timeline",
         },
         {
           icon: "public",
           title: "Network",
-          path: "/network"
+          name: "network",
         },
         {
           icon: "portrait",
           title: "Profile",
-          path: "/profile"
+          name: "profile",
         },
         {
           icon: "mail_outline",
           title: "Messages",
-          path: "/messages"
+          name: "messages",
         },
         {
           icon: "photo_library",
           title: "Media",
-          path: "/media"
+          name: "media",
         },
         {
           icon: "collections_bookmark",
           title: "Bookmarks",
-          path: "/bookmarks"
+          name: "bookmarks",
         },
         {
           icon: "cloud",
           title: "Storage",
-          path: "/storage"
+          name: "storage",
         },
         {
           icon: "settings",
           title: "Settings",
-          path: "/settings"
+          name: "settings",
         }
       ],
       miniVariant: false,
