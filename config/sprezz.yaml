@@ -1,4 +1,5 @@
-port: 8888
+host: test.sprezz.net
+listen_port: 8888
 reverse_proxy_hosts:
   - 127.0.0.0/8
 gino:

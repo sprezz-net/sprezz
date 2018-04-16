@@ -52,8 +52,8 @@ def main(argv: List[str] = None) -> None:
     loop = get_event_loop()
     app = init(loop, argv)
     run_app(app,
-            host=app['config']['host'],
-            port=app['config']['port'])
+            host=app['config']['listen'],
+            port=app['config']['listen_port'])
 
 
 if __name__ == '__main__':

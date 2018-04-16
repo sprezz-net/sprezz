@@ -38,8 +38,10 @@ IPAddressNetwork = T.String() & check_ip_address_or_network
 
 
 TRAFARET = T.Dict({
-    T.Key('host', default='0.0.0.0'): IPAddressString,
-    T.Key('port', default=8080): T.Int,
+    T.Key('host'): T.String,
+    T.Key('port', default=443): T.Int,
+    T.Key('listen', default='0.0.0.0'): IPAddressString,
+    T.Key('listen_port', default=8080): T.Int,
     T.Key('reverse_proxy_hosts', optional=True): T.List(IPAddressNetwork),
     T.Key('gino'): T.Dict({
         T.Key('driver', default='asyncpg', optional=True): T.String,
