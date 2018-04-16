@@ -1,11 +1,10 @@
-from logging import getLogger
+import logging
 
-from aiohttp import hdrs
-from aiohttp.web import HTTPMethodNotAllowed, HTTPNotAcceptable
+from aiohttp import web, hdrs
 from aiohttp.helpers import parse_mimetype
 
 
-log = getLogger(__name__)
+log = logging.getLogger(__name__)
 
 
 def parse_accept(accept):
@@ -47,8 +46,8 @@ class AcceptChooser:
                     log.debug('Choosing route for content type %s', mimetype)
                     resp = await acceptor(request)
                     return resp
-        raise HTTPNotAcceptable()
+        raise web.HTTPNotAcceptable()
 
     def _raise_allowed_methods(self, request):
         allowed_methods = {m for m in self._accepts}
-        raise HTTPMethodNotAllowed(request.method, allowed_methods)
+        raise web.HTTPMethodNotAllowed(request.method, allowed_methods)
