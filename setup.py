@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Sprezz setup script."""
 import os
+import sys
 
 from datetime import date
 from setuptools import find_packages, setup
+from setuptools.command.test import test as TestCommand
 
 
 PROJECT_NAME = 'Sprezz'
@@ -29,8 +31,11 @@ PROJECT_REQUIRES = [
     'asyncpg',
     'gino>=0.6.2',
     'passlib[bcrypt]',
-    'trafaret-config']
+    'trafaret-config',
+    'trafaret_validator']
 PROJECT_PACKAGES = find_packages(exclude=('tests',))
+PROJECT_TEST_REQUIRES = [
+    'pytest']
 
 
 HERE = os.path.abspath(os.path.dirname(__file__))
@@ -43,6 +48,15 @@ with open(os.path.join(HERE, 'CHANGES.rst'), encoding='utf-8') as f:
 ABOUT = {}
 with open(os.path.join(HERE, PROJECT_PACKAGE_NAME, '__version__.py')) as f:
     exec(f.read(), ABOUT)
+
+
+class PyTest(TestCommand):
+    user_options = []
+
+    def run(self):
+        import subprocess
+        errno = subprocess.call([sys.executable, '-m', 'pytest', 'tests'])
+        raise SystemExit(errno)
 
 
 setup(
@@ -59,9 +73,17 @@ setup(
     classifiers=PROJECT_CLASSIFIERS,
     install_requires=PROJECT_REQUIRES,
     include_package_data=True,
+    test_suite='tests',
+    tests_require=PROJECT_TEST_REQUIRES,
     entry_points={
         'console_scripts': [
             'sprezz = sprezz.__main__:main'
         ]
+    },
+    extras_require={
+        'testing': PROJECT_TEST_REQUIRES,
+    },
+    cmdclass={
+        'test': PyTest
     },
 )
