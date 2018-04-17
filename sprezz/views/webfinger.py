@@ -1,11 +1,9 @@
-import attr
 import json
 import logging
 
+import attr
 import furl
 import trafaret as T
-
-from urllib.parse import urlsplit
 
 from aiohttp import web
 from trafaret_validator import TrafaretValidator
@@ -43,11 +41,10 @@ class MDKey(T.Key):
 
 
 class WebfingerValidator(TrafaretValidator):
-    query = T.Dict({
-        T.Key('resource'): T.String,
-        MDKey('rel', optional=True): T.List(T.String),
-        },
-        ignore_extra='*')
+    query = T.Dict({T.Key('resource'): T.String,
+                    MDKey('rel', optional=True): T.List(T.String),
+                   },
+                   ignore_extra='*')
 
 
 class Resource:
@@ -61,9 +58,9 @@ class Resource:
             # Default to https scheme when not specified.
             self._url = furl.furl('https://{}'.format(self._url.url))
             # Default to acct when only username and host are defined.
-            if self.username and self.host and self.port is None and (
-                    self.path == '' and self.query == '' and (
-                    self.fragment == '')):
+            if self.username and self.host and (self.port is None) and (
+                    self.path == '') and self.query == '' and (
+                        self.fragment == ''):
                 self._url.set(scheme='acct')
         if self.path != '':
             self._url.path.normalize()
@@ -142,8 +139,8 @@ async def webfinger_get_jrd(request):
     data = validator.data['query']
     try:
         resource = Resource(data.get('resource'))
-    except (ValueError, AttributeError) as e:
-        raise_bad_request(str(e))
+    except (ValueError, AttributeError) as err:
+        raise_bad_request(str(err))
 
     rel = data.get('rel')
     if resource.host != request.app['config']['host']:
