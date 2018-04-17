@@ -22,8 +22,10 @@ furl.COLON_SEPARATED_SCHEMES.append('acct')
 chooser = AcceptChooser()  # pylint: disable=invalid-name
 
 
-async def link_openid_issuer(resource, rel):
-    return
+async def link_openid_issuer(account, request, resource, rel=None):
+    return {'rel': rel,
+            'href': 'https://{netloc}'.format(
+                netloc=request.app['config']['netloc'])}
 
 
 WEBFINGER_RELS = {
@@ -33,6 +35,32 @@ WEBFINGER_RELS = {
 
 RESOURCE_ALLOWED_SCHEMES = ['acct', 'http', 'https', 'mailto']
 RESOURCE_STANDARD_PORTS = ['80', '443']
+
+
+async def webfinger_account(account, request, resource, rels=None):
+    result = {}
+    result['subject'] = 'acct:{account}@{netloc}'.format(
+        account=account,
+        netloc=request.app['config']['netloc'])
+    result['aliases'] = [
+        'https://{netloc}/{account}'.format(
+            netloc=request.app['config']['netloc'],
+            account=account),
+        'https://{netloc}/~{account}'.format(
+            netloc=request.app['config']['netloc'],
+            account=account),
+        'https://{netloc}/@{account}'.format(
+            netloc=request.app['config']['netloc'],
+            account=account)
+        ]
+    result['links'] = []
+    if rels is None:
+        rels = WEBFINGER_RELS
+    for rel in rels:
+        method = WEBFINGER_RELS[rel]
+        part = await method(account, request, resource, rel)
+        result['links'].append(part)
+    return result
 
 
 class MDKey(T.Key):
@@ -62,8 +90,8 @@ class Resource:
                     self.path == '') and self.query == '' and (
                         self.fragment == ''):
                 self._url.set(scheme='acct')
-        if self.path != '':
-            self._url.path.normalize()
+        self._url.path.normalize()
+        self._url.fragment.path.normalize()
 
     @property
     def scheme(self):
@@ -86,12 +114,20 @@ class Resource:
         return str(self._url.path)
 
     @property
+    def path_segments(self):
+        return self._url.path.segments
+
+    @property
     def query(self):
         return str(self._url.query)
 
     @property
     def fragment(self):
         return str(self._url.fragment)
+
+    @property
+    def fragment_segments(self):
+        return self._url.fragment.segments
 
     @property
     def url(self):
@@ -142,17 +178,43 @@ async def webfinger_get_jrd(request):
     except (ValueError, AttributeError) as err:
         raise_bad_request(str(err))
 
-    rel = data.get('rel')
+    rels = data.get('rel')
     if resource.host != request.app['config']['host']:
-        raise_temp_redirect(request, resource, rel)
+        raise_temp_redirect(request, resource, rels)
     if resource.port and resource.port != request.app['config']['port']:
-        raise_temp_redirect(request, resource, rel)
+        raise_temp_redirect(request, resource, rels)
     if resource.scheme not in RESOURCE_ALLOWED_SCHEMES:
         raise web.HTTPNotFound()
 
-    # TODO Return an actual WebFinger response
-    log.debug(resource)
-    return web.json_response(resource.asdict())
+    account = None
+    if resource.scheme in ['acct', 'mailto']:
+        # acct:account@host
+        # mailto:account@host
+        account = resource.username
+    elif resource.scheme in ['http', 'https']:
+        if resource.username:
+            # https://account@host
+            account = resource.username
+        elif len(resource.path_segments) == 1:
+            # https://host/account
+            account = resource.path_segments[0]
+            if account.startswith('~') or account.startswith('@'):
+                # https://host/~account
+                # https://host/@account
+                account = account[1:]
+        elif len(resource.path_segments) == 2:
+            if resource.path_segments[0] in ['users', 'channel']:
+                # https://host/users/account
+                # https://host/channel/account
+                account = resource.path_segments[1]
+    if account is not None:
+        result = await webfinger_account(account, request, resource, rels)
+    else:
+        # TODO Allow WebFinger on other type of objects like articles
+        # and respond with copyright information, for example.
+        raise web.HTTPNotFound()
+
+    return web.json_response(result, content_type='application/jrd+json')
 
 
 def setup_routes(app: web.Application) -> None:

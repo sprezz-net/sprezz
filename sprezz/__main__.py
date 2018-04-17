@@ -27,6 +27,13 @@ def attempt_use_uvloop() -> None:
         pass
 
 
+def netloc(config) -> str:
+    if config['port'] == 80 or config['port'] == 443:
+        return config['host']
+    else:
+        return '{host}:{port}'.format(config.host, config.port)
+
+
 def init(loop: AbstractEventLoop, argv: List[str]) -> Application:
     """Initialize Sprezz application."""
     arg_parser = argparse.ArgumentParser()
@@ -37,6 +44,7 @@ def init(loop: AbstractEventLoop, argv: List[str]) -> Application:
     config = commandline.config_from_options(options, TRAFARET)
     app = Application(loop=loop, middlewares=[db])
     app['config'] = config
+    app['config']['netloc'] = netloc(config)
     app.on_startup.append(init_remotes)
     db.init_app(app)
     setup_routes(app)

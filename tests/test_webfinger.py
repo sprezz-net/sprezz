@@ -50,6 +50,11 @@ class TestWebFinger:
                                 'path': '/joe',
                                 'query': 'p1=one&p2=two'}
 
+        res = Resource("https://example.com/joe#frag")
+        assert res.asdict() == {**base, 'scheme': 'https', 'username': None,
+                                'path': '/joe',
+                                'fragment': 'frag'}
+
         res = Resource("example.com/joe?p1=one&p2=two#f1/f2")
         assert res.asdict() == {**base, 'scheme': 'https', 'username': None,
                                 'path': '/joe',
@@ -66,3 +71,8 @@ class TestWebFinger:
         assert res.asdict() == {**base, 'scheme': 'https', 'username': None,
                                 'path': '/bob',
                                 'query': 'p1=one&p2=two'}
+
+        res = Resource("https://example.com/joe#f1/../f2")
+        assert res.asdict() == {**base, 'scheme': 'https', 'username': None,
+                                'path': '/joe',
+                                'fragment': 'f2'}
