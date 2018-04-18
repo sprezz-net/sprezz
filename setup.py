@@ -35,7 +35,8 @@ PROJECT_REQUIRES = [
     'trafaret_validator']
 PROJECT_PACKAGES = find_packages(exclude=('tests',))
 PROJECT_TEST_REQUIRES = [
-    'pytest']
+    'pytest',
+    'pytest-aiohttp']
 
 
 HERE = os.path.abspath(os.path.dirname(__file__))
