@@ -136,14 +136,13 @@ class Resource:
     def __str__(self):
         return self.url
 
-    def asdict(self):
-        return {'scheme': self.scheme,
-                'username': self.username,
-                'host': self.host,
-                'port': self.port,
-                'path': self.path,
-                'query': self.query,
-                'fragment': self.fragment}
+    def as_dict(self):
+        keys = ['scheme', 'username', 'host', 'port',
+                'path', 'query', 'fragment']
+        data = {}
+        for key in keys:
+            data[key] = getattr(self, key)
+        return data
 
 
 @chooser.accept('GET', 'application/json')
