@@ -110,6 +110,8 @@ async def test_webfinger_https(aiohttp_client):
     here = os.path.abspath(os.path.dirname(__file__))
     # ssl_context = ssl.create_default_context(cafile=here + '/localhost.crt')
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
     ssl_context.load_cert_chain(certfile=here + '/localhost.crt',
                                 keyfile=here + '/localhost.key')
     client = await aiohttp_client(webfinger_app,
@@ -122,10 +124,10 @@ async def test_webfinger_https(aiohttp_client):
                             params=params,
                             ssl=ssl_context)
     assert resp.status == 406
-    # Test without accept content-type
+    # Test with accept content-type
     resp = await client.get('/.well-known/webfinger',
                             params=params,
                             headers=headers,
+                            scheme='https',
                             ssl=ssl_context)
-    assert resp.status == 500
-    assert resp.reason == 'WebFinger requires HTTPS'
+    assert resp.status == 200
