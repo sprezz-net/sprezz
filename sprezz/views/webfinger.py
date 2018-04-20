@@ -60,6 +60,11 @@ async def webfinger_account(account, request, resource, rels=None):
     for rel in rels:
         method = WEBFINGER_RELS[rel]
         part = await method(account, request, resource, rel)
+        for section in ['properties', ]:
+            if section in part:
+                if section not in result:
+                    result[section] = {}
+                result[section].update(part[section])
         for section in ['aliases', 'links']:
             if section in part:
                 if section not in result:
