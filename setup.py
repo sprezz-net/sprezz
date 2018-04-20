@@ -29,6 +29,7 @@ PROJECT_REQUIRES = [
     'aiohttp_remotes',
     'aiofiles',
     'asyncpg',
+    'furl>=1.0.1',
     'gino>=0.6.2',
     'passlib[bcrypt]',
     'trafaret-config',

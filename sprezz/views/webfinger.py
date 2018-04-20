@@ -16,7 +16,8 @@ log = logging.getLogger(__name__)
 
 # Make acct known as scheme
 # https://github.com/gruns/furl/issues/97
-furl.COLON_SEPARATED_SCHEMES.append('acct')
+if 'acct' not in furl.COLON_SEPARATED_SCHEMES:
+    furl.COLON_SEPARATED_SCHEMES.append('acct')
 
 
 chooser = AcceptChooser()  # pylint: disable=invalid-name
