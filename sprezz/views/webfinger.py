@@ -22,14 +22,16 @@ furl.COLON_SEPARATED_SCHEMES.append('acct')
 chooser = AcceptChooser()  # pylint: disable=invalid-name
 
 
-async def link_openid_issuer(account, request, resource, rel=None):
-    return {'rel': rel,
+async def openid_issuer(account, request, resource, rel=None):
+    return {
+        'links': [{
+            'rel': rel,
             'href': 'https://{netloc}'.format(
-                netloc=request.app['config']['netloc'])}
+                netloc=request.app['config']['netloc'])}]}
 
 
 WEBFINGER_RELS = {
-    'http://openid.net/specs/connect/1.0/issuer': link_openid_issuer,
+    'http://openid.net/specs/connect/1.0/issuer': openid_issuer,
     }
 
 
@@ -53,13 +55,16 @@ async def webfinger_account(account, request, resource, rels=None):
             netloc=request.app['config']['netloc'],
             account=account)
         ]
-    result['links'] = []
     if rels is None:
         rels = WEBFINGER_RELS
     for rel in rels:
         method = WEBFINGER_RELS[rel]
         part = await method(account, request, resource, rel)
-        result['links'].append(part)
+        for section in ['aliases', 'links']:
+            if section in part:
+                if section not in result:
+                    result[section] = []
+                result[section].extend(part[section])
     return result
 
 
