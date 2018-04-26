@@ -3,6 +3,10 @@ import argparse
 import logging
 import sys
 
+import venusian
+
+import sprezz
+
 from asyncio import get_event_loop, set_event_loop_policy, AbstractEventLoop
 from typing import List
 
@@ -13,6 +17,7 @@ from sprezz.models import db
 from sprezz.remotes import init_remotes
 from sprezz.routes import setup_routes
 from sprezz.utils.config import TRAFARET
+from sprezz.utils.registry import Registry
 
 
 log = logging.getLogger(__name__)
@@ -47,6 +52,10 @@ def init(loop: AbstractEventLoop, argv: List[str]) -> Application:
     app['config']['netloc'] = netloc(config)
     app.on_startup.append(init_remotes)
     db.init_app(app)
+    registry = Registry()
+    app['registry'] = registry
+    scanner = venusian.Scanner(registry=registry)
+    scanner.scan(sprezz)
     setup_routes(app)
     return app
 

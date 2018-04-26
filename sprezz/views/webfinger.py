@@ -1,9 +1,9 @@
 import json
 import logging
 
-import attr
 import furl
 import trafaret as T
+import venusian
 
 from aiohttp import web
 from trafaret_validator import TrafaretValidator
@@ -20,27 +20,85 @@ if 'acct' not in furl.COLON_SEPARATED_SCHEMES:
     furl.COLON_SEPARATED_SCHEMES.append('acct')
 
 
-chooser = AcceptChooser()  # pylint: disable=invalid-name
-
-
-async def openid_issuer(account, request, resource, rel=None):
-    return {
-        'links': [{
-            'rel': rel,
-            'href': 'https://{netloc}'.format(
-                netloc=request.app['config']['netloc'])}]}
-
-
-WEBFINGER_RELS = {
-    'http://openid.net/specs/connect/1.0/issuer': openid_issuer,
-    }
-
-
 RESOURCE_ALLOWED_SCHEMES = ['acct', 'http', 'https', 'mailto']
 RESOURCE_STANDARD_PORTS = ['80', '443']
 
 
-async def webfinger_account(account, request, resource, rels=None):
+chooser = AcceptChooser()  # pylint: disable=invalid-name
+
+
+class WebFingerRegistry:
+    def __init__(self):
+        self._aliases = []
+        self._properties = []
+        self._links = {}
+        self._frozen = False
+
+    def _check_frozen(self):
+        if self._frozen:
+            raise RuntimeError('Cannot modify frozen list.')
+
+    @property
+    def aliases(self):
+        return self._aliases
+
+    @property
+    def properties(self):
+        return self._properties
+
+    @property
+    def links(self):
+        return self._links
+
+    def add_alias(self, func):
+        self._check_frozen()
+        self._alias.add(func)
+
+    def add_property(self, func):
+        self._check_frozen()
+        self._properties.add(func)
+
+    def add_link(self, rel, func):
+        self._check_frozen()
+        self._links[rel] = func
+
+
+class webfinger:
+    def __init__(self, alias=False, prop=False, rel=None):
+        self.alias = alias
+        self.prop = prop
+        self.rel = rel
+
+    def __call__(self, func):
+        def callback(scanner, name, ob):
+            try:
+                reg = scanner.registry['webfinger']
+            except KeyError:
+                reg = WebFingerRegistry()
+                scanner.registry['webfinger'] = reg
+            if self.alias:
+                reg.add_alias(ob)
+            if self.prop:
+                reg.add_property(ob)
+            if self.rel is not None:
+                reg.add_link(rel=self.rel, func=ob)
+        venusian.attach(func, callback)
+        return func
+
+    @classmethod
+    def alias(cls):
+        return cls(alias=True)
+
+    @classmethod
+    def prop(cls):
+        return cls(prop=True)
+
+    @classmethod
+    def rel(cls, rel):
+        return cls(rel=rel)
+
+
+async def webfinger_plugins(request, account, resource, rels=None):
     result = {}
     result['subject'] = 'acct:{account}@{netloc}'.format(
         account=account,
@@ -56,21 +114,45 @@ async def webfinger_account(account, request, resource, rels=None):
             netloc=request.app['config']['netloc'],
             account=account)
         ]
+
+    reg = request.app['registry'].get('webfinger')
+    for plugin in reg.aliases:
+        part = await plugin(request=request,
+                            account=account,
+                            resource=resource,
+                            rels=rels)
+        if part:
+            if 'aliases' not in result:
+                result['aliases'] = []
+            result['aliases'].extend(part)
+
+    for plugin in reg.properties:
+        part = await plugin(request=request,
+                            account=account,
+                            resource=resource,
+                            rels=rels)
+        if part:
+            if 'properties' not in result:
+                result['properties'] = {}
+            result['properties'].update(part)
+
     if rels is None:
-        rels = WEBFINGER_RELS
-    for rel in rels:
-        method = WEBFINGER_RELS[rel]
-        part = await method(account, request, resource, rel)
-        for section in ['properties', ]:
-            if section in part:
-                if section not in result:
-                    result[section] = {}
-                result[section].update(part[section])
-        for section in ['aliases', 'links']:
-            if section in part:
-                if section not in result:
-                    result[section] = []
-                result[section].extend(part[section])
+        # Load all link plugins when no relation is given.
+        plugin_keys = reg.links.keys()
+    else:
+        # Otherwise restrict to the specified relations.
+        plugin_keys = rels
+    for key in plugin_keys:
+        plugin = reg.links[key]
+        part = await plugin(request=request,
+                            account=account,
+                            resource=resource,
+                            rels=rels)
+        if part:
+            if 'links' not in result:
+                result['links'] = []
+            result['links'].extend(part)
+
     return result
 
 
@@ -147,7 +229,7 @@ class Resource:
     def __str__(self):
         return self.url
 
-    def as_dict(self):
+    def asdict(self):
         keys = ['scheme', 'username', 'host', 'port',
                 'path', 'query', 'fragment']
         data = {}
@@ -218,7 +300,9 @@ async def webfinger_get_jrd(request):
                 # https://host/channel/account
                 account = resource.path_segments[1]
     if account is not None:
-        result = await webfinger_account(account, request, resource, rels)
+        # TODO Check if account exists.
+        result = await webfinger_plugins(account=account, request=request,
+                                         resource=resource, rels=rels)
     else:
         # TODO Allow WebFinger on other type of objects like articles
         # and respond with copyright information, for example.
