@@ -33,7 +33,8 @@ PROJECT_REQUIRES = [
     'gino>=0.6.2',
     'passlib[bcrypt]',
     'trafaret-config',
-    'trafaret_validator']
+    'trafaret_validator',
+    'venusian']
 PROJECT_PACKAGES = find_packages(exclude=('tests',))
 PROJECT_TEST_REQUIRES = [
     'pytest',
