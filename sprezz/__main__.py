@@ -54,7 +54,7 @@ def init(loop: AbstractEventLoop, argv: List[str]) -> Application:
     db.init_app(app)
     registry = Registry()
     app['registry'] = registry
-    scanner = venusian.Scanner(registry=registry)
+    scanner = venusian.Scanner(app=app)
     scanner.scan(sprezz)
     setup_routes(app)
     return app

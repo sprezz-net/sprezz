@@ -23,7 +23,7 @@ def parse_accept(accept):
     return types
 
 
-class AcceptChooser:
+class NegotiateContent:
     def __init__(self):
         self._accepts = {}
 

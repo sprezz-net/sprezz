@@ -1,3 +1,4 @@
+import logging
 import pathlib
 
 from aiohttp import web
@@ -9,12 +10,12 @@ from sprezz.views.client import (ClientListView,
                                  RegisterClientView)
 from sprezz.views.catchall import catch_all
 from sprezz.views.oauth2 import AuthorizeView, TokenView
-from sprezz.views import setup_view_routes
+
+
+log = logging.getLogger(__name__)
 
 
 def setup_routes(app: web.Application) -> None:
-    setup_view_routes(app)
-
     app.add_routes([web.view('/connect/authorize', AuthorizeView),
                     web.view('/connect/token', TokenView),
                     web.view('/client', ClientListView),

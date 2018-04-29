@@ -8,7 +8,8 @@ import venusian
 from aiohttp import web
 from trafaret_validator import TrafaretValidator
 
-from sprezz.utils.accept import AcceptChooser
+from sprezz.utils.plugin import plugin
+from sprezz.utils.accept import NegotiateContent
 
 
 log = logging.getLogger(__name__)
@@ -24,7 +25,12 @@ RESOURCE_ALLOWED_SCHEMES = ['acct', 'http', 'https', 'mailto']
 RESOURCE_STANDARD_PORTS = ['80', '443']
 
 
-chooser = AcceptChooser()  # pylint: disable=invalid-name
+negotiate = NegotiateContent()  # pylint: disable=invalid-name
+
+
+@plugin.add_routes()
+def setup_routes(app: web.Application) -> None:
+    app.add_routes([web.route('*', '/.well-known/webfinger', negotiate.route)])
 
 
 class WebFingerRegistry:
@@ -65,23 +71,24 @@ class WebFingerRegistry:
 
 class webfinger:
     def __init__(self, alias=False, prop=False, rel=None):
-        self.alias = alias
-        self.prop = prop
-        self.rel = rel
+        self._alias = alias
+        self._prop = prop
+        self._rel = rel
 
     def __call__(self, func):
         def callback(scanner, name, ob):
+            registry = scanner.app['registry']
             try:
-                reg = scanner.registry['webfinger']
+                wf = registry['webfinger']
             except KeyError:
-                reg = WebFingerRegistry()
-                scanner.registry['webfinger'] = reg
-            if self.alias:
-                reg.add_alias(ob)
-            if self.prop:
-                reg.add_property(ob)
-            if self.rel is not None:
-                reg.add_link(rel=self.rel, func=ob)
+                wf = WebFingerRegistry()
+                registry['webfinger'] = wf
+            if self._alias:
+                wf.add_alias(ob)
+            if self._prop:
+                wf.add_property(ob)
+            if self._rel is not None:
+                wf.add_link(rel=self._rel, func=ob)
         venusian.attach(func, callback)
         return func
 
@@ -96,64 +103,6 @@ class webfinger:
     @classmethod
     def rel(cls, rel):
         return cls(rel=rel)
-
-
-async def webfinger_plugins(request, account, resource, rels=None):
-    result = {}
-    result['subject'] = 'acct:{account}@{netloc}'.format(
-        account=account,
-        netloc=request.app['config']['netloc'])
-    result['aliases'] = [
-        'https://{netloc}/{account}'.format(
-            netloc=request.app['config']['netloc'],
-            account=account),
-        'https://{netloc}/~{account}'.format(
-            netloc=request.app['config']['netloc'],
-            account=account),
-        'https://{netloc}/@{account}'.format(
-            netloc=request.app['config']['netloc'],
-            account=account)
-        ]
-
-    reg = request.app['registry'].get('webfinger')
-    for plugin in reg.aliases:
-        part = await plugin(request=request,
-                            account=account,
-                            resource=resource,
-                            rels=rels)
-        if part:
-            if 'aliases' not in result:
-                result['aliases'] = []
-            result['aliases'].extend(part)
-
-    for plugin in reg.properties:
-        part = await plugin(request=request,
-                            account=account,
-                            resource=resource,
-                            rels=rels)
-        if part:
-            if 'properties' not in result:
-                result['properties'] = {}
-            result['properties'].update(part)
-
-    if rels is None:
-        # Load all link plugins when no relation is given.
-        plugin_keys = reg.links.keys()
-    else:
-        # Otherwise restrict to the specified relations.
-        plugin_keys = rels
-    for key in plugin_keys:
-        plugin = reg.links[key]
-        part = await plugin(request=request,
-                            account=account,
-                            resource=resource,
-                            rels=rels)
-        if part:
-            if 'links' not in result:
-                result['links'] = []
-            result['links'].extend(part)
-
-    return result
 
 
 class MDKey(T.Key):
@@ -238,8 +187,66 @@ class Resource:
         return data
 
 
-@chooser.accept('GET', 'application/json')
-@chooser.accept('GET', 'application/jrd+json')
+async def webfinger_plugins(request, account, resource, rels=None):
+    result = {}
+    result['subject'] = 'acct:{account}@{netloc}'.format(
+        account=account,
+        netloc=request.app['config']['netloc'])
+    result['aliases'] = [
+        'https://{netloc}/{account}'.format(
+            netloc=request.app['config']['netloc'],
+            account=account),
+        'https://{netloc}/~{account}'.format(
+            netloc=request.app['config']['netloc'],
+            account=account),
+        'https://{netloc}/@{account}'.format(
+            netloc=request.app['config']['netloc'],
+            account=account)
+        ]
+
+    reg = request.app['registry'].get('webfinger')
+    for plugin in reg.aliases:
+        part = await plugin(request=request,
+                            account=account,
+                            resource=resource,
+                            rels=rels)
+        if part:
+            if 'aliases' not in result:
+                result['aliases'] = []
+            result['aliases'].extend(part)
+
+    for plugin in reg.properties:
+        part = await plugin(request=request,
+                            account=account,
+                            resource=resource,
+                            rels=rels)
+        if part:
+            if 'properties' not in result:
+                result['properties'] = {}
+            result['properties'].update(part)
+
+    if rels is None:
+        # Load all link plugins when no relation is given.
+        plugin_keys = reg.links.keys()
+    else:
+        # Otherwise restrict to the specified relations.
+        plugin_keys = rels
+    for key in plugin_keys:
+        plugin = reg.links[key]
+        part = await plugin(request=request,
+                            account=account,
+                            resource=resource,
+                            rels=rels)
+        if part:
+            if 'links' not in result:
+                result['links'] = []
+            result['links'].extend(part)
+
+    return result
+
+
+@negotiate.accept('GET', 'application/json')
+@negotiate.accept('GET', 'application/jrd+json')
 async def webfinger_get_jrd(request):
 
     def raise_bad_request(errors):
@@ -309,7 +316,3 @@ async def webfinger_get_jrd(request):
         raise web.HTTPNotFound()
 
     return web.json_response(result, content_type='application/jrd+json')
-
-
-def setup_routes(app: web.Application) -> None:
-    app.add_routes([web.route('*', '/.well-known/webfinger', chooser.route)])
