@@ -1,0 +1,219 @@
+{
+  "@context": {
+    "@vocab": "https://www.w3.org/ns/activitystreams#",
+    "goog": "http://schema.org/",
+    "ldp": "http://www.w3.org/ns/ldp#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "id": "@id",
+    "type": "@type",
+    "Accept": "Accept",
+    "Activity": "Activity",
+    "IntransitiveActivity": "IntransitiveActivity",
+    "Add": "Add",
+    "Announce": "Announce",
+    "Application": "Application",
+    "Arrive": "Arrive",
+    "Article": "Article",
+    "Audio": "Audio",
+    "Block": "Block",
+    "Collection": "Collection",
+    "CollectionPage": "CollectionPage",
+    "Relationship": "Relationship",
+    "Create": "Create",
+    "Delete": "Delete",
+    "Dislike": "Dislike",
+    "Document": "Document",
+    "Event": "Event",
+    "Follow": "Follow",
+    "Group": "Group",
+    "Image": "Image",
+    "Invite": "Invite",
+    "Join": "Join",
+    "Leave": "Leave",
+    "Like": "Like",
+    "Link": "Link",
+    "Mention": "Mention",
+    "Note": "Note",
+    "Object": "Object",
+    "Offer": "Offer",
+    "OrderedCollection": "OrderedCollection",
+    "OrderedCollectionPage": "OrderedCollectionPage",
+    "Organization": "Organization",
+    "Page": "Page",
+    "Person": "Person",
+    "Place": "Place",
+    "Profile": "Profile",
+    "Question": "Question",
+    "Reject": "Reject",
+    "Remove": "Remove",
+    "Service": "Service",
+    "Tombstone": "Tombstone",
+    "Undo": "Undo",
+    "Update": "Update",
+    "Video": "Video",
+    "actor": {
+      "@type": "@id"
+    },
+    "attributedTo": {
+      "@type": "@id"
+    },
+    "attachment": {
+      "@type": "@id"
+    },
+    "bcc": {
+      "@type": "@id"
+    },
+    "bto": {
+      "@type": "@id"
+    },
+    "cc": {
+      "@type": "@id"
+    },
+    "context": {
+      "@type": "@id"
+    },
+    "current": {
+      "@type": "@id"
+    },
+    "first": {
+      "@type": "@id"
+    },
+    "generator": {
+      "@type": "@id"
+    },
+    "icon": {
+      "@type": "@id"
+    },
+    "image": {
+      "@type": "@id"
+    },
+    "inReplyTo": {
+      "@type": "@id"
+    },
+    "instrument": {
+      "@type": "@id"
+    },
+    "orderedItems": {
+      "@type": "@id",
+      "@container": "@list"
+    },
+    "items": {
+      "@type": "@id"
+    },
+    "last": {
+      "@type": "@id"
+    },
+    "location": {
+      "@type": "@id"
+    },
+    "next": {
+      "@type": "@id"
+    },
+    "object": {
+      "@type": "@id"
+    },
+    "oneOf": {
+      "@type": "@id"
+    },
+    "anyOf": {
+      "@type": "@id"
+    },
+    "prev": {
+      "@type": "@id"
+    },
+    "preview": {
+      "@type": "@id"
+    },
+    "result": {
+      "@type": "@id"
+    },
+    "replies": {
+      "@type": "@id"
+    },
+    "tag": {
+      "@type": "@id"
+    },
+    "target": {
+      "@type": "@id"
+    },
+    "to": {
+      "@type": "@id"
+    },
+    "url": {
+      "@type": "@id"
+    },
+    "accuracy": {
+      "@type": "xsd:float"
+    },
+    "altitude": {
+      "@type": "xsd:float"
+    },
+    "content": "xsd:string",
+    "name": "xsd:string",
+    "duration": "xsd:duration",
+    "endTime": {
+      "@type": "xsd:dateTime"
+    },
+    "height": {
+      "@type": "xsd:nonNegativeInteger"
+    },
+    "href": {
+      "@type": "@id"
+    },
+    "hreflang": "xsd:string",
+    "latitude": {
+      "@type": "xsd:float"
+    },
+    "longitude": {
+      "@type": "xsd:float"
+    },
+    "mediaType": "xsd:string",
+    "published": {
+      "@type": "xsd:dateTime"
+    },
+    "radius": {
+      "@type": "xsd:float"
+    },
+    "rel": "xsd:string",
+    "startIndex": {
+      "@type": "xsd:nonNegativeInteger"
+    },
+    "startTime": {
+      "@type": "xsd:dateTime"
+    },
+    "summary": "xsd:string",
+    "totalItems": {
+      "@type": "xsd:nonNegativeInteger"
+    },
+    "units": "xsd:string",
+    "updated": {
+      "@type": "xsd:dateTime"
+    },
+    "width": {
+      "@type": "xsd:nonNegativeInteger"
+    },
+    "inbox": {
+      "@type": "@id"
+    },
+    "outbox": {
+      "@type": "@id"
+    },
+    "following": {
+      "@type": "@id"
+    },
+    "followers": {
+      "@type": "@id"
+    },
+    "liked": {
+      "@type": "@id"
+    },
+    "preferredUsername": "xsd:string",
+    "endpoints": {
+      "@type": "@id"
+    },
+    "sharedInbox": {
+      "@type": "@id"
+    },
+    "Public": "https://www.w3.org/ns/activitystreams#Public"
+  }
+}

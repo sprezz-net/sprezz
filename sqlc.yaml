@@ -1,0 +1,16 @@
+version: "2"
+sql:
+- engine: postgresql
+  queries: internal/adapters/out/postgres/query
+  schema: schema.sql
+  gen:
+    go:
+      package: db
+      out: internal/adapters/out/postgres/db
+      sql_package: pgx/v5
+      emit_json_tags: true
+      emit_empty_slices: true
+      overrides:
+      - column: nomadic_identities.cloned_hubs
+        go_type:
+          type: "[]string"

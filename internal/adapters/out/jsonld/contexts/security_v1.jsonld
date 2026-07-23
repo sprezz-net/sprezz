@@ -1,0 +1,40 @@
+{
+  "@context": {
+    "sec": "https://w3id.org/security#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "Key": "sec:Key",
+    "PublicKey": "sec:PublicKey",
+    "publicKey": {
+      "@id": "sec:publicKey",
+      "@type": "@id"
+    },
+    "publicKeyPem": {
+      "@id": "sec:publicKeyPem",
+      "@type": "xsd:string"
+    },
+    "owner": {
+      "@id": "sec:owner",
+      "@type": "@id"
+    },
+    "signature": {
+      "@id": "sec:signature",
+      "@type": "@id"
+    },
+    "signatureValue": {
+      "@id": "sec:signatureValue",
+      "@type": "xsd:string"
+    },
+    "creator": {
+      "@id": "sec:creator",
+      "@type": "@id"
+    },
+    "created": {
+      "@id": "sec:created",
+      "@type": "xsd:dateTime"
+    },
+    "nonce": {
+      "@id": "sec:nonce",
+      "@type": "xsd:string"
+    }
+  }
+}

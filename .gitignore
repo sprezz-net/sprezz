@@ -1,0 +1,23 @@
+# Environment variables & secrets
+.env
+*.env
+*.pem
+*.key
+
+# Go binaries & build artifacts
+/server
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+coverage.out
+
+# IDEs & System files
+.DS_Store
+.idea/
+.vscode/
