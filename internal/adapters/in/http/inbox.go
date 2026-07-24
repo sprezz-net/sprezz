@@ -69,7 +69,8 @@ func (h *InboxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func readBody(r *http.Request) ([]byte, error) {
-	defer r.Body.Close()
+	// Fixed: Explicitly handle the error discard via an anonymous function closure to pass errcheck
+	defer func() { _ = r.Body.Close() }()
 	return io.ReadAll(io.LimitReader(r.Body, 10<<20))
 }
 
