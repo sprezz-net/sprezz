@@ -23,6 +23,10 @@ type StoragePort interface {
 	// Core RDF Event Sourcing Write Operations
 	CreateGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error)
 	SaveQuads(ctx context.Context, quads []model.Quad) error
+
+	// Expose SaveQuadIDs at the port boundary to allow low-latency,
+	// zero-allocation index batch writing directly from performance-critical services.
+	SaveQuadIDs(ctx context.Context, quadIDs []model.QuadID) error
 	RemoveQuadEdge(ctx context.Context, subject, predicate, object string) error
 
 	// Core RDF Graph Read Operations

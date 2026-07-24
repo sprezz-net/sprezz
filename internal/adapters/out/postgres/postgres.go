@@ -249,6 +249,18 @@ func (s *PostgresStorage) saveQuadIDs(ctx context.Context, queries *db.Queries, 
 	return nil
 }
 
+func (s *PostgresStorage) SaveQuadIDs(ctx context.Context, quadIDs []model.QuadID) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer s.safeRollback(ctx, tx)
+	if err := s.saveQuadIDs(ctx, db.New(tx), quadIDs); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (s *PostgresStorage) RemoveQuadEdge(ctx context.Context, subject, predicate, object string) error {
 	ids := make([]int64, 0, 3)
 	for _, value := range []string{subject, predicate, object} {

@@ -29,7 +29,6 @@ func (m *MockInboxStorage) EnqueueInbound(ctx context.Context, id, activityIRI, 
 	return nil
 }
 
-// Added missing interface function implementation to align with your storage changes
 func (m *MockInboxStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
 	m.RecordedIRI = actorIRI
 	return nil
@@ -56,6 +55,7 @@ func (m *MockInboxStorage) CreateGraphVersion(ctx context.Context, a, o string, 
 	return 0, nil
 }
 func (m *MockInboxStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
+func (m *MockInboxStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error { return nil }
 func (m *MockInboxStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
 func (m *MockInboxStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
 	return nil, nil
@@ -64,7 +64,6 @@ func (m *MockInboxStorage) StreamQuadsBySubject(ctx context.Context, s string) (
 	return nil, nil
 }
 
-// Added mock implementation since your structural updates require GetCollectionPayloads on ports
 func (m *MockInboxStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
 	return nil, nil
 }

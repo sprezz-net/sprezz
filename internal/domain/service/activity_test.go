@@ -68,6 +68,11 @@ func (m *MockStorageAdapter) SaveQuads(ctx context.Context, quads []model.Quad) 
 	return nil
 }
 
+func (m *MockStorageAdapter) SaveQuadIDs(ctx context.Context, quadIDs []model.QuadID) error { return nil }
+func (m *MockStorageAdapter) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
+	return nil, nil
+}
+
 var _ ports.JSONLDParserPort = (*MockParserAdapter)(nil)
 
 type MockParserAdapter struct {
