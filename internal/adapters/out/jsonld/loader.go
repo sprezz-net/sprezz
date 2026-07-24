@@ -2,7 +2,6 @@ package jsonld
 
 import (
 	"embed"
-	"fmt"
 	"strings"
 
 	"github.com/piprate/json-gold/ld"
@@ -17,6 +16,7 @@ type EmbeddedDocumentLoader struct {
 
 func NewEmbeddedDocumentLoader() *EmbeddedDocumentLoader {
 	return &EmbeddedDocumentLoader{
+		// Default loader handles standard remote HTTP lookups when local contexts aren't matched
 		fallbackLoader: ld.NewDefaultDocumentLoader(nil),
 	}
 }
@@ -43,5 +43,13 @@ func (l *EmbeddedDocumentLoader) LoadDocument(u string) (*ld.RemoteDocument, err
 		}
 	}
 
-	return nil, fmt.Errorf("offline document loader blocked remote document resolution for URL: %s", u)
+	// Delegate unknown or platform-specific extensions (like Mastodon namespaces) to the fallback network loader.
+	return l.fallbackLoader.LoadDocument(u)
+}
+
+// NewEmbeddedDocumentLoaderWithFallback allows injecting a mock or configured loader during testing
+func NewEmbeddedDocumentLoaderWithFallback(fallback ld.DocumentLoader) *EmbeddedDocumentLoader {
+	return &EmbeddedDocumentLoader{
+		fallbackLoader: fallback,
+	}
 }
