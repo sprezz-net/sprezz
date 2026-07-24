@@ -20,6 +20,31 @@ func (m *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	return m.roundTripFunc(req)
 }
 
+// matchPutRequest splits the complex PUT routing logic to drop Cognitive Complexity below Sonar's threshold.
+func matchPutRequest(req *http.Request, bucket, objectName string) (*http.Response, error) {
+	if strings.Contains(req.URL.Path, objectName) {
+		respBody := `<?xml version="1.0" encoding="UTF-8"?><CopyObjectResult><ETag>"hash123"</ETag></CopyObjectResult>`
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(respBody)),
+		}, nil
+	}
+
+	isCreationPath := req.URL.Path == "/" || req.URL.Path == "" || strings.HasSuffix(strings.TrimRight(req.URL.Path, "/"), "/"+bucket)
+	if isCreationPath {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(bytes.NewReader([]byte(""))),
+		}, nil
+	}
+
+	return &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Body:       io.NopCloser(bytes.NewReader([]byte("unexpected put route mismatch"))),
+	}, nil
+}
+
 func TestMinIOStorageAdapter_PutObject_Success(t *testing.T) {
 	bucket := "test-bucket"
 	objectName := "media/avatar.png"
@@ -27,9 +52,7 @@ func TestMinIOStorageAdapter_PutObject_Success(t *testing.T) {
 
 	clientTransport := &mockTransport{
 		roundTripFunc: func(req *http.Request) (*http.Response, error) {
-			isTargetingBucket := strings.Contains(req.URL.Host, bucket) || strings.Contains(req.URL.Path, "/"+bucket)
-
-			// Phase 1: SDK initial Region location probe (GET /test-bucket/?location=)
+			// Phase 1: SDK initial Region location probe
 			if req.Method == http.MethodGet && strings.Contains(req.URL.RawQuery, "location") {
 				respBody := `<?xml version="1.0" encoding="UTF-8"?><LocationConstraint xmlns="http://amazonaws.com">us-east-1</LocationConstraint>`
 				return &http.Response{
@@ -38,31 +61,19 @@ func TestMinIOStorageAdapter_PutObject_Success(t *testing.T) {
 				}, nil
 			}
 
-			// Phase 2: BucketExists execution check (HEAD /test-bucket/)
+			isTargetingBucket := strings.Contains(req.URL.Host, bucket) || strings.Contains(req.URL.Path, "/"+bucket)
+
+			// Phase 2: BucketExists execution check (HEAD)
 			if req.Method == http.MethodHead && isTargetingBucket {
 				return &http.Response{
-					StatusCode: http.StatusNotFound, // Simulate a fresh setup that requires initialization
+					StatusCode: http.StatusNotFound,
 					Body:       io.NopCloser(bytes.NewReader([]byte(""))),
 				}, nil
 			}
 
-			// Phase 3: MakeBucket execution (PUT /test-bucket/)
-			isCreationPath := req.URL.Path == "/" || req.URL.Path == "" || strings.HasSuffix(strings.TrimRight(req.URL.Path, "/"), "/"+bucket)
-			if req.Method == http.MethodPut && isTargetingBucket && isCreationPath {
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       io.NopCloser(bytes.NewReader([]byte(""))),
-				}, nil
-			}
-
-			// Phase 4: PutObject file payload streaming (PUT /test-bucket/media/avatar.png)
-			if req.Method == http.MethodPut && strings.Contains(req.URL.Path, objectName) {
-				respBody := `<?xml version="1.0" encoding="UTF-8"?><CopyObjectResult><ETag>"hash123"</ETag></CopyObjectResult>`
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Header:     make(http.Header),
-					Body:       io.NopCloser(strings.NewReader(respBody)),
-				}, nil
+			// Phase 3 & 4: Delegate to our flattened matching function to drop cyclomatic complexity metrics
+			if req.Method == http.MethodPut && isTargetingBucket {
+				return matchPutRequest(req, bucket, objectName)
 			}
 
 			return &http.Response{
@@ -103,8 +114,6 @@ func TestMinIOStorageAdapter_DeleteObject_Success(t *testing.T) {
 		roundTripFunc: func(req *http.Request) (*http.Response, error) {
 			isTargetingBucket := strings.Contains(req.URL.Host, bucket) || strings.Contains(req.URL.Path, "/"+bucket)
 
-			// Phase 1: SDK initial Region location probe (GET /test-bucket/?location=)
-			// FIXED: Return a valid XML document body instead of an empty slice to fix the EOF error.
 			if req.Method == http.MethodGet && strings.Contains(req.URL.RawQuery, "location") {
 				respBody := `<?xml version="1.0" encoding="UTF-8"?><LocationConstraint xmlns="http://amazonaws.com">us-east-1</LocationConstraint>`
 				return &http.Response{
@@ -113,7 +122,6 @@ func TestMinIOStorageAdapter_DeleteObject_Success(t *testing.T) {
 				}, nil
 			}
 
-			// Phase 2: Simulate that the bucket already exists (HEAD /test-bucket/)
 			if req.Method == http.MethodHead && isTargetingBucket {
 				return &http.Response{
 					StatusCode: http.StatusOK,
@@ -121,7 +129,6 @@ func TestMinIOStorageAdapter_DeleteObject_Success(t *testing.T) {
 				}, nil
 			}
 
-			// Phase 3: Object purge context handling execution (DELETE /test-bucket/media/avatar.png)
 			if req.Method == http.MethodDelete && strings.Contains(req.URL.Path, objectName) {
 				return &http.Response{
 					StatusCode: http.StatusNoContent,
