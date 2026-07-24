@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	inhttp "sprezz/internal/adapters/in/http"
@@ -13,9 +11,13 @@ import (
 
 func TestHandleWebfinger_MissingResource(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger", nil)
+	req.Host = "localhost"
 	rec := httptest.NewRecorder()
 
-	inhttp.HandleWebfinger(rec, req)
+	// Injecting allowed test domains via the new adapter function closure
+	allowedDomains := []string{"localhost", "sprezz.net"}
+	handler := inhttp.HandleWebfinger(allowedDomains)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("Expected status 400, got %d", rec.Code)
@@ -24,12 +26,15 @@ func TestHandleWebfinger_MissingResource(t *testing.T) {
 
 func TestHandleWebfinger_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@sprezz.net", nil)
+	req.Host = "sprezz.net" // Setting host explicitly to pass tenant lookup validation rules
 	rec := httptest.NewRecorder()
 
-	inhttp.HandleWebfinger(rec, req)
+	allowedDomains := []string{"sprezz.net"}
+	handler := inhttp.HandleWebfinger(allowedDomains)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d", rec.Code)
+		t.Fatalf("Expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
 	}
 
 	contentType := rec.Header().Get("Content-Type")
@@ -51,19 +56,29 @@ func TestHandleWebfinger_Success(t *testing.T) {
 	}
 }
 
-func TestHandleWebfingerWithConfig_UsesConfiguredTenantDomains(t *testing.T) {
-	tmpDir := t.TempDir()
-	cfgPath := filepath.Join(tmpDir, "tenants.json")
-	cfg := []byte(`{"domains":["tenant-a.example","tenant-b.example"]}`)
-	if err := os.WriteFile(cfgPath, cfg, 0o600); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
+func TestHandleWebfinger_ForbiddenDomain(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@roguedomain.com", nil)
+	req.Host = "roguedomain.com"
+	rec := httptest.NewRecorder()
 
+	allowedDomains := []string{"tenant-a.example", "tenant-b.example"}
+	handler := inhttp.HandleWebfinger(allowedDomains)
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Expected status 403 Forbidden for unconfigured domain, got %d", rec.Code)
+	}
+}
+
+func TestHandleWebfinger_UsesConfiguredTenantDomains(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@tenant-a.example", nil)
 	req.Host = "tenant-a.example"
 	rec := httptest.NewRecorder()
 
-	inhttp.HandleWebfingerWithConfig(rec, req, cfgPath)
+	// Simply pass the test domains in—no JSON files or disk IO operations needed!
+	allowedDomains := []string{"tenant-a.example", "tenant-b.example"}
+	handler := inhttp.HandleWebfinger(allowedDomains)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Expected status 200, got %d", rec.Code)

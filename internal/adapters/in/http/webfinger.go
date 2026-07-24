@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
-	"sprezz/internal/config"
 )
 
 type WebfingerResponse struct {
@@ -21,54 +19,56 @@ type WebfingerReferenceLink struct {
 	Href string `json:"href,omitempty"`
 }
 
-func HandleWebfinger(w http.ResponseWriter, r *http.Request) {
-	HandleWebfingerWithConfig(w, r, config.DefaultTenantConfigPath())
-}
+// HandleWebfinger takes the configured tenant domains directly as a dependency
+func HandleWebfinger(tenantDomains []string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		resource := r.URL.Query().Get("resource")
+		if resource == "" {
+			http.Error(w, "Missing resource parameter", http.StatusBadRequest)
+			return
+		}
 
-func HandleWebfingerWithConfig(w http.ResponseWriter, r *http.Request, tenantConfigPath string) {
-	resource := r.URL.Query().Get("resource")
-	if resource == "" {
-		http.Error(w, "Missing resource parameter", http.StatusBadRequest)
-		return
-	}
+		tenantHost := RequestHost(r)
+		if tenantHost == "" {
+			http.Error(w, "Unable to determine host from request", http.StatusBadRequest)
+			return
+		}
 
-	tenantHost := requestHost(r)
-	if tenantHost == "" {
-		tenantHost = strings.TrimSuffix(resource, "")
-	}
-	base := "https://" + tenantHost
+		// Validate against configured domains passed from main.go
+		found := false
+		for _, domain := range tenantDomains {
+			if strings.EqualFold(strings.TrimSpace(domain), tenantHost) {
+				found = true
+				break
+			}
+		}
 
-	cfg, err := config.LoadTenantConfig(tenantConfigPath)
-	if err == nil && !cfg.Contains(tenantHost) {
-		http.Error(w, fmt.Sprintf("Tenant %q not configured", tenantHost), http.StatusNotFound)
-		return
-	}
-	if err != nil {
-		cfg = nil
-	}
+		if !found {
+			http.Error(w, fmt.Sprintf("Domain %q not in allowed tenants", tenantHost), http.StatusForbidden)
+			return
+		}
 
-	actorIRI := base + "/actors/alice"
-	resp := WebfingerResponse{
-		Subject: resource,
-		Aliases: []string{actorIRI},
-		Links: []WebfingerReferenceLink{
-			{
-				Rel:  "self",
-				Type: "application/activity+json",
-				Href: actorIRI,
+		base := "https://" + tenantHost
+		actorIRI := base + "/actors/alice"
+
+		resp := WebfingerResponse{
+			Subject: resource,
+			Aliases: []string{actorIRI},
+			Links: []WebfingerReferenceLink{
+				{
+					Rel:  "self",
+					Type: "application/activity+json",
+					Href: actorIRI,
+				},
+				{
+					Rel:  "http://purl.org",
+					Type: "application/x-zot+json",
+					Href: base + "/zot/channel/alice-guid-12345",
+				},
 			},
-			{
-				Rel:  "http://purl.org/zot/protocol",
-				Type: "application/x-zot+json",
-				Href: base + "/zot/channel/alice-guid-12345",
-			},
-		},
-	}
+		}
 
-	if err != nil {
-		resp.Links = resp.Links[:1]
+		w.Header().Set("Content-Type", "application/jrd+json")
+		_ = json.NewEncoder(w).Encode(resp)
 	}
-
-	w.Header().Set("Content-Type", "application/jrd+json")
-	_ = json.NewEncoder(w).Encode(resp)
 }
