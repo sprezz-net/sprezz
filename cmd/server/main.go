@@ -12,6 +12,7 @@ import (
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/jsonld"
+	"sprezz/internal/adapters/out/minio"
 	"sprezz/internal/adapters/out/outbound"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
@@ -55,8 +56,18 @@ func main() {
 		log.Fatalf("Failed to ping postgres: %v", err)
 	}
 
-	// MinIO adapter initialization can go here if needed in your business layers:
-	// minioAdapter := minio.New(cfg.MinIO.RootUser, cfg.MinIO.RootPassword, cfg.MinIO.Endpoint, cfg.MinIO.UseSSL)
+	// Initialize MinIO (Driven Adapter) and safeguard against startup race conditions
+	minioStorage, err := minio.NewMinIOStorageAdapter(
+		cfg.MinIO.Endpoint,
+		cfg.MinIO.RootUser,
+		cfg.MinIO.RootPassword,
+		cfg.MinIO.BucketName,
+		cfg.MinIO.UseSSL,
+	)
+	if err != nil {
+		log.Fatalf("Critical storage adapter initialization error: %v", err)
+	}
+	_ = minioStorage // Keeps compile safe if not immediately used in application initialization pipelines below
 
 	// 4. Initialize Driven Adapters & Domain Service
 	postgresStorage := postgres.NewPostgresStorage(db, dictCache)

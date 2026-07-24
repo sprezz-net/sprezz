@@ -21,6 +21,7 @@ type MinIOConfig struct {
 	RootPassword string `env:"MINIO_ROOT_PASSWORD"`
 	Endpoint     string `env:"MINIO_ENDPOINT" env-default:"localhost:9000"`
 	UseSSL       bool   `env:"MINIO_USESSL" env-default:"false"`
+	BucketName   string `env:"MINIO_BUCKET_NAME" env-default:"sprezz-media"`
 }
 
 type AppConfig struct {
