@@ -33,7 +33,7 @@ func (h *InboxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host := requestHost(r)
+	host := RequestHost(r)
 	body, err := readBody(r)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
@@ -66,14 +66,6 @@ func (h *InboxHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusAccepted)
 	_, _ = w.Write([]byte(`{"status":"accepted"}`))
-}
-
-func requestHost(r *http.Request) string {
-	host := r.Host
-	if parts := strings.Split(host, ":"); len(parts) > 0 {
-		return parts[0]
-	}
-	return host
 }
 
 func readBody(r *http.Request) ([]byte, error) {

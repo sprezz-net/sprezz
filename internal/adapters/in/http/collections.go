@@ -58,7 +58,7 @@ func actorRoute(r *http.Request) (string, string, bool) {
 	if len(parts) == 3 && !validCollection(parts[2]) {
 		return "", "", false
 	}
-	return "https://" + requestHost(r) + "/actors/" + parts[1], collectionPart(parts), true
+	return "https://" + RequestHost(r) + "/actors/" + parts[1], collectionPart(parts), true
 }
 
 func validCollection(collection string) bool {
