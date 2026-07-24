@@ -33,11 +33,21 @@ func TestSignatureVerifierAcceptsValidRequest(t *testing.T) {
 	digestBytes := sha256.Sum256(body)
 	digest := base64.StdEncoding.EncodeToString(digestBytes[:])
 	date := time.Now().UTC().Format(http.TimeFormat)
-	request := httptest.NewRequest(http.MethodPost, "https://local.example/inbox/alice", strings.NewReader(string(body)))
+
+	// FIXED: Use a relative target path to ensure request.URL.RequestURI()
+	// evaluates exactly to "/inbox/alice" just like it does under live production traffic.
+	request := httptest.NewRequest(http.MethodPost, "/inbox/alice", strings.NewReader(string(body)))
 	request.Host = "local.example"
+
 	request.Header.Set("Date", date)
 	request.Header.Set("Digest", "SHA-256="+digest)
-	canonical := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s\ndigest: SHA-256=%s", request.URL.RequestURI(), request.Host, date, digest)
+
+	// FIXED: Explicitly matches the updated RequestHost(r) formatting logic used inside signature.go
+	expectedHost := "local.example"
+
+	canonical := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s\ndigest: SHA-256=%s",
+		request.URL.RequestURI(), expectedHost, date, digest)
+
 	canonicalHash := sha256.Sum256([]byte(canonical))
 	signature, err := rsa.SignPKCS1v15(rand.Reader, privateKey, crypto.SHA256, canonicalHash[:])
 	if err != nil {

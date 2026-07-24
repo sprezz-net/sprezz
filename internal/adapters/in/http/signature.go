@@ -114,7 +114,7 @@ func signingString(r *http.Request, headers []string) (string, error) {
 		case "(request-target)":
 			value = strings.ToLower(r.Method) + " " + r.URL.RequestURI()
 		case "host":
-			value = r.Host
+			value = RequestHost(r)
 		case "date":
 			value = r.Header.Get("Date")
 		case "digest":
@@ -156,7 +156,9 @@ func (r *HTTPPublicKeyResolver) ResolvePublicKey(keyID string) (*rsa.PublicKey, 
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	// FIXED: Handled the response close error value tracking through an explicit discard closure to pass strict errcheck criteria
+	defer func() { _ = resp.Body.Close() }()
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("key endpoint returned %s", resp.Status)
 	}
