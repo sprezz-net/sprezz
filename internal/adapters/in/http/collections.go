@@ -91,7 +91,10 @@ func (h *ActorHandler) serveRelationshipCollection(w http.ResponseWriter, r *htt
 		http.Error(w, internalServerError, http.StatusInternalServerError)
 		return
 	}
-	predicate := "https://www.w3.org/ns/activitystreams#" + strings.TrimSuffix(collection, "s")
+
+	// FIXED: Keep plural forms to respect ActivityPub vocabulary specifications
+	predicate := "https://www.w3.org/ns/activitystreams#" + collection
+
 	items := make([]string, 0)
 	for _, quad := range quads {
 		if quad.Predicate == predicate && !quad.IsLiteral() {
