@@ -167,7 +167,14 @@ func (s *PostgresStorage) SaveGraphVersion(ctx context.Context, activityIRI, obj
 	if err != nil {
 		return err
 	}
-	if err := s.saveQuads(ctx, queries, graphID, quads); err != nil {
+
+	// Convert human-readable string quads into lightweight integer QuadIDs
+	quadIDs, err := s.toQuadIDs(ctx, queries, graphID, quads)
+	if err != nil {
+		return err
+	}
+
+	if err := s.saveQuadIDs(ctx, queries, quadIDs); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -179,30 +186,63 @@ func (s *PostgresStorage) SaveQuads(ctx context.Context, quads []model.Quad) err
 		return err
 	}
 	defer s.safeRollback(ctx, tx)
-	if err := s.saveQuads(ctx, db.New(tx), 0, quads); err != nil {
+	queries := db.New(tx)
+
+	quadIDs, err := s.toQuadIDs(ctx, queries, 0, quads)
+	if err != nil {
+		return err
+	}
+
+	if err := s.saveQuadIDs(ctx, queries, quadIDs); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func (s *PostgresStorage) saveQuads(ctx context.Context, queries *db.Queries, graphID int64, quads []model.Quad) error {
-	for _, quad := range quads {
-		if graphID != 0 {
-			quad.GraphID = graphID
+// toQuadIDs converts a batch of string-based Quads into compact, integer-indexed QuadID structures.
+func (s *PostgresStorage) toQuadIDs(ctx context.Context, queries *db.Queries, defaultGraphID int64, quads []model.Quad) ([]model.QuadID, error) {
+	quadIDs := make([]model.QuadID, len(quads))
+	for i, quad := range quads {
+		graphID := quad.GraphID
+		if defaultGraphID != 0 {
+			graphID = defaultGraphID
 		}
-		subjectID, err := s.dictionaryID(ctx, queries, quad.Subject)
+
+		subID, err := s.dictionaryID(ctx, queries, quad.Subject)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		predicateID, err := s.dictionaryID(ctx, queries, quad.Predicate)
+		predID, err := s.dictionaryID(ctx, queries, quad.Predicate)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		objectID, err := s.dictionaryID(ctx, queries, quad.Object)
+		objID, err := s.dictionaryID(ctx, queries, quad.Object)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		if err := queries.InsertQuad(ctx, db.InsertQuadParams{GraphID: quad.GraphID, SubjectID: subjectID, PredicateID: predicateID, ObjectID: objectID, IsLiteral: pgtype.Bool{Bool: quad.IsLiteral(), Valid: true}}); err != nil {
+
+		quadIDs[i] = model.QuadID{
+			GraphID:     graphID,
+			SubjectID:   subID,
+			PredicateID: predID,
+			ObjectID:    objID,
+			IsLiteral:   quad.IsLiteral(),
+		}
+	}
+	return quadIDs, nil
+}
+
+// saveQuadIDs natively processes and writes clean slices of model.QuadID to the database.
+func (s *PostgresStorage) saveQuadIDs(ctx context.Context, queries *db.Queries, quadIDs []model.QuadID) error {
+	for _, qID := range quadIDs {
+		params := db.InsertQuadParams{
+			GraphID:     qID.GraphID,
+			SubjectID:   qID.SubjectID,
+			PredicateID: qID.PredicateID,
+			ObjectID:    qID.ObjectID,
+			IsLiteral:   pgtype.Bool{Bool: qID.IsLiteral, Valid: true},
+		}
+		if err := queries.InsertQuad(ctx, params); err != nil {
 			return err
 		}
 	}
