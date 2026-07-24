@@ -56,6 +56,11 @@ func (c *DictionaryCache) GetURI(id int64) (string, bool) {
 func (c *DictionaryCache) Set(uri string, id int64) {
 	c.uriToID.Set(uri, id, 1)
 	c.idToURI.Set(id, uri, 1)
-	c.uriToID.Wait()
-	c.idToURI.Wait()
+}
+
+// Memory cleaning contract methods to satisfy the
+// interface requirements of your postgres storage data manager layers.
+func (c *DictionaryCache) Clear() {
+	c.uriToID.Clear()
+	c.idToURI.Clear()
 }
