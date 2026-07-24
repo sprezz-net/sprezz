@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 )
@@ -39,12 +40,20 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	digestBase64 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	req.Header.Set("Digest", fmt.Sprintf("SHA-256=%s", digestBase64))
 
-	req.Header.Set("Host", req.URL.Host)
+	// FIXED: Strip the port from the host value to match canonical signature specifications
+	cleanHost := req.URL.Host
+	if host, _, err := net.SplitHostPort(req.URL.Host); err == nil {
+		cleanHost = host
+	}
+
+	req.Header.Set("Host", cleanHost)
 	dateStr := time.Now().UTC().Format(http.TimeFormat)
 	req.Header.Set("Date", dateStr)
 
+	// FIXED: Changed req.URL.Path to req.URL.RequestURI() to preserve query strings
+	// (e.g. ?shared=true) required by federating remotes for signature validation.
 	signingString := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s\ndigest: SHA-256=%s",
-		req.URL.Path, req.URL.Host, dateStr, digestBase64)
+		req.URL.RequestURI(), cleanHost, dateStr, digestBase64)
 
 	signature, err := signString(signingString, privateKeyPEM)
 	if err != nil {
@@ -59,7 +68,8 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	// FIXED: Wrapped body close in a closure to discard error and pass strict errcheck linter rules
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		return fmt.Errorf("remote network endpoint refused activity delivery: status code %d", resp.StatusCode)
