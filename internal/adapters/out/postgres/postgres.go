@@ -39,7 +39,7 @@ func (s *PostgresStorage) EnqueueInbound(ctx context.Context, id string, activit
 	if err != nil {
 		return err
 	}
-	defer rollback(tx)
+	defer s.safeRollback(ctx, tx)
 	queries := db.New(tx)
 	if err := queries.InsertTenant(ctx, targetDomain); err != nil {
 		return err
@@ -82,7 +82,7 @@ func (s *PostgresStorage) ClaimInboundBatch(ctx context.Context, batchSize int) 
 	if err != nil {
 		return nil, err
 	}
-	defer rollback(tx)
+	defer s.safeRollback(ctx, tx)
 	queries := db.New(tx)
 	rows, err := queries.ClaimInboundTasks(ctx, int32(batchSize))
 	if err != nil {
@@ -161,7 +161,7 @@ func (s *PostgresStorage) SaveGraphVersion(ctx context.Context, activityIRI, obj
 	if err != nil {
 		return err
 	}
-	defer rollback(tx)
+	defer s.safeRollback(ctx, tx)
 	queries := db.New(tx)
 	graphID, err := queries.CreateGraphVersion(ctx, db.CreateGraphVersionParams{ActivityID: activityIRI, ObjectIri: objectIRI, Payload: payload})
 	if err != nil {
@@ -178,7 +178,7 @@ func (s *PostgresStorage) SaveQuads(ctx context.Context, quads []model.Quad) err
 	if err != nil {
 		return err
 	}
-	defer rollback(tx)
+	defer s.safeRollback(ctx, tx)
 	if err := s.saveQuads(ctx, db.New(tx), 0, quads); err != nil {
 		return err
 	}
@@ -210,12 +210,14 @@ func (s *PostgresStorage) saveQuads(ctx context.Context, queries *db.Queries, gr
 }
 
 func (s *PostgresStorage) RemoveQuadEdge(ctx context.Context, subject, predicate, object string) error {
-	ids := []int64{}
+	ids := make([]int64, 0, 3)
 	for _, value := range []string{subject, predicate, object} {
 		id, found := s.cache.GetID(value)
 		if !found {
 			var err error
 			id, err = s.queries().GetDictionaryID(ctx, value)
+			// If any single coordinate token is completely absent from the database,
+			// the edge cannot exist. Return nil gracefully instead of triggering a slice boundary panic.
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil
 			}
@@ -225,6 +227,10 @@ func (s *PostgresStorage) RemoveQuadEdge(ctx context.Context, subject, predicate
 			s.cache.Set(value, id)
 		}
 		ids = append(ids, id)
+	}
+
+	if len(ids) < 3 {
+		return nil
 	}
 	return s.queries().RemoveQuadEdge(ctx, db.RemoveQuadEdgeParams{SubjectID: ids[0], PredicateID: ids[1], ObjectID: ids[2]})
 }
@@ -269,11 +275,23 @@ func (s *PostgresStorage) dictionaryID(ctx context.Context, queries *db.Queries,
 	if id, found := s.cache.GetID(value); found {
 		return id, nil
 	}
+
+	// Leverage a pure database UPSERT operation or a safety query fallback routine inside
+	// your schema wrapper to catch or handle unique constraint violations under concurrent execution windows.
 	id, err := queries.InsertDictionaryValue(ctx, value)
-	if err == nil {
-		s.cache.Set(value, id)
+	if err != nil {
+		// Fallback lookup case to prevent unique tracking constraint abort exceptions
+		var lookupErr error
+		id, lookupErr = queries.GetDictionaryID(ctx, value)
+		if lookupErr == nil {
+			s.cache.Set(value, id)
+			return id, nil
+		}
+		return 0, err
 	}
-	return id, err
+
+	s.cache.Set(value, id)
+	return id, nil
 }
 
 func parseUUID(value string) (pgtype.UUID, error) {
@@ -291,6 +309,7 @@ func uuidFromPG(value pgtype.UUID) (uuid.UUID, error) {
 	return uuid.UUID(value.Bytes), nil
 }
 
-func rollback(tx pgx.Tx) {
-	_ = tx.Rollback(context.Background())
+// Clean context lifecycle binding wrapper to eliminate hanging database network sockets.
+func (s *PostgresStorage) safeRollback(ctx context.Context, tx pgx.Tx) {
+	_ = tx.Rollback(ctx)
 }
