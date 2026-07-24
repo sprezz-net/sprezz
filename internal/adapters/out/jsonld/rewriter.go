@@ -61,15 +61,13 @@ func buildBNodeMap(quads []model.Quad, signatures map[string]string, mainObjectI
 }
 
 func rewriteQuad(quad model.Quad, bnodeMap map[string]string) model.Quad {
-	subjectBlank := strings.HasPrefix(quad.Subject, "_:")
-	objectBlank := quad.ObjType == model.BlankNode || strings.HasPrefix(quad.Object, "_:")
-	if subjectBlank {
+	// Decoupled evaluation blocks to safely translate Subject and Object positions
+	// independently, preventing type state corruption.
+	if strings.HasPrefix(quad.Subject, "_:") {
 		quad.Subject = bnodeMap[quad.Subject]
-		if quad.ObjType == model.BlankNode {
-			quad.ObjType = model.NamedNode
-		}
 	}
-	if objectBlank && !quad.IsLiteral() {
+
+	if quad.ObjType == model.BlankNode || strings.HasPrefix(quad.Object, "_:") {
 		quad.Object = bnodeMap[quad.Object]
 		quad.ObjType = model.NamedNode
 	}
