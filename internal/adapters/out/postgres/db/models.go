@@ -109,11 +109,13 @@ type LocalActorCredential struct {
 }
 
 type MediaAttachment struct {
-	ID          pgtype.UUID        `json:"id"`
-	ObjectName  string             `json:"object_name"`
-	ContentType string             `json:"content_type"`
-	FileSize    int64              `json:"file_size"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	ID           pgtype.UUID        `json:"id"`
+	ObjectName   string             `json:"object_name"`
+	OriginalName string             `json:"original_name"`
+	Sha256Hex    string             `json:"sha256_hex"`
+	ContentType  string             `json:"content_type"`
+	FileSize     int64              `json:"file_size"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type NomadicIdentity struct {

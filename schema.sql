@@ -120,11 +120,16 @@ CREATE INDEX idx_quads_op ON rdf_quads (graph_id, object_id, predicate_id);
 -- Global unique registry for physical media assets stored in the central MinIO bucket.
 CREATE TABLE media_attachments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    object_name VARCHAR(512) NOT NULL UNIQUE, -- Stable path inside the central bucket
+    object_name VARCHAR(512) NOT NULL UNIQUE,    -- Safe unique path tracking key in MinIO
+    original_name VARCHAR(512) NOT NULL,         -- Stored original filename
+    sha256_hex CHAR(64) NOT NULL,                -- Cryptographic content fingerprint signature
     content_type VARCHAR(255) NOT NULL,
     file_size BIGINT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Index for instant global deduplication checks under load
+CREATE INDEX idx_media_dedup_hash ON media_attachments(sha256_hex);
 
 -- Connects a media asset to an immutable point-in-time RDF named graph version.
 CREATE TABLE rdf_graph_attachments (

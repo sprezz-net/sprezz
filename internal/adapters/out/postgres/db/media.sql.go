@@ -12,19 +12,29 @@ import (
 )
 
 const insertMediaAttachment = `-- name: InsertMediaAttachment :one
-INSERT INTO media_attachments (object_name, content_type, file_size)
-VALUES ($1, $2, $3)
+INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (object_name) DO UPDATE
+SET sha256_hex = EXCLUDED.sha256_hex -- Ensure fallback idempotency
 RETURNING id
 `
 
 type InsertMediaAttachmentParams struct {
-	ObjectName  string `json:"object_name"`
-	ContentType string `json:"content_type"`
-	FileSize    int64  `json:"file_size"`
+	ObjectName   string `json:"object_name"`
+	OriginalName string `json:"original_name"`
+	Sha256Hex    string `json:"sha256_hex"`
+	ContentType  string `json:"content_type"`
+	FileSize     int64  `json:"file_size"`
 }
 
 func (q *Queries) InsertMediaAttachment(ctx context.Context, arg InsertMediaAttachmentParams) (pgtype.UUID, error) {
-	row := q.db.QueryRow(ctx, insertMediaAttachment, arg.ObjectName, arg.ContentType, arg.FileSize)
+	row := q.db.QueryRow(ctx, insertMediaAttachment,
+		arg.ObjectName,
+		arg.OriginalName,
+		arg.Sha256Hex,
+		arg.ContentType,
+		arg.FileSize,
+	)
 	var id pgtype.UUID
 	err := row.Scan(&id)
 	return id, err

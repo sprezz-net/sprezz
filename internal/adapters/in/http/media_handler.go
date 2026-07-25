@@ -68,7 +68,8 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.writeError(w, http.StatusBadRequest, "Target attachment part parameter 'file' not found")
 		return
 	}
-	defer file.Close()
+	// Discard error explicitly within a function literal to satisfy errcheck metrics
+	defer func() { _ = file.Close() }()
 
 	// 5. Generate a unique, time-ordered sequential UUIDv7 token for this temporary streaming path
 	taskID, err := uuid.NewV7()

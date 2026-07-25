@@ -196,9 +196,11 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 
 	// 2. Register the physical media file details globally inside the centralized registry bucket
 	mediaID, err := queries.InsertMediaAttachment(ctx, db.InsertMediaAttachmentParams{
-		ObjectName:  params.ObjectName,
-		ContentType: params.ContentType,
-		FileSize:    params.FileSize,
+		ObjectName:   params.ObjectName,
+		OriginalName: params.OriginalName,
+		Sha256Hex:    params.SHA256Hex,
+		ContentType:  params.ContentType,
+		FileSize:     params.FileSize,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to register central media registry entry: %w", err)

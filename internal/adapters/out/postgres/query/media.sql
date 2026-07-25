@@ -1,6 +1,8 @@
 -- name: InsertMediaAttachment :one
-INSERT INTO media_attachments (object_name, content_type, file_size)
-VALUES ($1, $2, $3)
+INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (object_name) DO UPDATE
+SET sha256_hex = EXCLUDED.sha256_hex -- Ensure fallback idempotency
 RETURNING id;
 
 -- name: RegisterActorMediaOwnership :exec
