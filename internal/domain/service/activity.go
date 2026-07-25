@@ -35,10 +35,10 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	if writer, ok := s.storage.(ports.GraphVersionWriter); ok {
 		quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
 		if err != nil {
-			return fmt.Errorf("Failed to parse activity payload to quads: %w", err)
+			return fmt.Errorf("failed to parse activity payload to quads: %w", err)
 		}
 		if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload, quads); err != nil {
-			return fmt.Errorf("Failed to save graph version and quads: %w", err)
+			return fmt.Errorf("failed to save graph version and quads: %w", err)
 		}
 		return nil
 	}
@@ -46,18 +46,18 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	// Fallback path utilizing explicit graph versioning combined with the optimized ports layer
 	graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload)
 	if err != nil {
-		return fmt.Errorf("Failed to create graph version: %w", err)
+		return fmt.Errorf("failed to create graph version: %w", err)
 	}
 
 	quads, err := s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
 	if err != nil {
-		return fmt.Errorf("Failed to parse activity payload to quads: %w", err)
+		return fmt.Errorf("failed to parse activity payload to quads: %w", err)
 	}
 
 	// Updated the fallback loop branch to pipe string quad slices straight through
 	// the high-performance SaveQuads adapter method, keeping your storage pipeline fully aligned.
 	if err := s.storage.SaveQuads(ctx, quads); err != nil {
-		return fmt.Errorf("Failed to save quads: %w", err)
+		return fmt.Errorf("failed to save quads: %w", err)
 	}
 
 	return nil
@@ -65,20 +65,20 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 
 func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error {
 	if s.forwarder == nil {
-		return fmt.Errorf("Outbound dispatcher is not configured")
+		return fmt.Errorf("outbound dispatcher is not configured")
 	}
 	var envelope struct {
 		Inbox string `json:"inbox"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
-		return fmt.Errorf("Decode outbound activity: %w", err)
+		return fmt.Errorf("decode outbound activity: %w", err)
 	}
 	if envelope.Inbox == "" {
-		return fmt.Errorf("Outbound activity %s has no target inbox", activityIRI)
+		return fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
 	}
 	privateKey, err := s.storage.GetActorPrivateKey(ctx, actorIRI)
 	if err != nil {
-		return fmt.Errorf("Load actor private key: %w", err)
+		return fmt.Errorf("load actor private key: %w", err)
 	}
 	return s.forwarder.ForwardFederatedActivity(ctx, envelope.Inbox, actorIRI+"#main-key", privateKey, payload)
 }
@@ -86,7 +86,7 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error) {
 	quads, err := s.storage.StreamQuadsBySubject(ctx, actorIRI)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to stream quads for actor %s: %w", actorIRI, err)
+		return nil, fmt.Errorf("failed to stream quads for actor %s: %w", actorIRI, err)
 	}
 
 	followers := make([]string, 0)
@@ -183,7 +183,7 @@ func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActor
 	// 1. Stream the raw candidate payload entries directly out of your postgres storage engine port
 	rawPayloads, err := s.storage.GetCollectionPayloads(ctx, actorIRI, collection, limit, offset)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to stream candidate collection payloads: %w", err)
+		return nil, fmt.Errorf("failed to stream candidate collection payloads: %w", err)
 	}
 
 	if len(rawPayloads) == 0 {
