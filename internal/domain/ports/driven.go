@@ -39,7 +39,8 @@ type StoragePort interface {
 // Media execution is decoupled from RDF persistence to guarantee that a failed
 // media stream upload leaves core database nodes entirely untouched.
 type MediaStoragePort interface {
-	PutObject(ctx context.Context, objectName string, reader io.Reader, objectSize int64, contentType string) (string, error)
+	// PutObject streams data into the central bucket and returns (objectKey, sha256Hex, error)
+	PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
 	DeleteObject(ctx context.Context, objectName string) error
 }
 
@@ -64,13 +65,15 @@ type OutboundDispatcher interface {
 // MediaAttachmentParams unifies all relational parameters required to link the
 // central MinIO media object to specific local multi-tenant actors and graph versions.
 type MediaAttachmentParams struct {
-	ObjectName  string
-	ContentType string
-	FileSize    int64
-	TenantID    string
-	ActorIRI    string
-	ActivityIRI string
-	ObjectIRI   string
-	Payload     []byte
-	Quads       []model.Quad
+	ObjectName   string
+	OriginalName string
+	SHA256Hex    string
+	ContentType  string
+	FileSize     int64
+	TenantID     string
+	ActorIRI     string
+	ActivityIRI  string
+	ObjectIRI    string
+	Payload      []byte
+	Quads        []model.Quad
 }

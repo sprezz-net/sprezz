@@ -13,7 +13,7 @@ import (
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/jsonld"
-	"sprezz/internal/adapters/media"
+	"sprezz/internal/adapters/out/minio"
 	"sprezz/internal/adapters/out/outbound"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
@@ -59,13 +59,14 @@ func main() {
 	}
 
 	// Initialize MinIO (Driven Adapter)
-	mediaStorage, err := media.NewMinioHandler(
+	mediaStorage, err := minio.NewMinIOStorageAdapter(
 		cfg.MinIO.Endpoint,
 		cfg.MinIO.RootUser,
 		cfg.MinIO.RootPassword,
 		cfg.MinIO.BucketName,
 		cfg.MinIO.UseSSL,
 	)
+
 	if err != nil {
 		log.Fatalf("Critical storage adapter initialization error: %v", err)
 	}

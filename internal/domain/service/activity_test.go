@@ -115,15 +115,15 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 
 // MockMediaAdapter implements ports.MediaStoragePort for testing.
 type MockMediaAdapter struct {
-	PutObjectFunc    func(ctx context.Context, objectName string, reader io.Reader, objectSize int64, contentType string) (string, error)
+	PutObjectFunc    func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
 	DeleteObjectFunc func(ctx context.Context, objectName string) error
 }
 
-func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, size int64, cType string) (string, error) {
+func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
 	if m.PutObjectFunc != nil {
-		return m.PutObjectFunc(ctx, objectName, reader, size, cType)
+		return m.PutObjectFunc(ctx, objectName, reader, contentType)
 	}
-	return objectName, nil
+	return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil // Default fake empty SHA-256
 }
 
 func (m *MockMediaAdapter) DeleteObject(ctx context.Context, objectName string) error {

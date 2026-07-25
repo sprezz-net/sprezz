@@ -222,12 +222,13 @@ func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActor
 // InboundMediaContext encapsulates the execution boundary variables
 // for streaming attachments to adhere to the 7-parameter limit.
 type InboundMediaContext struct {
-	TenantID    string
-	ActorIRI    string
-	ObjectName  string
-	ContentType string
-	Size        int64
-	MediaStream io.Reader
+	TenantID     string
+	ActorIRI     string
+	OriginalName string
+	ObjectName   string
+	ContentType  string
+	Size         int64
+	MediaStream  io.Reader
 }
 
 // ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
@@ -236,8 +237,9 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 		return fmt.Errorf("media storage engine driver is not configured")
 	}
 
-	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated
-	stableKey, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.Size, mediaCtx.ContentType)
+	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated (Section 9)
+	// CHANGED: Removed mediaCtx.Size argument and added sha256Hex assignment
+	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
 	if err != nil {
 		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
 	}
@@ -252,18 +254,20 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 	// 3. Delegate atomic multi-table execution down to the transaction writer engine
 	if writer, ok := s.storage.(ports.GraphVersionWriter); ok {
 		err := writer.SaveGraphVersionWithMedia(ctx, ports.MediaAttachmentParams{
-			ObjectName:  stableKey,
-			ContentType: mediaCtx.ContentType,
-			FileSize:    mediaCtx.Size,
-			TenantID:    mediaCtx.TenantID,
-			ActorIRI:    mediaCtx.ActorIRI,
-			ActivityIRI: task.ActivityIRI,
-			ObjectIRI:   task.ObjectIRI,
-			Payload:     task.Payload,
-			Quads:       quads,
+			ObjectName:   stableKey,
+			OriginalName: mediaCtx.OriginalName,
+			SHA256Hex:    sha256Hex, // ADDED: Pass the captured cryptographic content hash
+			ContentType:  mediaCtx.ContentType,
+			FileSize:     mediaCtx.Size,
+			TenantID:     mediaCtx.TenantID,
+			ActorIRI:     mediaCtx.ActorIRI,
+			ActivityIRI:  task.ActivityIRI,
+			ObjectIRI:    task.ObjectIRI,
+			Payload:      task.Payload,
+			Quads:        quads,
 		})
 		if err != nil {
-			_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Rollback central bucket file if SQL fails
+			_ = s.mediaStorage.DeleteObject(ctx, stableKey)
 			return fmt.Errorf("failed to commit graph and media attachment relationships: %w", err)
 		}
 		return nil
