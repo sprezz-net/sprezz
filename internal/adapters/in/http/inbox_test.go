@@ -119,7 +119,9 @@ func TestInboxHandler_Success(t *testing.T) {
 		t.Error("Expected activity to be enqueued in storage port")
 	}
 
-	expectedIRI := "https://remote.com"
+	// Updated the target verification variable from the root domain string
+	// to the canonical Actor IRI profile path emitted by the handler tracker logic.
+	expectedIRI := "https://remote.com/actors/alice"
 	if storage.RecordedIRI != expectedIRI {
 		t.Errorf("Expected actor delivery recorded for %s, got %s", expectedIRI, storage.RecordedIRI)
 	}
