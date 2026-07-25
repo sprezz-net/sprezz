@@ -2,15 +2,35 @@
 BINARY_NAME=sprezz-server
 COVERAGE_FILE=coverage.out
 
-.PHONY: all tidy fmt lint test cover clean run build
+.PHONY: all tidy sqlc-gen sqlc-check fmt lint test cover clean run build
 
-# Default target runs everything to guarantee a pristine repository state
-all: tidy fmt lint test
+# Default target runs code generation and verification to guarantee a pristine repository state
+all: tidy sqlc-gen fmt lint test
 
 ## tidy: Run go mod tidy to add missing and prune unused modules
 tidy:
 	@echo "=> Optimizing go.mod and go.sum..."
 	go mod tidy
+
+## sqlc-gen: Compile SQL schema definitions and annotations into type-safe Go source code
+sqlc-gen:
+	@echo "=> Compiling query layer using sqlc code generator..."
+	@if command -v sqlc > /dev/null; then \
+		sqlc generate; \
+	else \
+		echo "ERROR: sqlc command not found. Install it via 'brew install sqlc' or visit sqlc.dev"; \
+		exit 1; \
+	fi
+
+## sqlc-check: Validate that generated database files are perfectly synced with queries on disk
+sqlc-check:
+	@echo "=> Verifying sqlc generation up-to-date state..."
+	@if command -v sqlc > /dev/null; then \
+		sqlc diff; \
+	else \
+		echo "ERROR: sqlc command not found. Validation skipped."; \
+		exit 1; \
+	fi
 
 ## fmt: Automatically format all code files according to standard styles
 fmt:
@@ -42,7 +62,7 @@ cover:
 	go tool cover -html=$(COVERAGE_FILE)
 
 ## build: Compile the core program binary into a transport target
-build: tidy
+build: tidy sqlc-gen
 	@echo "=> Building system production binary..."
 	go build -o $(BINARY_NAME) cmd/server/main.go
 
