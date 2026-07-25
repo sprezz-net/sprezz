@@ -5,7 +5,7 @@
 *.key
 
 # Go binaries & build artifacts
-/server
+/sprezz-server
 *.exe
 *.exe~
 *.dll
