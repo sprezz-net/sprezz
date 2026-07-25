@@ -102,6 +102,7 @@ Invalid requests must not create queue, tenant-delivery, graph, or inbox-deliver
 ### 4.2 Queue Processing
 
 Inbound queue records have four states:
+
 - `pending`: accepted and waiting for a worker.
 - `processing`: claimed by a worker.
 - `completed`: graph persistence succeeded.
