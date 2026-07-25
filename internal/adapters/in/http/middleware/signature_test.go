@@ -98,6 +98,13 @@ func TestSignatureValidator_Handler(t *testing.T) {
 			expectedStatus: http.StatusForbidden,
 			expectedActor:  "",
 		},
+		{
+			name:           "Bypass Evaluation For Non Mutation Requests",
+			method:         http.MethodGet,
+			signature:      "",
+			expectedStatus: http.StatusAccepted,
+			expectedActor:  "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -112,6 +119,14 @@ func TestSignatureValidator_Handler(t *testing.T) {
 
 			if rr.Code != tt.expectedStatus {
 				t.Errorf("Signature validation handling failure for %q: got status %d, want %d", tt.name, rr.Code, tt.expectedStatus)
+			}
+
+			// Read and verify the propagated context key to guarantee linter compliance
+			if tt.expectedStatus == http.StatusAccepted && tt.method == http.MethodPost {
+				extractedActor := rr.Header().Get("X-Authenticated-Actor")
+				if extractedActor != tt.expectedActor {
+					t.Errorf("Context propagation mismatch in %q: got %q, want %q", tt.name, extractedActor, tt.expectedActor)
+				}
 			}
 		})
 	}

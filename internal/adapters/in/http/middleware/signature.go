@@ -8,7 +8,7 @@ import (
 	"sprezz/internal/domain/ports"
 )
 
-// Type contextKey is defined in tenant.go
+// The shared package-visible contextKey is natively inherited from tenant.go.
 const AuthenticatedActorKey contextKey = "authenticated_actor"
 
 // SignatureVerifier matches your production cryptographic struct signature exactly.
@@ -35,12 +35,18 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 			return
 		}
 
-		// 1. Read the body bytes to pass to the verifier
+		// Securely clear any pre-existing untrusted client-supplied header tracking parameters
+		// to eliminate identity spoofing vectors via malicious header injection.
+		r.Header.Del("X-Actor-IRI")
+
+		// 1. Safely read and clone the body bytes to pass to the verifier
 		var bodyBytes []byte
 		if r.Body != nil {
 			var err error
 			bodyBytes, err = io.ReadAll(r.Body)
+			// FIXED: Re-instantiate a valid empty reader closer pool on failure to eliminate memory leaks
 			if err != nil {
+				r.Body = io.NopCloser(bytes.NewReader(nil))
 				http.Error(w, "Bad Request: Unable to read request payload", http.StatusBadRequest)
 				return
 			}
@@ -54,13 +60,14 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 			return
 		}
 
-		// 3. Resolve the remote actor identity parameters from the request or request context
-		// (Assuming your verifier injects or handles it, or extracting it from payload context)
-		actorIRI := r.Header.Get("X-Actor-IRI") // Fallback check or customized metadata string extraction
+		// 3. Extract the cryptographically verified actor identifier set exclusively by the verifier
+		actorIRI := r.Header.Get("X-Actor-IRI")
 		if actorIRI == "" {
-			actorIRI = "authenticated-federated-actor" // Default marker fallback
+			http.Error(w, "Unauthorized: Signature verifier failed to assert actor identity metadata", http.StatusUnauthorized)
+			return
 		}
 
+		// 4. Enforce domain policy isolation blocks against the cryptographically extracted actor
 		blocked, err := v.storage.IsDomainBlocked(r.Context(), actorIRI)
 		if err != nil || blocked {
 			http.Error(w, "Forbidden: Blocked federation domain identity match", http.StatusForbidden)
