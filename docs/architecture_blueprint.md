@@ -73,6 +73,7 @@ The service owns business sequencing and error semantics. It does not own connec
 Driven ports describe capabilities required by the domain:
 
 - Storage of queues, tenants, identities, graph versions, quads, and collection data.
+- High-performance, zero-allocation database stream writing via compact 64-bit integer mappings (`model.QuadID`).
 - Conversion of JSON-LD payloads into RDF quads.
 - Signed outbound federation.
 - Media object storage.
@@ -149,7 +150,12 @@ Graph version creation and quad persistence are one database transaction. A pars
 
 Subjects, predicates, and objects are mapped to compact numeric dictionary identifiers. The quad store retains graph identity, term identity, and literal status. Dictionary lookups use the Ristretto TinyLFU cache for both URI-to-ID and ID-to-URI directions.
 
-The PostgreSQL adapter uses pgx v5 for connection pooling and transactions. sqlc-generated queries are the only SQL execution surface; the domain adapter maps generated records into domain models.
+The system utilizes two distinct persistence pathways:
+
+1. `SaveQuads`: Translates unmapped domain string graphs into compact numeric keys using an explicit database insertion fallback routine to prevent `Unique Constraint Violations (SQLSTATE 23505)` during concurrent worker windows.
+2. `SaveQuadIDs`: Accepts pre-resolved integer matrices directly, eliminating string heap copies and allocation cycles during batch stream writes.
+
+The PostgreSQL adapter uses pgx v5 for connection pooling and transactions. sqlc-generated queries are the only SQL execution surface; the domain adapter maps generated records into domain models. Transaction rollbacks are context-bound to eliminate orphaned connection sockets.
 
 ### 6.3 Blank-Node Stability
 
@@ -230,6 +236,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - A valid signed inbox request is accepted once and is safely deduplicated on replay.
 - Invalid signatures, mismatched digests, stale dates, blocked domains, malformed JSON, and oversized bodies are rejected before queue insertion.
 - Concurrent workers claim disjoint queue records.
+- High-throughput streaming operations leverage integer-based `QuadID` structures to isolate string heap replication from the database engine.
 - A parser or quad persistence failure leaves no orphaned graph version.
 - Equivalent JSON-LD payloads produce stable blank-node identifiers.
 - Actor, inbox, outbox, followers, and following resources return the required ActivityPub shapes and media types.
@@ -237,6 +244,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - Outbound requests contain verifiable RSA signatures and body digests.
 - Nomad identity clones can be registered repeatedly without duplicate records.
 - pgx/sqlc integration tests cover UUIDs, JSONB, PostgreSQL arrays, transactions, and row-locking behavior.
+- A parser or quad persistence failure leaves no orphaned graph version.
 
 ## 12. Implementation Status
 
