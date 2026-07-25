@@ -113,7 +113,7 @@ func main() {
 	r := chi.NewRouter()
 
 	// Inject core optimized infrastructure middleware globally
-	r.Use(chiMiddleware.RealIP)
+	r.Use(middleware.RealIP) // Replaced the deprecated chiMiddleware.RealIP with our security-hardened middleware package call
 	r.Use(chiMiddleware.Logger)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(chiMiddleware.Timeout(60 * time.Second))
