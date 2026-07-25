@@ -44,14 +44,30 @@ The request path performs validation and durable queueing only. Parsing, graph p
 
 Driving adapters translate external requests into application operations.
 
-The HTTP adapter provides:
+The HTTP adapter partitions incoming network traffic into two distinct, isolated routing planes to protect system namespaces and maintain protocol immutability:
 
-- WebFinger discovery for `acct:user@domain` resources.
-- ActivityPub inbox intake at the server and actor inbox paths.
-- Actor resources and OrderedCollection resources.
-- Health reporting for deployment probes.
+#### 3.1.1 The Canonical Protocol Plane (Machine-to-Machine)
 
-The adapter does not parse RDF, access PostgreSQL directly, or decide how a graph is stored. It validates the request, extracts the activity identity and object identity, and invokes the relevant port.
+All machine-to-machine federation protocol resources and endpoints utilize stable, immutable machine identifiers as their absolute anchors to guarantee graph structural integrity across handle mutations. To optimize database index performance, actor identifiers use random tokens while transactional event streams utilize chronologically ordered vectors.
+
+- **Canonical Actor ID (`@id`)**: `https://<domain>/actor/<uuidv4>` (Utilizes UUIDv4 for static, long-lived entity stability)
+- **Actor Inbox**: `https://<domain>/actor/<uuid>/inbox`
+- **Actor Outbox**: `https://<domain>/actor/<uuid>/outbox`
+- **Followers Collection**: `https://<domain>/actor/<uuid>/followers`
+- **Following Collection**: `https://<domain>/actor/<uuid>/following`
+- **Activity Reference Permalink**: `https://<domain>/activity/<uuidv7>` (Utilizes time-ordered sequential UUIDv7 tokens to maximize B-Tree insertion performance under heavy streaming throughput)
+
+#### 3.1.2 The Vanity Interaction Plane (Human-to-Machine & Discovery)
+
+Human-readable vanity handles act as discoverable aliases and routing shortcuts. To prevent hazardous root-level namespace collisions (e.g., a user registering a handle like `"actor"`, `"activity"`, `"api"`, `"static"`, or `"health"` and hijacking system routing primitives), all vanity profiles must reside behind designated structural prefix patterns.
+
+- **Web UI Profile Paths**: `https://<domain>/@<username>` and `https://<domain>/~<username>`
+
+#### 3.1.3 Content Negotiation and Redirection
+
+The vanity paths are strictly presentation layers. If a request targets a vanity route (e.g., `https://<domain>/@username`) accompanied by a machine federation header (`Accept: application/activity+json`), the HTTP driving adapter MUST perform an atomic lookup to map the handle to its active UUID on disk and execute a non-breaking `HTTP 303 See Other` redirect straight to the stable Canonical Actor ID (`https://<domain>/actor/<uuid>`). If requested via a standard web browser, it bypasses the redirect and renders the HTML interface view.
+
+The adapter does not parse RDF graph quads, execute raw PostgreSQL statements directly, or decide how history states are versioned. It validates incoming transport layers, extracts routing context signatures, and invokes the relevant core domain port.
 
 ### 3.2 Core Domain Services
 
@@ -126,13 +142,23 @@ Tenant-specific delivery records must prevent duplicate `(activity, tenant)` pai
 
 ### 5.2 Static ActivityPub Identity
 
-A local actor has a stable actor IRI, username, tenant association, and private signing key. The actor resource is read from the latest graph payload for that actor IRI. Private keys are used only by the outbound signing adapter and must never be returned through HTTP resources or logs.
+A local actor possesses an immutable Canonical Actor IRI anchored by a unique, randomly generated UUIDv4, a mutable text-based username handle, a multi-tenant server association, and a private cryptographic signing key.
 
-### 5.3 Nomad Identity
+#### 5.2.1 Handle-to-UUID Decoupling Rules
 
-A Nomad identity has a permanent global GUID, a current primary hub, a master public key, and zero or more physical clone hubs. Clone registration is idempotent.
+1. **Immutability of the Actor IRI**: The `https://<domain>/actor/<uuidv4>` string serves as the absolute, unchanging object permalink identifier across the fediverse database ecosystem. It must never change.
+2. **Mutability of the Handle**: The `preferredUsername` string literal (e.g., `"alice"`) is volatile metadata stored as an RDF edge inside the quad store. If a user modifies their text handle to `"bob"`, the core system generates an outbound ActivityPub `Update(Actor)` activity block. Remote instances update their visual display text mappings against the stable UUIDv4 without destroying historical follow graphs, network edges, or signature validation keys.
+3. **WebFinger Routing Resolution**: When an external machine queries `acct:username@domain`, the WebFinger discovery adapter scans the active quad store graph to resolve the *current* pointer matching that text handle, returning the stable Canonical Actor IRI as the ultimate payload reference destination target.
 
-When a payload identifies a Nomad identity, the identity adapter contributes graph relationships for the actor type and global GUID. Identity data remains separate from the actor hostname so a clone can move between hubs without changing its global identity.
+### 5.3 Nomad Identity and Cross-Protocol Mapping
+
+A Nomad identity represents a global, network-wide persona defined by a permanent, immutable cryptographic string token (**Nomad GUID**), a current primary hub, a master public verification key, and zero or more physical clone hubs.
+
+#### Nomadic Identity Topology Rules
+
+1. **Decoupled Identity Abstraction**: The Nomad identity engine operates independently of local hostnames or ActivityPub-specific path rules. The Nomad GUID is persisted exclusively as a property predicate edge (`http://purl.org/zot/protocol/6.0#guid`) mapping an actor subject to a literal value within the immutable RDF event-sourced quad database.
+2. **Many-to-One Architectural Mapping**: The system explicitly supports binding the same global Nomad GUID to multiple distinct local or remote Actor URIs (`https://<domain>/actor/<uuidv4>`). This configuration allows a user to establish multiple redundant clone endpoints across disparate server domains (e.g., Server A and Server B) for high-availability operational fallback.
+3. **Vanilla ActivityPub Parity**: Each clone hub interacts with standard ActivityPub platforms using its unique local UUIDv4 actor container, distinct cryptographic keys, and regional inbox delivery slots. The quad store maps cross-protocol authority by matching incoming activities to the underlying shared Nomad GUID, allowing disjoint local endpoints to synchronize states, merge activity lineages, and verify cryptographic cross-server credentials seamlessly.
 
 ## 6. RDF and Graph Persistence
 
@@ -176,21 +202,28 @@ ActivityStreams and security contexts are embedded in the executable. The docume
 
 ### 7.1 Actor Resource
 
-`GET /actors/{username}` returns the latest ActivityPub actor representation for the receiving tenant. Missing actors return `404`. Successful responses use the ActivityPub media type.
+`GET /actor/<uuidv4>` returns the latest ActivityPub actor representation for the receiving tenant reconstructed directly from the RDF quad store graph history. Missing or unmapped UUID identifiers return `404 Not Found`. Successful responses MUST emit the canonical ActivityPub media type header (`application/activity+json`).
+
+The server decouples machine processing from human discovery. If an external client targets a public vanity presentation path (e.g., `https://<domain>/@<username>` or `https://<domain>/~<username>`), the server evaluates the request headers:
+
+1. **Machine Federation Client**: Requests featuring a federation-level media type header (`Accept: application/activity+json`) trigger an atomic index lookup and return an immediate `HTTP 303 See Other` redirect pointing straight to the stable Canonical Actor ID (`https://<domain>/actor/<uuidv4>`).
+2. **Standard Web Browser**: Requests omitting federation content negotiation parameters bypass the protocol redirect completely and render the human-readable HTML profile interface view.
 
 ### 7.2 Inbox and Outbox Collections
 
-Actor inbox and outbox resources return OrderedCollections containing complete ActivityPub activity objects. They use queue payloads rather than reconstructed leaf objects.
+Actor inbox and outbox resources return OrderedCollections containing complete ActivityPub activity objects. They are anchored at `https://<domain>/actor/<uuidv4>/inbox` and `https://<domain>/actor/<uuidv4>/outbox` respectively, utilizing the stable UUIDv4 to preserve immutable collection delivery targets across user handle mutations.
 
-Collection reads support bounded pagination. The server must cap requested page sizes and normalize negative offsets.
+Collections serve serialized task payloads from the underlying event ledger rather than reconstructing heavy leaf nodes on the fly. Collection reads support bounded, high-performance pagination. The server MUST enforce structural upper-bound thresholds on requested page sizes and normalize or reject negative offset parameters before querying the storage layer.
 
-### 7.3 Followers and Following
+### 7.3 Followers and Following Collections
 
-Followers and following resources return OrderedCollections of actor IRIs. Items are sourced from RDF relationship edges, exclude literals, and preserve stable storage order.
+Followers and following resources are exposed at `https://<domain>/actor/<uuidv4>/followers` and `https://<domain>/actor/<uuidv4>/following`. They return OrderedCollections of actor IRIs.
+
+Items are sourced by scanning historical RDF relationship edges matching designated graph predicates (`activitystreams#follower` or `activitystreams#following`). The resolution pipeline filters out literal values, excludes duplicate entries, and preserves stable storage index ordering to guarantee deterministic pagination windows.
 
 ### 7.4 Privacy and Audience Rules
 
-Timeline and thread views must evaluate the ActivityStreams public audience explicitly. Public activities are eligible for general display. Private activities are eligible only when the requesting actor is present in the addressed audience or has an authorized relationship in the local graph.
+Timeline and thread views MUST evaluate the ActivityStreams public audience explicitly. Public activities are eligible for general display. Private activities are eligible only when the requesting actor is present in the addressed audience or has an authorized relationship in the local graph.
 
 The domain service provides a low-complexity, graph-based privacy filtration pipeline. It groups quads by version, validates canonical case-insensitive target namespaces (`activitystreams#to`, `activitystreams#cc`, `activitystreams#audience`, `activitystreams#Public`), and safely prunes unauthorized graphs.
 
