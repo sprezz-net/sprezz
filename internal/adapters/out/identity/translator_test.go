@@ -8,7 +8,6 @@ import (
 	"sprezz/internal/domain/model"
 )
 
-// Minimal mock storage to satisfy the initialization constraints of the translator
 type mockIdentityStorage struct{}
 
 func (m *mockIdentityStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) { return false, nil }
@@ -69,22 +68,21 @@ func TestIdentityTranslator_InjectNomadicTriples_Success(t *testing.T) {
 		t.Fatalf("Expected exactly 2 nomadic entity quads generated, got %d", len(quads))
 	}
 
-	// 5. FIXED: Added explicit index slice subscripts [0] to extract the element correctly
 	rdfTypeQuad := quads[0]
 	if rdfTypeQuad.GraphID != targetGraphID ||
 		rdfTypeQuad.Subject != actorIRI ||
-		rdfTypeQuad.Predicate != "http://w3.org" ||
-		rdfTypeQuad.Object != "https://w3.org" ||
+		rdfTypeQuad.Predicate != "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" ||
+		rdfTypeQuad.Object != "https://www.w3.org/ns/activitystreams#Person" ||
 		rdfTypeQuad.ObjType != model.NamedNode {
 		t.Errorf("RDF type Quad generation malformed or misaligned: %+v", rdfTypeQuad)
 	}
 
-	// 6. FIXED: Added explicit index slice subscripts [1] to extract the element correctly
 	zotGuidQuad := quads[1]
+	expectedObjectLiteral := "alice-guid-12345"
 	if zotGuidQuad.GraphID != targetGraphID ||
 		zotGuidQuad.Subject != actorIRI ||
-		zotGuidQuad.Predicate != "http://purl.org" ||
-		zotGuidQuad.Object != guid ||
+		zotGuidQuad.Predicate != "http://purl.org/zot/protocol/guid" ||
+		zotGuidQuad.Object != expectedObjectLiteral ||
 		zotGuidQuad.ObjType != model.Literal {
 		t.Errorf("Zot network identifier mapping tracking Quad malformed: %+v", zotGuidQuad)
 	}
