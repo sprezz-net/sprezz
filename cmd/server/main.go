@@ -126,13 +126,17 @@ func main() {
 
 	// Setup Inbound Activity Handlers
 	keyResolver := inhttp.NewHTTPPublicKeyResolver(nil)
-	inboxHandler := inhttp.NewVerifiedInboxHandler(postgresStorage, inhttp.NewSignatureVerifier(keyResolver))
+	sigVerifier := inhttp.NewSignatureVerifier(keyResolver)
+	inboxHandler := inhttp.NewInboxHandler(postgresStorage)
 	actorHandler := inhttp.NewActorHandler(postgresStorage)
 
 	// Instantiate the tenant validator from middleware package
 	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{
 		TenantDomains: cfg.TenantDomains,
 	})
+
+	// Instantiate the cryptographic signature validator middleware
+	signatureValidator := middleware.NewSignatureValidator(sigVerifier, postgresStorage)
 
 	// Wrap federated multi-tenant endpoints inside a protected routing group
 	r.Group(func(protected chi.Router) {
@@ -142,14 +146,16 @@ func main() {
 		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains))
 
 		// Scoped activity routers
-		protected.Route("/inbox", func(router chi.Router) {
-			router.Handle("/", inboxHandler)
-			router.Handle("/{actor}", inboxHandler)
-		})
-
 		protected.Route("/actors", func(router chi.Router) {
 			router.Handle("/", actorHandler)
 			router.Handle("/{actor}", actorHandler)
+		})
+
+		// Scoped cryptographic validation group explicitly targeting the /inbox delivery channel
+		protected.Route("/inbox", func(router chi.Router) {
+			router.Use(signatureValidator.Handler) // Enforces valid HTTP Signatures before task ingestion
+			router.Handle("/", inboxHandler)
+			router.Handle("/{actor}", inboxHandler)
 		})
 	})
 

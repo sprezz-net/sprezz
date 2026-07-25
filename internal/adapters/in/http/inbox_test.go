@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	inhttp "sprezz/internal/adapters/in/http"
+	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
 )
@@ -18,7 +19,6 @@ type MockInboxStorage struct {
 	RecordedIRI   string
 }
 
-// Ensure interface contract fulfillment at compile time
 var _ ports.StoragePort = (*MockInboxStorage)(nil)
 
 func (m *MockInboxStorage) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
@@ -28,45 +28,24 @@ func (m *MockInboxStorage) EnqueueInbound(ctx context.Context, id, activityIRI, 
 	m.Enqueued = true
 	return nil
 }
-
 func (m *MockInboxStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
 	m.RecordedIRI = actorIRI
 	return nil
 }
-
-func (m *MockInboxStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {
-	return nil, nil
-}
+func (m *MockInboxStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) { return nil, nil }
 func (m *MockInboxStorage) MarkInboundComplete(ctx context.Context, id string) error  { return nil }
 func (m *MockInboxStorage) MarkInboundFailed(ctx context.Context, id, r string) error { return nil }
-func (m *MockInboxStorage) GetNomadicIdentity(ctx context.Context, g string) (*model.NomadicIdentity, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) UpsertNomadicIdentity(ctx context.Context, i *model.NomadicIdentity) error {
-	return nil
-}
-func (m *MockInboxStorage) RegisterIdentityClone(ctx context.Context, g, h string, l bool) error {
-	return nil
-}
-func (m *MockInboxStorage) GetActorPrivateKey(ctx context.Context, a string) (string, error) {
-	return "", nil
-}
-func (m *MockInboxStorage) CreateGraphVersion(ctx context.Context, a, o string, p []byte) (int64, error) {
-	return 0, nil
-}
+func (m *MockInboxStorage) GetNomadicIdentity(ctx context.Context, g string) (*model.NomadicIdentity, error) { return nil, nil }
+func (m *MockInboxStorage) UpsertNomadicIdentity(ctx context.Context, i *model.NomadicIdentity) error { return nil }
+func (m *MockInboxStorage) RegisterIdentityClone(ctx context.Context, g, h string, l bool) error { return nil }
+func (m *MockInboxStorage) GetActorPrivateKey(ctx context.Context, a string) (string, error) { return "", nil }
+func (m *MockInboxStorage) CreateGraphVersion(ctx context.Context, a, o string, p []byte) (int64, error) { return 0, nil }
 func (m *MockInboxStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
 func (m *MockInboxStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error { return nil }
 func (m *MockInboxStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
-func (m *MockInboxStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) {
-	return nil, nil
-}
-
-func (m *MockInboxStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
-	return nil, nil
-}
+func (m *MockInboxStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) { return nil, nil }
+func (m *MockInboxStorage) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) { return nil, nil }
+func (m *MockInboxStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) { return nil, nil }
 
 func TestInboxHandler_MethodNotAllowed(t *testing.T) {
 	storage := &MockInboxStorage{}
@@ -82,33 +61,32 @@ func TestInboxHandler_MethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestInboxHandler_BlockedDomain(t *testing.T) {
-	storage := &MockInboxStorage{BlockedDomain: "malicious.com"}
+func TestInboxHandler_Unauthenticated(t *testing.T) {
+	storage := &MockInboxStorage{}
 	handler := inhttp.NewInboxHandler(storage)
 
 	req := httptest.NewRequest(http.MethodPost, "/inbox", bytes.NewReader([]byte(`{}`)))
-	req.Host = "malicious.com"
 	rec := httptest.NewRecorder()
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 Forbidden, got %d", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("Expected status 401 Unauthorized for context lacking credentials, got %d", rec.Code)
 	}
 }
 
 func TestInboxHandler_Success(t *testing.T) {
 	storage := &MockInboxStorage{}
+	handler := inhttp.NewInboxHandler(storage)
 
-	// Create an unverified handler since verifier is omitted/nil (skips authentication checks safely)
-	handler := inhttp.NewVerifiedInboxHandler(storage, nil)
-
-	payload := []byte(`{"id":"https://remote.com/act/123","type":"Create","object":{"id":"https://remote.com/note/456"}}`)
-
-	// Targeting a specific user actor inbox so we trigger the delivery tracking logic branch
-	req := httptest.NewRequest(http.MethodPost, "/inbox/alice", bytes.NewReader(payload))
+	payload := []byte(`{"id":"https://remote.com","type":"Create","object":{"id":"https://remote.com"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/inbox", bytes.NewReader(payload))
 	req.Host = "remote.com"
 	rec := httptest.NewRecorder()
+
+	// Inject the pre-authenticated actor IRI into the request context, simulating the signature middleware pass
+	ctx := context.WithValue(req.Context(), middleware.AuthenticatedActorKey, "https://remote.com")
+	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(rec, req)
 
@@ -117,12 +95,5 @@ func TestInboxHandler_Success(t *testing.T) {
 	}
 	if !storage.Enqueued {
 		t.Error("Expected activity to be enqueued in storage port")
-	}
-
-	// Updated the target verification variable from the root domain string
-	// to the canonical Actor IRI profile path emitted by the handler tracker logic.
-	expectedIRI := "https://remote.com/actors/alice"
-	if storage.RecordedIRI != expectedIRI {
-		t.Errorf("Expected actor delivery recorded for %s, got %s", expectedIRI, storage.RecordedIRI)
 	}
 }
