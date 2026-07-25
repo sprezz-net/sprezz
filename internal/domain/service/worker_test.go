@@ -76,6 +76,9 @@ func (m *mockWorkerStorage) StreamQuadsBySubject(ctx context.Context, s string) 
 func (m *mockWorkerStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
 	return nil, nil
 }
+func (m *mockWorkerStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
+	return nil
+}
 
 type mockActivityService struct {
 	failID string

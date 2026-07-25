@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"sprezz/internal/adapters/out/identity"
+	"sprezz/internal/domain/identity"
 	"sprezz/internal/domain/model"
 )
 
@@ -45,6 +45,9 @@ func (m *mockIdentityStorage) StreamQuadsBySubject(ctx context.Context, s string
 }
 func (m *mockIdentityStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
 	return nil, nil
+}
+func (m *mockIdentityStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
+	return nil
 }
 
 func TestIdentityTranslator_InjectNomadicTriples_Success(t *testing.T) {

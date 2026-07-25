@@ -72,6 +72,9 @@ func (m *MockStorageAdapter) SaveQuadIDs(ctx context.Context, quadIDs []model.Qu
 func (m *MockStorageAdapter) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
 	return nil, nil
 }
+func (m *MockStorageAdapter) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
+	return nil
+}
 
 var _ ports.JSONLDParserPort = (*MockParserAdapter)(nil)
 
