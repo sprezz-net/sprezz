@@ -215,9 +215,19 @@ The long-term design uses the outbound queue for retryable asynchronous delivery
 
 ## 9. Media Storage
 
-The MinIO adapter stores federated attachments by opaque object name and content type. It creates or verifies the configured bucket before writing an object and returns a stable object location to the caller.
+### 9.1 Infrastructure Isolation
 
-Media access is separate from RDF graph persistence. A failed media upload must not partially commit graph metadata unless the domain operation explicitly defines a compensating state.
+The MinIO adapter stores federated attachments by opaque object name and content type. It creates or verifies the configured bucket before writing an object and returns a stable object location to the caller. Media access is separate from RDF graph persistence.
+
+### 9.2 Content-Addressable Hashing & Operational Rollbacks
+
+Incoming binary attachments are processed using a stack-allocated `io.TeeReader` loop. This pipeline computes a cryptographic SHA-256 content fingerprint on the fly while streaming the data to MinIO, eliminating redundant memory buffering. Media upload actions execute ahead of relational persistence. If a database transaction, quad conversion, or dictionary mapping aborts, a compensating deletion routine triggers automatically to prune orphaned files from the central bucket.
+
+### 9.3 Dynamic Storage Quota Subsystem
+
+1. **Multi-Tenant Accounting**: Storage metrics MUST be audited at the tenant boundary level (`server_tenants`) and aggregated by the distinct ActivityPub actor identifier (`actor_media_ownership.actor_iri`).
+2. **Pre-Flight Ingestion Verification**: Driving multi-part adapters MUST perform an isolated database read query of the current storage utilization footprint *before* allocating chunks or initializing a MinIO multi-part chunked upload sequence.
+3. **Hard Ceiling Thresholds**: If a request's incoming payload `header.Size` causes a tenant or actor to cross its dynamically allocated threshold envelope, the execution path MUST drop the stream immediately and reject the request with HTTP Status `413 Payload Too Large`.
 
 ## 10. Operational Requirements
 
@@ -252,6 +262,13 @@ The implementation is functionally aligned with this blueprint when the followin
 
 ## 12. Implementation Status
 
-The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, and a signed outbound dispatcher.
+The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, and a transaction-isolated database persistence mapping engine.
 
-The remaining architectural work is to connect the media workflow to a driving use case, apply full privacy-aware timeline traversal filters to your collections, and add PostgreSQL integration coverage for transaction and concurrency guarantees.
+The remaining architectural work is to:
+
+- Connect the completed multi-part attachment media workflow to a concrete driving application use case.
+- Apply full privacy-aware timeline traversal filters across your indexed collection resources.
+- Add PostgreSQL integration coverage for transaction and concurrency guarantees.
+- Implement **Pre-Flight Storage Quota Queries** inside `internal/adapters/out/postgres` to aggregate current byte usage per `tenant_id`.
+- Create **Dynamic Tenant Limits Configuration Schema Table** (`tenant_storage_policies`) to manage storage rules over SQL instead of hardcoded app constants.
+- Add **Quota Verification Guard Middleware** or service verification hooks to intercept driving multipart form file extraction channels inside `internal/adapters/in/http`.
