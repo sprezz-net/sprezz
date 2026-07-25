@@ -37,9 +37,9 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
 
-	// 2. Extract tenant and actor routing metadata injected by upstream middlewares
-	tenantID, _ := ctx.Value("tenant_id").(string)
-	actorIRI, _ := ctx.Value("actor_iri").(string)
+	// 2. Extract tenant and actor routing metadata using type-safe context key constants
+	tenantID, _ := ctx.Value(model.TenantIDKey).(string)
+	actorIRI, _ := ctx.Value(model.ActorIRIKey).(string)
 	if tenantID == "" || actorIRI == "" {
 		h.writeError(w, http.StatusUnauthorized, "Missing routing or identity multi-tenant boundaries")
 		return
