@@ -18,6 +18,8 @@ import (
 	"sprezz/internal/config"
 	"sprezz/internal/domain/service"
 
+	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -55,7 +57,7 @@ func main() {
 		log.Fatalf("Failed to ping postgres: %v", err)
 	}
 
-	// Initialize MinIO (Driven Adapter) and safeguard against startup race conditions
+	// Initialize MinIO (Driven Adapter)
 	minioStorage, err := minio.NewMinIOStorageAdapter(
 		cfg.MinIO.Endpoint,
 		cfg.MinIO.RootUser,
@@ -66,15 +68,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Critical storage adapter initialization error: %v", err)
 	}
-	_ = minioStorage // Keeps compile safe if not immediately used in application initialization pipelines below
+	_ = minioStorage
 
-	// 4. Initialize Driven Adapters & Domain Service
+	// 4. Initialize Driven Adapters & Domain Service Layers
 	postgresStorage := postgres.NewPostgresStorage(db, dictCache)
 	jsonldParser := jsonld.NewJSONLDParser()
 	federatedSigner := outbound.NewFederatedSignerAdapter()
 	activityService := service.NewActivityService(postgresStorage, jsonldParser, federatedSigner)
 
-	// 5. Start Symmetrical Background Worker Engines (Inbound & Outbound)
+	// 5. Start Background Batch Worker Engines (Inbound & Outbound)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -106,31 +108,43 @@ func main() {
 		}
 	}()
 
-	// 6. Setup Driving Adapters (HTTP Router)
-	mux := http.NewServeMux()
+	// 6. Setup Driving Adapters with Chi Router
+	r := chi.NewRouter()
 
-	// Pass the pre-loaded config slice right into the driving adapter function
-	mux.HandleFunc("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains))
+	// Inject core optimized infrastructure middleware globally
+	r.Use(chiMiddleware.RealIP)
+	r.Use(chiMiddleware.Logger)
+	r.Use(chiMiddleware.Recoverer)
+	r.Use(chiMiddleware.Timeout(60 * time.Second))
 
-	// Inbox handler
-	keyResolver := inhttp.NewHTTPPublicKeyResolver(nil)
-	inboxHandler := inhttp.NewVerifiedInboxHandler(postgresStorage, inhttp.NewSignatureVerifier(keyResolver))
-	mux.Handle("/inbox", inboxHandler)
-	mux.Handle("/inbox/", inboxHandler)
-
-	actorHandler := inhttp.NewActorHandler(postgresStorage)
-	mux.Handle("/actors/", actorHandler)
-	mux.Handle("/actors", actorHandler)
-
-	// Health check
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	// Global baseline health endpoints
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
 
+	// WebFinger Discovery Endpoint
+	r.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains))
+
+	// Setup Inbound Activity Handlers
+	keyResolver := inhttp.NewHTTPPublicKeyResolver(nil)
+	inboxHandler := inhttp.NewVerifiedInboxHandler(postgresStorage, inhttp.NewSignatureVerifier(keyResolver))
+	actorHandler := inhttp.NewActorHandler(postgresStorage)
+
+	// Sub-router grouping for clean route scoping
+	r.Route("/inbox", func(router chi.Router) {
+		router.Handle("/", inboxHandler)
+		router.Handle("/{actor}", inboxHandler)
+	})
+
+	r.Route("/actors", func(router chi.Router) {
+		router.Handle("/", actorHandler)
+		router.Handle("/{actor}", actorHandler)
+	})
+
 	server := &http.Server{
 		Addr:         ":" + cfg.Port,
-		Handler:      mux,
+		Handler:      r, // Pass the Chi router tree directly into the server
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
@@ -140,7 +154,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Sprezz server running on http://localhost:%s for domains: %v", cfg.Port, cfg.TenantDomains)
+		log.Printf("Sprezz server running via Chi on http://localhost:%s for domains: %v", cfg.Port, cfg.TenantDomains)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
@@ -156,6 +170,6 @@ func main() {
 		log.Printf("Server shutdown error: %v", err)
 	}
 
-	cancel() // Stop all background worker engines symmetrically via context cancellation
+	cancel() // Cancel context to safely stop background engines
 	log.Println("Sprezz server stopped gracefully.")
 }

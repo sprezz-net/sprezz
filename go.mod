@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	github.com/dgraph-io/ristretto v0.2.0
+	github.com/go-chi/chi/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/jackc/pgx/v5 v5.9.2
