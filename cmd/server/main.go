@@ -10,6 +10,7 @@ import (
 	"time"
 
 	inhttp "sprezz/internal/adapters/in/http"
+	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/jsonld"
 	"sprezz/internal/adapters/out/minio"
@@ -117,29 +118,39 @@ func main() {
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(chiMiddleware.Timeout(60 * time.Second))
 
-	// Global baseline health endpoints
+	// Global baseline health endpoints (accessible without tenant locks)
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
 	})
-
-	// WebFinger Discovery Endpoint
-	r.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains))
 
 	// Setup Inbound Activity Handlers
 	keyResolver := inhttp.NewHTTPPublicKeyResolver(nil)
 	inboxHandler := inhttp.NewVerifiedInboxHandler(postgresStorage, inhttp.NewSignatureVerifier(keyResolver))
 	actorHandler := inhttp.NewActorHandler(postgresStorage)
 
-	// Sub-router grouping for clean route scoping
-	r.Route("/inbox", func(router chi.Router) {
-		router.Handle("/", inboxHandler)
-		router.Handle("/{actor}", inboxHandler)
+	// Instantiate the tenant validator from middleware package
+	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{
+		TenantDomains: cfg.TenantDomains,
 	})
 
-	r.Route("/actors", func(router chi.Router) {
-		router.Handle("/", actorHandler)
-		router.Handle("/{actor}", actorHandler)
+	// Wrap federated multi-tenant endpoints inside a protected routing group
+	r.Group(func(protected chi.Router) {
+		protected.Use(tenantValidator.Handler)
+
+		// WebFinger Discovery Endpoint
+		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains))
+
+		// Scoped activity routers
+		protected.Route("/inbox", func(router chi.Router) {
+			router.Handle("/", inboxHandler)
+			router.Handle("/{actor}", inboxHandler)
+		})
+
+		protected.Route("/actors", func(router chi.Router) {
+			router.Handle("/", actorHandler)
+			router.Handle("/{actor}", actorHandler)
+		})
 	})
 
 	server := &http.Server{
