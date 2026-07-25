@@ -13,9 +13,10 @@ import (
 var _ ports.StoragePort = (*MockStorageAdapter)(nil)
 
 type MockStorageAdapter struct {
-	OnCreateGraphVersion   func(activityIRI, objectIRI string, payload []byte) (int64, error)
-	OnSaveQuads            func(quads []model.Quad) error
-	OnStreamQuadsBySubject func(subjectIRI string) ([]model.Quad, error)
+	OnCreateGraphVersion      func(activityIRI, objectIRI string, payload []byte) (int64, error)
+	OnSaveQuads               func(quads []model.Quad) error
+	OnStreamQuadsBySubject    func(subjectIRI string) ([]model.Quad, error)
+	GetCollectionPayloadsFunc func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
 }
 
 func (m *MockStorageAdapter) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
@@ -70,6 +71,9 @@ func (m *MockStorageAdapter) SaveQuads(ctx context.Context, quads []model.Quad) 
 
 func (m *MockStorageAdapter) SaveQuadIDs(ctx context.Context, quadIDs []model.QuadID) error { return nil }
 func (m *MockStorageAdapter) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
+	if m.GetCollectionPayloadsFunc != nil {
+		return m.GetCollectionPayloadsFunc(ctx, a, c, l, o)
+	}
 	return nil, nil
 }
 func (m *MockStorageAdapter) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
@@ -206,5 +210,56 @@ func TestGetFollowersTimeline(t *testing.T) {
 	}
 	if len(followersOffset) != 1 || followersOffset[0] != "https://remote.com/users/dave" {
 		t.Errorf("Unexpected paginated followers list: %v", followersOffset)
+	}
+}
+
+func TestActivityService_GetCollectionTimeline_PrivacyScoping(t *testing.T) {
+	ctx := context.Background()
+	actorIRI := "https://sprezz.net/alice"
+	readerBob := "https://remote.com/bob"
+
+	publicPayload := []byte(`{"id":"https://sprezz.net/alice","type":"Create","to":["https://www.w3.org/ns/activitystreams#Public"]}`)
+	privatePayload := []byte(`{"id":"https://sprezz.net/alice","type":"Create","to":["https://remote.com/bob"]}`)
+	blockedPayload := []byte(`{"id":"https://sprezz.net/alice","type":"Create","to":["https://remote.com/dave"]}`)
+
+	mockStorage := &MockStorageAdapter{
+		GetCollectionPayloadsFunc: func(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
+			if a == actorIRI && c == "outbox" {
+				return [][]byte{publicPayload, privatePayload, blockedPayload}, nil
+			}
+			return nil, nil
+		},
+	}
+
+	mockParser := &MockParserAdapter{
+		OnToQuads: func(graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
+			if string(rawJSON) == string(publicPayload) {
+				return []model.Quad{{GraphID: graphID, Subject: "act/1", Predicate: "activitystreams#to", Object: "https://www.w3.org/ns/activitystreams#Public", ObjType: model.NamedNode}}, nil
+			}
+			if string(rawJSON) == string(privatePayload) {
+				return []model.Quad{{GraphID: graphID, Subject: "act/2", Predicate: "activitystreams#to", Object: readerBob, ObjType: model.NamedNode}}, nil
+			}
+			return []model.Quad{{GraphID: graphID, Subject: "act/3", Predicate: "activitystreams#to", Object: "https://remote.com", ObjType: model.NamedNode}}, nil
+		},
+	}
+
+	svc := service.NewActivityService(mockStorage, mockParser)
+
+	// Test Case 1: Bob reads Alice's outbox timeline
+	bobResults, err := svc.GetCollectionTimeline(ctx, readerBob, actorIRI, "outbox", 10, 0)
+	if err != nil {
+		t.Fatalf("unexpected execution exception: %v", err)
+	}
+	if len(bobResults) != 2 {
+		t.Errorf("Expected Bob to see 2 activities (Public + Direct Target), got %d", len(bobResults))
+	}
+
+	// Test Case 2: Anonymous external reader requests Alice's outbox timeline
+	anonResults, err := svc.GetCollectionTimeline(ctx, "", actorIRI, "outbox", 10, 0)
+	if err != nil {
+		t.Fatalf("unexpected execution exception: %v", err)
+	}
+	if len(anonResults) != 1 {
+		t.Errorf("Expected Anonymous reader to see only 1 Public activity, got %d", len(anonResults))
 	}
 }

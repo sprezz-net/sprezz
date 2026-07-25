@@ -175,3 +175,43 @@ func isAddressingPredicate(predicate string) bool {
 	}
 	return false
 }
+
+// GetCollectionTimeline retrieves an actor's collection (e.g. "inbox" or "outbox"),
+// parses payloads into intermediate quads, applies case-insensitive privacy-aware audience checks,
+// and streams down a safe, filtered set of authorized payload slices.
+func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error) {
+	// 1. Stream the raw candidate payload entries directly out of your postgres storage engine port
+	rawPayloads, err := s.storage.GetCollectionPayloads(ctx, actorIRI, collection, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to stream candidate collection payloads: %w", err)
+	}
+
+	if len(rawPayloads) == 0 {
+		return rawPayloads, nil
+	}
+
+	authorizedPayloads := make([][]byte, 0, len(rawPayloads))
+
+	// 2. Iterate through each activity document version to evaluate security contexts
+	for i, payload := range rawPayloads {
+		// Assign a temporary synthetic GraphID mapping identifier to group quads locally
+		syntheticGraphID := int64(i + 1)
+
+		// Expand the raw JSON-LD structure into absolute RDF quad matrices
+		quads, err := s.parser.ToQuads(ctx, syntheticGraphID, actorIRI, payload)
+		if err != nil {
+			// Skip malformed entries gracefully without failing the entire timeline query pipeline
+			continue
+		}
+
+		// Run the quads through your case-insensitive audience validation engine
+		filteredQuads := s.FilterPublicAndAuthorizedQuads(ctx, readerActorIRI, quads)
+
+		// If the returned quad pool is not empty, the reader has explicit permission to read this event
+		if len(filteredQuads) > 0 {
+			authorizedPayloads = append(authorizedPayloads, payload)
+		}
+	}
+
+	return authorizedPayloads, nil
+}
