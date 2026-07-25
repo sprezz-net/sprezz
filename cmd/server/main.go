@@ -16,7 +16,6 @@ import (
 	"sprezz/internal/adapters/out/outbound"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
-	"sprezz/internal/domain/ports"
 	"sprezz/internal/domain/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -75,14 +74,37 @@ func main() {
 	federatedSigner := outbound.NewFederatedSignerAdapter()
 	activityService := service.NewActivityService(postgresStorage, jsonldParser, federatedSigner)
 
-	// 5. Start Background Worker Pool for Inbound Tasks
+	// 5. Start Symmetrical Background Worker Engines (Inbound & Outbound)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	numWorkers := 4
-	for i := 1; i <= numWorkers; i++ {
-		go startInboundWorker(ctx, i, postgresStorage, activityService)
-	}
+	// Inbound Worker Configuration Integration
+	inboundEngine := service.NewInboundWorkerEngine(service.WorkerConfig{
+		NumWorkers: 4,
+		BatchSize:  10,
+		PollDelay:  500 * time.Millisecond,
+	}, postgresStorage, activityService)
+
+	go func() {
+		log.Println("Launching async Inbound Worker Engine...")
+		if err := inboundEngine.Start(ctx); err != nil {
+			log.Printf("Inbound worker engine exited with error: %v", err)
+		}
+	}()
+
+	// Outbound Federation Worker Configuration Integration
+	outboundEngine := service.NewOutboundWorkerEngine(service.OutboundWorkerConfig{
+		NumWorkers: 4,
+		BatchSize:  10,
+		PollDelay:  500 * time.Millisecond,
+	}, postgresStorage, federatedSigner)
+
+	go func() {
+		log.Println("Launching async Outbound Federation Worker Engine...")
+		if err := outboundEngine.Start(ctx); err != nil {
+			log.Printf("Outbound worker engine exited with error: %v", err)
+		}
+	}()
 
 	// 6. Setup Driving Adapters (HTTP Router)
 	mux := http.NewServeMux()
@@ -134,35 +156,6 @@ func main() {
 		log.Printf("Server shutdown error: %v", err)
 	}
 
-	cancel() // Stop background workers
+	cancel() // Stop all background worker engines symmetrically via context cancellation
 	log.Println("Sprezz server stopped gracefully.")
-}
-
-func startInboundWorker(ctx context.Context, workerID int, storage ports.StoragePort, svc ports.ActivityServicePort) {
-	log.Printf("[Worker %d] Started inbound activity processor", workerID)
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Printf("[Worker %d] Stopping worker", workerID)
-			return
-		case <-ticker.C:
-			tasks, err := storage.ClaimInboundBatch(ctx, 10)
-			if err != nil {
-				continue
-			}
-			for _, task := range tasks {
-				log.Printf("[Worker %d] Processing task %s (Activity: %s)", workerID, task.ID, task.ActivityIRI)
-				if err := svc.ProcessInboundTask(ctx, task); err != nil {
-					log.Printf("[Worker %d] Task %s failed: %v", workerID, task.ID, err)
-					_ = storage.MarkInboundFailed(ctx, task.ID, err.Error())
-				} else {
-					log.Printf("[Worker %d] Task %s completed successfully", workerID, task.ID)
-					_ = storage.MarkInboundComplete(ctx, task.ID)
-				}
-			}
-		}
-	}
 }
