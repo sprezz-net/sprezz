@@ -26,9 +26,9 @@ type MinIOConfig struct {
 
 type AppConfig struct {
 	// CleanEnv requires nested structs to either have tags or have their internal tags explicitly processed
-	Database      DatabaseConfig
-	MinIO         MinIOConfig
-	Port          string `env:"PORT" env-default:"8080"`
+	Database DatabaseConfig
+	MinIO    MinIOConfig
+	Port     string `env:"PORT" env-default:"8080"`
 	// CleanEnv handles slices by splitting a comma-separated string from the environment variable
 	TenantDomains []string `env:"TENANT_DOMAINS" env-separator:","`
 }

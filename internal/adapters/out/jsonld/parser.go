@@ -14,10 +14,10 @@ import (
 // Defined package-level constants to centralize XML schema and shorthand vocab namespaces,
 // resolving all duplicated string literal metrics across the adapter methods.
 const (
-	w3cXMLSchemaNS   = "http://www.w3.org/2001/XMLSchema"
-	w3cDateTimeType  = "http://www.w3.org/2001/XMLSchema#dateTime"
-	shortHTTPW3C     = "http://w3.org"
-	shortHTTPSW3C    = "https://w3.org"
+	w3cXMLSchemaNS  = "http://www.w3.org/2001/XMLSchema"
+	w3cDateTimeType = "http://www.w3.org/2001/XMLSchema#dateTime"
+	shortHTTPW3C    = "http://w3.org"
+	shortHTTPSW3C   = "https://w3.org"
 )
 
 type JSONLDParser struct {

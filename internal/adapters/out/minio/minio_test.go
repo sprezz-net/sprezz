@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"sprezz/internal/adapters/out/minio"
 	sdk "github.com/minio/minio-go/v7"
+	"sprezz/internal/adapters/out/minio"
 )
 
 type mockTransport struct {

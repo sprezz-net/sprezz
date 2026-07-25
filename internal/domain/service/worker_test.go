@@ -48,7 +48,9 @@ func (m *mockWorkerStorage) GetActorPrivateKey(ctx context.Context, a string) (s
 	return m.privateKey, nil
 }
 
-func (m *mockWorkerStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) { return false, nil }
+func (m *mockWorkerStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
+	return false, nil
+}
 func (m *mockWorkerStorage) EnqueueInbound(ctx context.Context, id, a, o, t string, p []byte) error {
 	return nil
 }
@@ -65,7 +67,7 @@ func (m *mockWorkerStorage) CreateGraphVersion(ctx context.Context, a, o string,
 	return 0, nil
 }
 func (m *mockWorkerStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
-func (m *mockWorkerStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error { return nil }
+func (m *mockWorkerStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error  { return nil }
 func (m *mockWorkerStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
 func (m *mockWorkerStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
 	return nil, nil

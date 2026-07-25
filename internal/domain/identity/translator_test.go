@@ -10,7 +10,9 @@ import (
 
 type mockIdentityStorage struct{}
 
-func (m *mockIdentityStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) { return false, nil }
+func (m *mockIdentityStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
+	return false, nil
+}
 func (m *mockIdentityStorage) EnqueueInbound(ctx context.Context, id, a, o, t string, p []byte) error {
 	return nil
 }
@@ -35,7 +37,7 @@ func (m *mockIdentityStorage) CreateGraphVersion(ctx context.Context, a, o strin
 	return 0, nil
 }
 func (m *mockIdentityStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
-func (m *mockIdentityStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error { return nil }
+func (m *mockIdentityStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error  { return nil }
 func (m *mockIdentityStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
 func (m *mockIdentityStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
 	return nil, nil

@@ -3,8 +3,8 @@ package outbound_test
 import (
 	"context"
 	"crypto"
-	"crypto/rsa"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"sprezz/internal/adapters/out/outbound"
 	inhttp "sprezz/internal/adapters/in/http"
+	"sprezz/internal/adapters/out/outbound"
 )
 
 func TestForwardFederatedActivity_Success(t *testing.T) {
