@@ -189,7 +189,9 @@ Followers and following resources return OrderedCollections of actor IRIs. Items
 
 ### 7.4 Privacy and Audience Rules
 
-Timeline and thread views must identify the ActivityStreams public audience explicitly. Public activities are eligible for general display. Private activities are eligible only when the requested actor is present in the addressed audience or has an authorized relationship in the local graph.
+Timeline and thread views must evaluate the ActivityStreams public audience explicitly. Public activities are eligible for general display. Private activities are eligible only when the requesting actor is present in the addressed audience or has an authorized relationship in the local graph.
+
+The domain service provides a low-complexity, graph-based privacy filtration pipeline. It groups quads by version, validates canonical case-insensitive target namespaces (`activitystreams#to`, `activitystreams#cc`, `activitystreams#audience`, `activitystreams#Public`), and safely prunes unauthorized graphs.
 
 Privacy filtering occurs before collection serialization and before pagination so private records do not affect visible counts or page boundaries.
 

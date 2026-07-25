@@ -107,3 +107,71 @@ func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI str
 	}
 	return followers[offset:end], nil
 }
+
+// FilterPublicAndAuthorizedQuads evaluates an array of quads and removes any activities
+// that do not match public audience addresses or explicit reader authorizations.
+func (s *ActivityService) FilterPublicAndAuthorizedQuads(ctx context.Context, readerActorIRI string, quads []model.Quad) []model.Quad {
+	if len(quads) == 0 {
+		return quads
+	}
+
+	// Group quads by their GraphID to evaluate security boundaries per activity version
+	graphs := make(map[int64][]model.Quad)
+	for _, q := range quads {
+		graphs[q.GraphID] = append(graphs[q.GraphID], q)
+	}
+
+	authorizedGraphIDs := make(map[int64]struct{})
+	for graphID, graphQuads := range graphs {
+		if s.isGraphAuthorized(graphID, readerActorIRI, graphQuads) {
+			authorizedGraphIDs[graphID] = struct{}{}
+		}
+	}
+
+	// Filter out quads belonging to unauthorized graph versions before pagination occurs
+	filtered := make([]model.Quad, 0, len(quads))
+	for _, q := range quads {
+		if _, authorized := authorizedGraphIDs[q.GraphID]; authorized {
+			filtered = append(filtered, q)
+		}
+	}
+
+	return filtered
+}
+
+// isGraphAuthorized iterates a single graph's quads to determine public or direct visibility.
+func (s *ActivityService) isGraphAuthorized(graphID int64, readerActorIRI string, quads []model.Quad) bool {
+	isPublic := false
+	isDirectRecipient := false
+
+	for _, q := range quads {
+		if q.GraphID != graphID {
+			continue
+		}
+
+		if isAddressingPredicate(q.Predicate) {
+			cleanObject := strings.Trim(q.Object, `"'`)
+			if cleanObject == "https://www.w3.org/ns/activitystreams#Public" {
+				isPublic = true
+			}
+			if readerActorIRI != "" && cleanObject == readerActorIRI {
+				isDirectRecipient = true
+			}
+		}
+	}
+
+	return isPublic || isDirectRecipient
+}
+
+// isAddressingPredicate isolates the specific W3C target addressing field checks.
+func isAddressingPredicate(predicate string) bool {
+	// Standardized on lowercase containment substrings to match absolute URLs
+	// featuring both hash fragments or folder path separators emitted by the parser engine.
+	addressingTerms := []string{"activitystreams#to", "activitystreams#cc", "activitystreams#bto", "activitystreams#bcc", "activitystreams#audience"}
+	for _, term := range addressingTerms {
+		if strings.Contains(strings.ToLower(predicate), term) {
+			return true
+		}
+	}
+	return false
+}
