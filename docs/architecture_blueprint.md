@@ -25,7 +25,7 @@ flowchart LR
     Remote[Remote ActivityPub or Nomad server] --> HTTP[HTTP driving adapter]
     HTTP --> Verify[Signature and request validation]
     Verify --> Queue[Inbound queue]
-    Queue --> Worker[Inbound worker pool]
+    Queue --> Worker[Generic BatchWorkerEngine pool]
     Worker --> Service[Activity service]
     Service --> Parser[Offline JSON-LD parser]
     Service --> Store[PostgreSQL and sqlc adapter]
@@ -102,13 +102,14 @@ Invalid requests must not create queue, tenant-delivery, graph, or inbox-deliver
 ### 4.2 Queue Processing
 
 Inbound queue records have four states:
-
 - `pending`: accepted and waiting for a worker.
 - `processing`: claimed by a worker.
 - `completed`: graph persistence succeeded.
 - `failed`: processing failed and the record may be retried according to policy.
 
-Workers claim records with row locking and skip locked rows so concurrent workers do not process the same queue record. A claim increments the attempt count and changes the state before the worker begins domain processing.
+The background subsystem orchestrates both ingestion task loops and outbound federation distributions using a unified, type-safe generic scheduling framework (`BatchWorkerEngine[T]`). This engine decouples queue polling, thread-pool resource management, and graceful context cancellations from the concrete execution steps. The unique task behaviors are injected cleanly at initialization using functional closures.
+
+Workers claim records using explicit row-level database locking (`FOR UPDATE SKIP LOCKED`). This guarantees that concurrent execution threads process disjoint batches and prevents race conditions under high load.
 
 The activity identifier is globally unique. Tenant and actor delivery tables provide local fan-out without duplicating graph parsing work.
 
@@ -248,6 +249,6 @@ The implementation is functionally aligned with this blueprint when the followin
 
 ## 12. Implementation Status
 
-The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, and a signed outbound dispatcher.
+The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, and a signed outbound dispatcher.
 
-The remaining architectural work is to complete the asynchronous outbound queue worker, connect the media workflow to a driving use case, apply full privacy-aware timeline traversal, and add PostgreSQL integration coverage for transaction and concurrency guarantees.
+The remaining architectural work is to connect the media workflow to a driving use case, apply full privacy-aware timeline traversal filters to your collections, and add PostgreSQL integration coverage for transaction and concurrency guarantees.
