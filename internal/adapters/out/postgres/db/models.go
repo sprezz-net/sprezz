@@ -69,6 +69,12 @@ type ActorInboxDelivery struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type ActorMediaOwnership struct {
+	ActorIri          string      `json:"actor_iri"`
+	TenantID          int32       `json:"tenant_id"`
+	MediaAttachmentID pgtype.UUID `json:"media_attachment_id"`
+}
+
 type BlockedDomain struct {
 	DomainName string             `json:"domain_name"`
 	BlockedAt  pgtype.Timestamptz `json:"blocked_at"`
@@ -102,6 +108,14 @@ type LocalActorCredential struct {
 	PrivateKeyPem string      `json:"private_key_pem"`
 }
 
+type MediaAttachment struct {
+	ID          pgtype.UUID        `json:"id"`
+	ObjectName  string             `json:"object_name"`
+	ContentType string             `json:"content_type"`
+	FileSize    int64              `json:"file_size"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+}
+
 type NomadicIdentity struct {
 	Guid               string             `json:"guid"`
 	PrimaryHubUrl      string             `json:"primary_hub_url"`
@@ -131,6 +145,11 @@ type RdfGraph struct {
 	ObjectIri  string             `json:"object_iri"`
 	Payload    []byte             `json:"payload"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+type RdfGraphAttachment struct {
+	GraphID           int64       `json:"graph_id"`
+	MediaAttachmentID pgtype.UUID `json:"media_attachment_id"`
 }
 
 type RdfQuad struct {

@@ -116,3 +116,29 @@ CREATE TABLE rdf_quads (
 );
 CREATE INDEX idx_quads_sp ON rdf_quads (graph_id, subject_id, predicate_id);
 CREATE INDEX idx_quads_op ON rdf_quads (graph_id, object_id, predicate_id);
+
+-- Global unique registry for physical media assets stored in the central MinIO bucket.
+CREATE TABLE media_attachments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    object_name VARCHAR(512) NOT NULL UNIQUE, -- Stable path inside the central bucket
+    content_type VARCHAR(255) NOT NULL,
+    file_size BIGINT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Connects a media asset to an immutable point-in-time RDF named graph version.
+CREATE TABLE rdf_graph_attachments (
+    graph_id BIGINT NOT NULL REFERENCES rdf_graphs(id) ON DELETE CASCADE,
+    media_attachment_id UUID NOT NULL REFERENCES media_attachments(id) ON DELETE CASCADE,
+    PRIMARY KEY (graph_id, media_attachment_id)
+);
+CREATE INDEX idx_graph_attachments_lookup ON rdf_graph_attachments(media_attachment_id);
+
+-- Enforces multi-tenant storage metrics, accounting, and quota boundaries per local actor.
+CREATE TABLE actor_media_ownership (
+    actor_iri TEXT NOT NULL,
+    tenant_id INT NOT NULL REFERENCES server_tenants(id) ON DELETE CASCADE,
+    media_attachment_id UUID NOT NULL REFERENCES media_attachments(id) ON DELETE CASCADE,
+    PRIMARY KEY (actor_iri, media_attachment_id)
+);
+CREATE INDEX idx_actor_media_tenant_quota ON actor_media_ownership(tenant_id, actor_iri);

@@ -9,7 +9,7 @@ import (
 )
 
 func TestActivityService_FilterPublicAndAuthorizedQuads(t *testing.T) {
-	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{})
+	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, &MockMediaAdapter{})
 	ctx := context.Background()
 
 	readerAlice := "https://sprezz.net/alice"

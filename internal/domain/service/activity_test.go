@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"io"
 	"testing"
 
 	"sprezz/internal/domain/model"
@@ -17,6 +18,9 @@ type MockStorageAdapter struct {
 	OnSaveQuads               func(quads []model.Quad) error
 	OnStreamQuadsBySubject    func(subjectIRI string) ([]model.Quad, error)
 	GetCollectionPayloadsFunc func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
+
+	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
+	OnSaveGraphVersionWithMedia func(ctx context.Context, params ports.MediaAttachmentParams) error
 }
 
 func (m *MockStorageAdapter) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
@@ -62,6 +66,20 @@ func (m *MockStorageAdapter) CreateGraphVersion(ctx context.Context, activityIRI
 	return 1, nil
 }
 
+func (m *MockStorageAdapter) SaveGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
+	if m.OnSaveGraphVersion != nil {
+		return m.OnSaveGraphVersion(ctx, activityIRI, objectIRI, payload, quads)
+	}
+	return nil
+}
+
+func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, params ports.MediaAttachmentParams) error {
+	if m.OnSaveGraphVersionWithMedia != nil {
+		return m.OnSaveGraphVersionWithMedia(ctx, params)
+	}
+	return nil
+}
+
 func (m *MockStorageAdapter) SaveQuads(ctx context.Context, quads []model.Quad) error {
 	if m.OnSaveQuads != nil {
 		return m.OnSaveQuads(quads)
@@ -95,15 +113,36 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 	return []model.Quad{}, nil
 }
 
+// MockMediaAdapter implements ports.MediaStoragePort for testing.
+type MockMediaAdapter struct {
+	PutObjectFunc    func(ctx context.Context, objectName string, reader io.Reader, objectSize int64, contentType string) (string, error)
+	DeleteObjectFunc func(ctx context.Context, objectName string) error
+}
+
+func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, size int64, cType string) (string, error) {
+	if m.PutObjectFunc != nil {
+		return m.PutObjectFunc(ctx, objectName, reader, size, cType)
+	}
+	return objectName, nil
+}
+
+func (m *MockMediaAdapter) DeleteObject(ctx context.Context, objectName string) error {
+	if m.DeleteObjectFunc != nil {
+		return m.DeleteObjectFunc(ctx, objectName)
+	}
+	return nil
+}
+
 func TestProcessInboundTask_Success(t *testing.T) {
 	ctx := context.Background()
 	storageInvoked := false
 	parserInvoked := false
 
 	mockStorage := &MockStorageAdapter{
-		OnCreateGraphVersion: func(activityIRI, objectIRI string, payload []byte) (int64, error) {
+		// Update this block to capture the transaction-wrapped execution path
+		OnSaveGraphVersion: func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
 			storageInvoked = true
-			return 42, nil
+			return nil
 		},
 		OnSaveQuads: func(quads []model.Quad) error {
 			return nil
@@ -119,7 +158,7 @@ func TestProcessInboundTask_Success(t *testing.T) {
 		},
 	}
 
-	svc := service.NewActivityService(mockStorage, mockParser)
+	svc := service.NewActivityService(mockStorage, mockParser, &MockMediaAdapter{})
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/1",
@@ -139,11 +178,13 @@ func TestProcessInboundTask_Success(t *testing.T) {
 func TestProcessInboundTask_StorageError(t *testing.T) {
 	ctx := context.Background()
 	mockStorage := &MockStorageAdapter{
-		OnCreateGraphVersion: func(activityIRI, objectIRI string, payload []byte) (int64, error) {
-			return 0, errors.New("db error")
+		// Configure the mock error inside the active transactional branch
+		OnSaveGraphVersion: func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
+			return errors.New("db error")
 		},
 	}
-	svc := service.NewActivityService(mockStorage, &MockParserAdapter{})
+
+	svc := service.NewActivityService(mockStorage, &MockParserAdapter{}, &MockMediaAdapter{})
 	task := model.InboundTask{ID: "task-1"}
 
 	err := svc.ProcessInboundTask(ctx, task)
@@ -164,7 +205,7 @@ func TestProcessInboundTask_ParserError(t *testing.T) {
 			return nil, errors.New("parse error")
 		},
 	}
-	svc := service.NewActivityService(mockStorage, mockParser)
+	svc := service.NewActivityService(mockStorage, mockParser, &MockMediaAdapter{})
 	task := model.InboundTask{ID: "task-1"}
 
 	err := svc.ProcessInboundTask(ctx, task)
@@ -192,7 +233,7 @@ func TestGetFollowersTimeline(t *testing.T) {
 		},
 	}
 
-	svc := service.NewActivityService(mockStorage, &MockParserAdapter{})
+	svc := service.NewActivityService(mockStorage, &MockParserAdapter{}, &MockMediaAdapter{})
 
 	followers, err := svc.GetFollowersTimeline(ctx, actorIRI, 2, 0)
 	if err != nil {
@@ -245,7 +286,7 @@ func TestActivityService_GetCollectionTimeline_PrivacyScoping(t *testing.T) {
 		},
 	}
 
-	svc := service.NewActivityService(mockStorage, mockParser)
+	svc := service.NewActivityService(mockStorage, mockParser, &MockMediaAdapter{})
 
 	// Test Case 1: Bob reads Alice's outbox timeline
 	bobResults, err := svc.GetCollectionTimeline(ctx, readerBob, actorIRI, "outbox", 10, 0)

@@ -13,7 +13,7 @@ import (
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/jsonld"
-	"sprezz/internal/adapters/out/minio"
+	"sprezz/internal/adapters/media"
 	"sprezz/internal/adapters/out/outbound"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
@@ -59,7 +59,7 @@ func main() {
 	}
 
 	// Initialize MinIO (Driven Adapter)
-	minioStorage, err := minio.NewMinIOStorageAdapter(
+	mediaStorage, err := media.NewMinioHandler(
 		cfg.MinIO.Endpoint,
 		cfg.MinIO.RootUser,
 		cfg.MinIO.RootPassword,
@@ -69,13 +69,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Critical storage adapter initialization error: %v", err)
 	}
-	_ = minioStorage
+	_ = mediaStorage
 
 	// 4. Initialize Driven Adapters & Domain Service Layers
 	postgresStorage := postgres.NewPostgresStorage(db, dictCache)
 	jsonldParser := jsonld.NewJSONLDParser()
 	federatedSigner := outbound.NewFederatedSignerAdapter()
-	activityService := service.NewActivityService(postgresStorage, jsonldParser, federatedSigner)
+	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, federatedSigner)
 
 	// 5. Start Background Batch Worker Engines (Inbound & Outbound)
 	ctx, cancel := context.WithCancel(context.Background())

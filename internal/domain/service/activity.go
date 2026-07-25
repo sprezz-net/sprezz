@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"sprezz/internal/domain/model"
@@ -11,15 +12,17 @@ import (
 )
 
 type ActivityService struct {
-	storage   ports.StoragePort
-	parser    ports.JSONLDParserPort
-	forwarder ports.OutboundDispatcher
+	storage      ports.StoragePort
+	parser       ports.JSONLDParserPort
+	forwarder    ports.OutboundDispatcher
+	mediaStorage ports.MediaStoragePort
 }
 
-func NewActivityService(storage ports.StoragePort, parser ports.JSONLDParserPort, forwarders ...ports.OutboundDispatcher) *ActivityService {
+func NewActivityService(storage ports.StoragePort, parser ports.JSONLDParserPort, media ports.MediaStoragePort, forwarders ...ports.OutboundDispatcher) *ActivityService {
 	service := &ActivityService{
-		storage: storage,
-		parser:  parser,
+		storage:      storage,
+		parser:       parser,
+		mediaStorage: media,
 	}
 	if len(forwarders) > 0 {
 		service.forwarder = forwarders[0]
@@ -214,4 +217,58 @@ func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActor
 	}
 
 	return authorizedPayloads, nil
+}
+
+// InboundMediaContext encapsulates the execution boundary variables
+// for streaming attachments to adhere to the 7-parameter limit.
+type InboundMediaContext struct {
+	TenantID    string
+	ActorIRI    string
+	ObjectName  string
+	ContentType string
+	Size        int64
+	MediaStream io.Reader
+}
+
+// ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
+func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx InboundMediaContext, task model.InboundTask) error {
+	if s.mediaStorage == nil {
+		return fmt.Errorf("media storage engine driver is not configured")
+	}
+
+	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated
+	stableKey, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.Size, mediaCtx.ContentType)
+	if err != nil {
+		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
+	}
+
+	// 2. Parse the JSON-LD payload into quads before triggering the database routine
+	quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
+	if err != nil {
+		_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Compensating removal
+		return fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
+	}
+
+	// 3. Delegate atomic multi-table execution down to the transaction writer engine
+	if writer, ok := s.storage.(ports.GraphVersionWriter); ok {
+		err := writer.SaveGraphVersionWithMedia(ctx, ports.MediaAttachmentParams{
+			ObjectName:  stableKey,
+			ContentType: mediaCtx.ContentType,
+			FileSize:    mediaCtx.Size,
+			TenantID:    mediaCtx.TenantID,
+			ActorIRI:    mediaCtx.ActorIRI,
+			ActivityIRI: task.ActivityIRI,
+			ObjectIRI:   task.ObjectIRI,
+			Payload:     task.Payload,
+			Quads:       quads,
+		})
+		if err != nil {
+			_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Rollback central bucket file if SQL fails
+			return fmt.Errorf("failed to commit graph and media attachment relationships: %w", err)
+		}
+		return nil
+	}
+
+	_ = s.mediaStorage.DeleteObject(ctx, stableKey)
+	return fmt.Errorf("storage port does not implement required GraphVersionWriter extension")
 }

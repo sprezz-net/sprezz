@@ -35,6 +35,9 @@ type StoragePort interface {
 	GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error)
 }
 
+// MediaStoragePort defines the driven port for federated media object storage.
+// Media execution is decoupled from RDF persistence to guarantee that a failed
+// media stream upload leaves core database nodes entirely untouched.
 type MediaStoragePort interface {
 	PutObject(ctx context.Context, objectName string, reader io.Reader, objectSize int64, contentType string) (string, error)
 	DeleteObject(ctx context.Context, objectName string) error
@@ -44,10 +47,30 @@ type JSONLDParserPort interface {
 	ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error)
 }
 
+// GraphVersionWriter extends the default storage capabilities to process unified,
+// multi-table batch operations within a single, context-bound pgx transaction block.
 type GraphVersionWriter interface {
 	SaveGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
+
+	// SaveGraphVersionWithMedia registers the central media file, tracks tenant storage metrics,
+	// and persists the immutable graph payload within a single atomic database operation.
+	SaveGraphVersionWithMedia(ctx context.Context, params MediaAttachmentParams) error
 }
 
 type OutboundDispatcher interface {
 	ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyPEM string, payload []byte) error
+}
+
+// MediaAttachmentParams unifies all relational parameters required to link the
+// central MinIO media object to specific local multi-tenant actors and graph versions.
+type MediaAttachmentParams struct {
+	ObjectName  string
+	ContentType string
+	FileSize    int64
+	TenantID    string
+	ActorIRI    string
+	ActivityIRI string
+	ObjectIRI   string
+	Payload     []byte
+	Quads       []model.Quad
 }

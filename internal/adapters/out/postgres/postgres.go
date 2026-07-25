@@ -180,6 +180,75 @@ func (s *PostgresStorage) SaveGraphVersion(ctx context.Context, activityIRI, obj
 	return tx.Commit(ctx)
 }
 
+func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params ports.MediaAttachmentParams) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer s.safeRollback(ctx, tx)
+	queries := db.New(tx)
+
+	// 1. Resolve the string TenantID to the integer tenant ID required by the schema
+	tenantID, err := queries.GetTenantID(ctx, params.TenantID)
+	if err != nil {
+		return fmt.Errorf("failed to resolve tenant %q for media ownership: %w", params.TenantID, err)
+	}
+
+	// 2. Register the physical media file details globally inside the centralized registry bucket
+	mediaID, err := queries.InsertMediaAttachment(ctx, db.InsertMediaAttachmentParams{
+		ObjectName:  params.ObjectName,
+		ContentType: params.ContentType,
+		FileSize:    params.FileSize,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to register central media registry entry: %w", err)
+	}
+
+	// 3. Track local multi-tenant storage resource ownership metrics per actor/tenant boundary
+	// params.TenantID (string) has been correctly resolved above to tenantID (int32)
+	err = queries.RegisterActorMediaOwnership(ctx, db.RegisterActorMediaOwnershipParams{
+		ActorIri:          params.ActorIRI,
+		TenantID:          tenantID,
+		MediaAttachmentID: mediaID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to commit tenant storage ownership mappings: %w", err)
+	}
+
+	// 4. Create the underlying core immutable activity graph version layer
+	graphID, err := queries.CreateGraphVersion(ctx, db.CreateGraphVersionParams{
+		ActivityID: params.ActivityIRI,
+		ObjectIri:  params.ObjectIRI,
+		Payload:    params.Payload,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to save graph version metadata: %w", err)
+	}
+
+	// 5. Connect media entries to graph tracking
+	// Field changed from GraphVersionID to GraphID to exactly match sqlc naming outputs
+	err = queries.LinkAttachmentToGraphVersion(ctx, db.LinkAttachmentToGraphVersionParams{
+		GraphID:           graphID,
+		MediaAttachmentID: mediaID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to connect media entry to graph version: %w", err)
+	}
+
+	// 6. Expand string elements out to dictionary indices
+	quadIDs, err := s.toQuadIDs(ctx, queries, graphID, params.Quads)
+	if err != nil {
+		return fmt.Errorf("failed to parse index strings to dictionary: %w", err)
+	}
+
+	// 7. Commit the indexing quad arrays
+	if err := s.saveQuadIDs(ctx, queries, quadIDs); err != nil {
+		return fmt.Errorf("failed to write indexing quad arrays: %w", err)
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (s *PostgresStorage) SaveQuads(ctx context.Context, quads []model.Quad) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
