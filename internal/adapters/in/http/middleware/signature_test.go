@@ -117,17 +117,22 @@ func TestSignatureValidator_Handler(t *testing.T) {
 
 			wrappedHandler.ServeHTTP(rr, req)
 
-			if rr.Code != tt.expectedStatus {
-				t.Errorf("Signature validation handling failure for %q: got status %d, want %d", tt.name, rr.Code, tt.expectedStatus)
-			}
-
-			// Read and verify the propagated context key to guarantee linter compliance
-			if tt.expectedStatus == http.StatusAccepted && tt.method == http.MethodPost {
-				extractedActor := rr.Header().Get("X-Authenticated-Actor")
-				if extractedActor != tt.expectedActor {
-					t.Errorf("Context propagation mismatch in %q: got %q, want %q", tt.name, extractedActor, tt.expectedActor)
-				}
-			}
+			// Handled response validation loops via a distinct single-responsibility helper block
+			assertResponse(t, tt.name, rr, tt.method, tt.expectedStatus, tt.expectedActor)
 		})
+	}
+}
+
+// assertResponse decouples validation loops from the test runner loop context to achieve absolute flat logic profiles.
+func assertResponse(t *testing.T, name string, rr *httptest.ResponseRecorder, method string, expectedStatus int, expectedActor string) {
+	if rr.Code != expectedStatus {
+		t.Errorf("Signature validation handling failure for %q: got status %d, want %d", name, rr.Code, expectedStatus)
+	}
+
+	if expectedStatus == http.StatusAccepted && method == http.MethodPost {
+		extractedActor := rr.Header().Get("X-Authenticated-Actor")
+		if extractedActor != expectedActor {
+			t.Errorf("Context propagation mismatch in %q: got %q, want %q", name, extractedActor, expectedActor)
+		}
 	}
 }

@@ -31,7 +31,7 @@ func NewSignatureVerifier(resolver PublicKeyResolver) *SignatureVerifier {
 	return &SignatureVerifier{resolver: resolver, now: time.Now, maxAge: 5 * time.Minute}
 }
 
-// Verify focuses exclusively on standard W3C HTTP signature validation math [source: 5].
+// Verify focuses exclusively on standard W3C HTTP signature validation math.
 func (v *SignatureVerifier) Verify(r *http.Request, body []byte) error {
 	if v == nil || v.resolver == nil {
 		return fmt.Errorf("signature verifier is not configured")
@@ -47,16 +47,17 @@ func (v *SignatureVerifier) Verify(r *http.Request, body []byte) error {
 	if err != nil {
 		return err
 	}
-	date := r.Header.Get("Date")
-	parsedDate, err := http.ParseTime(date)
-	if err != nil || v.now().Sub(parsedDate) > v.maxAge || parsedDate.Sub(v.now()) > v.maxAge {
-		return fmt.Errorf("stale or invalid date header")
+
+	// Extracted date validation metrics down to a separate standalone function.
+	if err := v.verifyDateFreshness(r.Header.Get("Date")); err != nil {
+		return err
 	}
-	for _, name := range headers {
-		if name != "(request-target)" && name != "host" && name != "date" && name != "digest" {
-			return fmt.Errorf("unsigned request component %q is not allowed", name)
-		}
+
+	// Extracted header whitelist iteration gate down to a separate standalone function.
+	if err := verifyAllowedHeaders(headers); err != nil {
+		return err
 	}
+
 	canonical, err := signingString(r, headers)
 	if err != nil {
 		return err
@@ -74,10 +75,27 @@ func (v *SignatureVerifier) Verify(r *http.Request, body []byte) error {
 		return fmt.Errorf("invalid request signature: %w", err)
 	}
 
-	// Dynamically set the resolved key ID owner onto a fallback header
-	// so that the edge middleware can securely extract the verified remote actor ID.
 	if r.Header.Get("X-Actor-IRI") == "" {
 		r.Header.Set("X-Actor-IRI", keyID)
+	}
+	return nil
+}
+
+// verifyDateFreshness validates standard HTTP header time format expiration drifts.
+func (v *SignatureVerifier) verifyDateFreshness(dateStr string) error {
+	parsedDate, err := http.ParseTime(dateStr)
+	if err != nil || v.now().Sub(parsedDate) > v.maxAge || parsedDate.Sub(v.now()) > v.maxAge {
+		return fmt.Errorf("stale or invalid date header")
+	}
+	return nil
+}
+
+// verifyAllowedHeaders audits that only approved message parameters participate in signing layout blocks.
+func verifyAllowedHeaders(headers []string) error {
+	for _, name := range headers {
+		if name != "(request-target)" && name != "host" && name != "date" && name != "digest" {
+			return fmt.Errorf("unsigned request component %q is not allowed", name)
+		}
 	}
 	return nil
 }
