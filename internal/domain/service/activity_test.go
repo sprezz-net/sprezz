@@ -8,35 +8,21 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/ports/portstest"
 	"sprezz/internal/domain/service"
 )
 
 var _ ports.StoragePort = (*MockStorageAdapter)(nil)
 
 type MockStorageAdapter struct {
-	OnCreateGraphVersion      func(activityIRI, objectIRI string, payload []byte) (int64, error)
-	OnSaveQuads               func(quads []model.Quad) error
-	OnStreamQuadsBySubject    func(subjectIRI string) ([]model.Quad, error)
-	GetCollectionPayloadsFunc func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
+	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	OnCreateGraphVersion               func(activityIRI, objectIRI string, payload []byte) (int64, error)
+	OnSaveQuads                        func(quads []model.Quad) error
+	OnStreamQuadsBySubject             func(subjectIRI string) ([]model.Quad, error)
+	GetCollectionPayloadsFunc          func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
 
 	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
 	OnSaveGraphVersionWithMedia func(ctx context.Context, params ports.MediaAttachmentParams) error
-}
-
-func (m *MockStorageAdapter) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
-	return false, nil
-}
-func (m *MockStorageAdapter) EnqueueInbound(ctx context.Context, id, a, o, t string, p []byte) error {
-	return nil
-}
-func (m *MockStorageAdapter) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {
-	return nil, nil
-}
-func (m *MockStorageAdapter) MarkInboundComplete(ctx context.Context, id string) error  { return nil }
-func (m *MockStorageAdapter) MarkInboundFailed(ctx context.Context, id, r string) error { return nil }
-func (m *MockStorageAdapter) RemoveQuadEdge(ctx context.Context, s, p, o string) error  { return nil }
-func (m *MockStorageAdapter) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
-	return nil, nil
 }
 
 func (m *MockStorageAdapter) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) {
@@ -48,15 +34,6 @@ func (m *MockStorageAdapter) StreamQuadsBySubject(ctx context.Context, s string)
 
 func (m *MockStorageAdapter) GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error) {
 	return &model.NomadicIdentity{GUID: guid}, nil
-}
-func (m *MockStorageAdapter) UpsertNomadicIdentity(ctx context.Context, identity *model.NomadicIdentity) error {
-	return nil
-}
-func (m *MockStorageAdapter) RegisterIdentityClone(ctx context.Context, guid string, hubURL string, isLocal bool) error {
-	return nil
-}
-func (m *MockStorageAdapter) GetActorPrivateKey(ctx context.Context, a string) (string, error) {
-	return "", nil
 }
 
 func (m *MockStorageAdapter) CreateGraphVersion(ctx context.Context, activityIRI, objectIRI string, rawPayload []byte) (int64, error) {
@@ -87,31 +64,18 @@ func (m *MockStorageAdapter) SaveQuads(ctx context.Context, quads []model.Quad) 
 	return nil
 }
 
-func (m *MockStorageAdapter) SaveQuadIDs(ctx context.Context, quadIDs []model.QuadID) error {
-	return nil
-}
 func (m *MockStorageAdapter) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
 	if m.GetCollectionPayloadsFunc != nil {
 		return m.GetCollectionPayloadsFunc(ctx, a, c, l, o)
 	}
 	return nil, nil
 }
-func (m *MockStorageAdapter) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
-	return nil
-}
-
-func (m *MockStorageAdapter) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
-	return nil, nil
-}
-
-func (m *MockStorageAdapter) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
-	return nil, nil
-}
 
 var _ ports.JSONLDParserPort = (*MockParserAdapter)(nil)
 
 type MockParserAdapter struct {
-	OnToQuads func(graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error)
+	portstest.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloating layout)
+	OnToQuads                               func(graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error)
 }
 
 func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
@@ -123,15 +87,16 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 
 // MockMediaAdapter implements ports.MediaStoragePort for testing.
 type MockMediaAdapter struct {
-	PutObjectFunc    func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
-	DeleteObjectFunc func(ctx context.Context, objectName string) error
+	portstest.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloating layout)
+	PutObjectFunc                           func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
+	DeleteObjectFunc                        func(ctx context.Context, objectName string) error
 }
 
 func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
 	if m.PutObjectFunc != nil {
 		return m.PutObjectFunc(ctx, objectName, reader, contentType)
 	}
-	return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil // Default fake empty SHA-256
+	return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
 }
 
 func (m *MockMediaAdapter) DeleteObject(ctx context.Context, objectName string) error {

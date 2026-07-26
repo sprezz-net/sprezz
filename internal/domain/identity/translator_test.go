@@ -6,56 +6,12 @@ import (
 
 	"sprezz/internal/domain/identity"
 	"sprezz/internal/domain/model"
+	"sprezz/internal/domain/ports/portstest"
 )
 
-type mockIdentityStorage struct{}
-
-func (m *mockIdentityStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
-	return false, nil
-}
-func (m *mockIdentityStorage) EnqueueInbound(ctx context.Context, id, a, o, t string, p []byte) error {
-	return nil
-}
-func (m *mockIdentityStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {
-	return nil, nil
-}
-func (m *mockIdentityStorage) MarkInboundComplete(ctx context.Context, id string) error  { return nil }
-func (m *mockIdentityStorage) MarkInboundFailed(ctx context.Context, id, r string) error { return nil }
-func (m *mockIdentityStorage) GetNomadicIdentity(ctx context.Context, g string) (*model.NomadicIdentity, error) {
-	return nil, nil
-}
-func (m *mockIdentityStorage) UpsertNomadicIdentity(ctx context.Context, i *model.NomadicIdentity) error {
-	return nil
-}
-func (m *mockIdentityStorage) RegisterIdentityClone(ctx context.Context, g, h string, l bool) error {
-	return nil
-}
-func (m *mockIdentityStorage) GetActorPrivateKey(ctx context.Context, a string) (string, error) {
-	return "", nil
-}
-func (m *mockIdentityStorage) CreateGraphVersion(ctx context.Context, a, o string, p []byte) (int64, error) {
-	return 0, nil
-}
-func (m *mockIdentityStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
-func (m *mockIdentityStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error  { return nil }
-func (m *mockIdentityStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
-func (m *mockIdentityStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
-	return nil, nil
-}
-func (m *mockIdentityStorage) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) {
-	return nil, nil
-}
-func (m *mockIdentityStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
-	return nil, nil
-}
-func (m *mockIdentityStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
-	return nil
-}
-func (m *mockIdentityStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
-	return nil, nil
-}
-func (m *mockIdentityStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
-	return nil, nil
+type mockIdentityStorage struct {
+	portstest.UnimplementedStoragePort
+	OnGetNomadicIdentity func(ctx context.Context, guid string) (*model.NomadicIdentity, error)
 }
 
 func TestIdentityTranslator_InjectNomadicTriples_Success(t *testing.T) {

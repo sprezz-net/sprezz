@@ -9,14 +9,15 @@ import (
 
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/ports/portstest"
 )
 
 type MockInboxStorage struct {
-	BlockedDomain string
-	Enqueued      bool
-	RecordedIRI   string
+	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	BlockedDomain                      string
+	Enqueued                           bool
+	RecordedIRI                        string
 }
 
 var _ ports.StoragePort = (*MockInboxStorage)(nil)
@@ -24,52 +25,15 @@ var _ ports.StoragePort = (*MockInboxStorage)(nil)
 func (m *MockInboxStorage) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
 	return domainName == m.BlockedDomain, nil
 }
+
 func (m *MockInboxStorage) EnqueueInbound(ctx context.Context, id, activityIRI, objectIRI, targetDomain string, payload []byte) error {
 	m.Enqueued = true
 	return nil
 }
+
 func (m *MockInboxStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
 	m.RecordedIRI = actorIRI
 	return nil
-}
-func (m *MockInboxStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) MarkInboundComplete(ctx context.Context, id string) error  { return nil }
-func (m *MockInboxStorage) MarkInboundFailed(ctx context.Context, id, r string) error { return nil }
-func (m *MockInboxStorage) GetNomadicIdentity(ctx context.Context, g string) (*model.NomadicIdentity, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) UpsertNomadicIdentity(ctx context.Context, i *model.NomadicIdentity) error {
-	return nil
-}
-func (m *MockInboxStorage) RegisterIdentityClone(ctx context.Context, g, h string, l bool) error {
-	return nil
-}
-func (m *MockInboxStorage) GetActorPrivateKey(ctx context.Context, a string) (string, error) {
-	return "", nil
-}
-func (m *MockInboxStorage) CreateGraphVersion(ctx context.Context, a, o string, p []byte) (int64, error) {
-	return 0, nil
-}
-func (m *MockInboxStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
-func (m *MockInboxStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error  { return nil }
-func (m *MockInboxStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
-func (m *MockInboxStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
-	return nil, nil
-}
-
-func (m *MockInboxStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
-	return nil, nil
-}
-func (m *MockInboxStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
-	return nil, nil
 }
 
 func TestInboxHandler_MethodNotAllowed(t *testing.T) {

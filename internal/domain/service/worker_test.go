@@ -8,15 +8,17 @@ import (
 	"time"
 
 	"sprezz/internal/domain/model"
+	"sprezz/internal/domain/ports/portstest"
 	"sprezz/internal/domain/service"
 )
 
 type mockWorkerStorage struct {
-	mu           sync.Mutex
-	tasks        []model.InboundTask
-	completedIDs map[string]struct{}
-	failedTasks  map[string]string
-	privateKey   string
+	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	mu                                 sync.Mutex
+	tasks                              []model.InboundTask
+	completedIDs                       map[string]struct{}
+	failedTasks                        map[string]string
+	privateKey                         string
 }
 
 func (m *mockWorkerStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {
@@ -46,48 +48,6 @@ func (m *mockWorkerStorage) GetActorPrivateKey(ctx context.Context, a string) (s
 		return "", errors.New("key resolved error")
 	}
 	return m.privateKey, nil
-}
-
-func (m *mockWorkerStorage) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
-	return false, nil
-}
-func (m *mockWorkerStorage) EnqueueInbound(ctx context.Context, id, a, o, t string, p []byte) error {
-	return nil
-}
-func (m *mockWorkerStorage) GetNomadicIdentity(ctx context.Context, g string) (*model.NomadicIdentity, error) {
-	return nil, nil
-}
-func (m *mockWorkerStorage) UpsertNomadicIdentity(ctx context.Context, i *model.NomadicIdentity) error {
-	return nil
-}
-func (m *mockWorkerStorage) RegisterIdentityClone(ctx context.Context, g, h string, l bool) error {
-	return nil
-}
-func (m *mockWorkerStorage) CreateGraphVersion(ctx context.Context, a, o string, p []byte) (int64, error) {
-	return 0, nil
-}
-func (m *mockWorkerStorage) SaveQuads(ctx context.Context, q []model.Quad) error      { return nil }
-func (m *mockWorkerStorage) SaveQuadIDs(ctx context.Context, q []model.QuadID) error  { return nil }
-func (m *mockWorkerStorage) RemoveQuadEdge(ctx context.Context, s, p, o string) error { return nil }
-func (m *mockWorkerStorage) GetLatestPayload(ctx context.Context, o string) ([]byte, error) {
-	return nil, nil
-}
-func (m *mockWorkerStorage) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) {
-	return nil, nil
-}
-func (m *mockWorkerStorage) GetCollectionPayloads(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
-	return nil, nil
-}
-func (m *mockWorkerStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
-	return nil
-}
-
-func (m *mockWorkerStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
-	return nil, nil
-}
-
-func (m *mockWorkerStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
-	return nil, nil
 }
 
 type mockActivityService struct {

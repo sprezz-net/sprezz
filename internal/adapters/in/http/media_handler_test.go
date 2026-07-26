@@ -14,6 +14,7 @@ import (
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/ports/portstest"
 	"sprezz/internal/domain/service"
 )
 
@@ -23,9 +24,9 @@ var _ ports.GraphVersionWriter = (*MockStorageAdapter)(nil)
 
 // MockStorageAdapter implements ports.StoragePort and ports.GraphVersionWriter for isolation testing.
 type MockStorageAdapter struct {
-	ports.StoragePort           // Composite fallback embedded stub
-	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
-	OnSaveGraphVersionWithMedia func(ctx context.Context, params ports.MediaAttachmentParams) error
+	portstest.UnimplementedStoragePort // Composite fallback embedded stub
+	OnSaveGraphVersion                 func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
+	OnSaveGraphVersionWithMedia        func(ctx context.Context, params ports.MediaAttachmentParams) error
 }
 
 // SaveGraphVersion satisfies ports.GraphVersionWriter
@@ -46,7 +47,7 @@ func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, para
 
 // MockParserAdapter implements ports.JSONLDParserPort for isolation testing.
 type MockParserAdapter struct {
-	ports.JSONLDParserPort
+	portstest.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloated layout)
 }
 
 func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
@@ -55,8 +56,8 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 
 // MockMediaAdapter implements ports.MediaStoragePort for isolation testing.
 type MockMediaAdapter struct {
-	ports.MediaStoragePort
-	OnPutObject func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
+	portstest.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloated layout)
+	OnPutObject                             func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
 }
 
 func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
@@ -64,10 +65,6 @@ func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, rea
 		return m.OnPutObject(ctx, objectName, reader, contentType)
 	}
 	return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
-}
-
-func (m *MockMediaAdapter) DeleteObject(ctx context.Context, objectName string) error {
-	return nil
 }
 
 // createMultipartRequest builds an in-memory body with structured file chunks and JSON-LD fields.
