@@ -1,4 +1,4 @@
-package outbound
+package http
 
 import (
 	"bytes"

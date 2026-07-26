@@ -1,4 +1,4 @@
-package outbound_test
+package http_test
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 	"testing"
 
 	inhttp "sprezz/internal/adapters/in/http"
-	"sprezz/internal/adapters/out/outbound"
+	outhttp "sprezz/internal/adapters/out/http"
 )
 
 func TestForwardFederatedActivity_Success(t *testing.T) {
@@ -80,7 +80,7 @@ func TestForwardFederatedActivity_Success(t *testing.T) {
 	defer server.Close()
 
 	// 3. Dispatch activity
-	signer := outbound.NewFederatedSignerAdapter()
+	signer := outhttp.NewFederatedSignerAdapter()
 	payload := []byte(`{"type":"Create","actor":"https://sprezz.net/actors/alice"}`)
 
 	err = signer.ForwardFederatedActivity(

@@ -14,7 +14,7 @@ import (
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/jsonld"
 	"sprezz/internal/adapters/out/minio"
-	"sprezz/internal/adapters/out/outbound"
+	outhttp "sprezz/internal/adapters/out/http"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
 	"sprezz/internal/domain/service"
@@ -84,7 +84,7 @@ func main() {
 	// 4. Initialize Driven Adapters & Domain Service Layers
 	postgresStorage := postgres.NewPostgresStorage(db, dictCache)
 	jsonldParser := jsonld.NewJSONLDParser()
-	federatedSigner := outbound.NewFederatedSignerAdapter()
+	federatedSigner := outhttp.NewFederatedSignerAdapter()
 	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, federatedSigner)
 
 	// 5. Start Background Batch Worker Engines (Inbound & Outbound)
