@@ -2,6 +2,10 @@
 BINARY_NAME=sprezz-server
 COVERAGE_FILE=coverage.out
 
+# Include the environment file and export its variables to the shell session
+-include .env
+export
+
 .PHONY: all tidy sqlc-gen sqlc-check fmt lint test cover clean run build
 
 # Default target runs code generation and verification to guarantee a pristine repository state
