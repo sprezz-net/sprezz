@@ -58,6 +58,15 @@ func main() {
 		log.Fatalf("Failed to ping postgres: %v", err)
 	}
 
+	// Execute pending DDL schema statements before initializing services.
+	// Passing context.Background() ensures initialization is fully atomic and
+	// safe from early application boot cancellation routines.
+	log.Println("Executing database schema migration hooks...")
+	if err := postgres.RunDatabaseMigrations(context.Background(), db); err != nil {
+		log.Fatalf("Critical database schema migration failure: %v", err)
+	}
+	log.Println("Database schemas are synchronized and verified.")
+
 	// Initialize MinIO (Driven Adapter)
 	mediaStorage, err := minio.NewMinIOStorageAdapter(
 		cfg.MinIO.Endpoint,
