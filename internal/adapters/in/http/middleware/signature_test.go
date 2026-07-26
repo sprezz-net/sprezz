@@ -66,6 +66,13 @@ func (m *mockStorageStub) RecordActorInboxDelivery(ctx context.Context, actorIRI
 	return nil
 }
 
+func (m *mockStorageStub) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+func (m *mockStorageStub) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+
 func TestSignatureValidator_Handler(t *testing.T) {
 	storage := &mockStorageStub{}
 	verifier := &mockSignatureVerifier{

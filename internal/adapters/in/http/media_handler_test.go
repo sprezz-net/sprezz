@@ -23,7 +23,7 @@ var _ ports.GraphVersionWriter = (*MockStorageAdapter)(nil)
 
 // MockStorageAdapter implements ports.StoragePort and ports.GraphVersionWriter for isolation testing.
 type MockStorageAdapter struct {
-	ports.StoragePort // Composite fallback embedded stub
+	ports.StoragePort           // Composite fallback embedded stub
 	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
 	OnSaveGraphVersionWithMedia func(ctx context.Context, params ports.MediaAttachmentParams) error
 }

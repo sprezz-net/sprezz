@@ -82,6 +82,14 @@ func (m *mockWorkerStorage) RecordActorInboxDelivery(ctx context.Context, actorI
 	return nil
 }
 
+func (m *mockWorkerStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+
+func (m *mockWorkerStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+
 type mockActivityService struct {
 	failID string
 }

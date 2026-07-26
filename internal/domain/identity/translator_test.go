@@ -51,6 +51,12 @@ func (m *mockIdentityStorage) GetCollectionPayloads(ctx context.Context, a, c st
 func (m *mockIdentityStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
 	return nil
 }
+func (m *mockIdentityStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+func (m *mockIdentityStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	return nil, nil
+}
 
 func TestIdentityTranslator_InjectNomadicTriples_Success(t *testing.T) {
 	// 1. Initialize our clean, isolated translator layer

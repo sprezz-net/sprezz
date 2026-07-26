@@ -144,7 +144,7 @@ func main() {
 		protected.Use(tenantValidator.Handler)
 
 		// WebFinger Discovery Endpoint
-		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains))
+		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains, postgresStorage))
 
 		// Scoped activity routers
 		protected.Route("/actors", func(router chi.Router) {

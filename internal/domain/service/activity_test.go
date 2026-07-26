@@ -100,6 +100,14 @@ func (m *MockStorageAdapter) RecordActorInboxDelivery(ctx context.Context, actor
 	return nil
 }
 
+func (m *MockStorageAdapter) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+
+func (m *MockStorageAdapter) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+
 var _ ports.JSONLDParserPort = (*MockParserAdapter)(nil)
 
 type MockParserAdapter struct {

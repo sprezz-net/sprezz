@@ -65,6 +65,13 @@ func (m *MockInboxStorage) GetCollectionPayloads(ctx context.Context, a, c strin
 	return nil, nil
 }
 
+func (m *MockInboxStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+func (m *MockInboxStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	return nil, nil
+}
+
 func TestInboxHandler_MethodNotAllowed(t *testing.T) {
 	storage := &MockInboxStorage{}
 	handler := inhttp.NewInboxHandler(storage)

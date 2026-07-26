@@ -33,6 +33,11 @@ type StoragePort interface {
 	GetLatestPayload(ctx context.Context, objectIRI string) ([]byte, error)
 	StreamQuadsBySubject(ctx context.Context, subjectIRI string) ([]model.Quad, error)
 	GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error)
+
+	// GetActorProfileFromGraph searches the quad store matching the tenant ID and username handle,
+	// returning a unified profile structure parsed directly out of the RDF edges.
+	GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)
+	GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error)
 }
 
 // MediaStoragePort defines the driven port for federated media object storage.

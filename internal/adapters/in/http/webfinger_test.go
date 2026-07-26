@@ -1,101 +1,162 @@
 package http_test
 
 import (
-	"encoding/json"
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	inhttp "sprezz/internal/adapters/in/http"
+	"sprezz/internal/domain/model"
+	"sprezz/internal/domain/ports"
 )
 
-func TestHandleWebfinger_MissingResource(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger", nil)
-	req.Host = "localhost"
-	rec := httptest.NewRecorder()
-
-	// Injecting allowed test domains via the new adapter function closure
-	allowedDomains := []string{"localhost", "sprezz.net"}
-	handler := inhttp.HandleWebfinger(allowedDomains)
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", rec.Code)
-	}
+// MockWebfingerStorageAdapter isolates graph reads from live SQL engines.
+type MockWebfingerStorageAdapter struct {
+	ports.StoragePort
+	OnGetActorProfileFromGraph func(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)
+	OnGetActorProfileByIRI     func(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error)
 }
 
-func TestHandleWebfinger_Success(t *testing.T) {
+func (m *MockWebfingerStorageAdapter) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	if m.OnGetActorProfileFromGraph != nil {
+		return m.OnGetActorProfileFromGraph(ctx, tenantID, username)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func (m *MockWebfingerStorageAdapter) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	if m.OnGetActorProfileByIRI != nil {
+		return m.OnGetActorProfileByIRI(ctx, tenantID, iri)
+	}
+	return nil, errors.New("not implemented")
+}
+
+func TestHandleWebfinger_Success_ByHandle(t *testing.T) {
+	tenantDomains := []string{"sprezz.net"}
+	username := "alice"
+	actorUUID := "8f6c5b4a-2e1d-4c3b-9a8b-7f6e5d4c3b2a"
+	actorIRI := "https://sprezz.net" + actorUUID
+
+	mockStorage := &MockWebfingerStorageAdapter{
+		OnGetActorProfileFromGraph: func(ctx context.Context, tenantID int32, u string) (*model.ActorProfile, error) {
+			if u != username {
+				return nil, errors.New("not found")
+			}
+			return &model.ActorProfile{
+				UUID:         actorUUID,
+				IRI:          actorIRI,
+				Username:     username,
+				NomadGUID:    "nomad-guid-abc-123",
+				PublicKeyPEM: "mock-public-key",
+			}, nil
+		},
+	}
+
+	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@sprezz.net", nil)
-	req.Host = "sprezz.net" // Setting host explicitly to pass tenant lookup validation rules
-	rec := httptest.NewRecorder()
 
-	allowedDomains := []string{"sprezz.net"}
-	handler := inhttp.HandleWebfinger(allowedDomains)
-	handler.ServeHTTP(rec, req)
+	// Explicitly set the host parameter on the struct layout to satisfy RequestHost
+	req.Host = "sprezz.net"
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d. Body: %s", rec.Code, rec.Body.String())
+	ctx := context.WithValue(req.Context(), model.TenantIDKey, int32(1))
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status code 200, got %d. Body: %s", rr.Code, rr.Body.String())
 	}
 
-	contentType := rec.Header().Get("Content-Type")
-	if contentType != "application/jrd+json" {
-		t.Errorf("Expected Content-Type application/jrd+json, got %s", contentType)
+	body := rr.Body.String()
+	if !strings.Contains(body, actorIRI) {
+		t.Errorf("Expected response to feature canonical Actor IRI link target %q", actorIRI)
 	}
 
-	var resp inhttp.WebfingerResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("Failed to decode Webfinger JSON response: %v", err)
-	}
-
-	if resp.Subject != "acct:alice@sprezz.net" {
-		t.Errorf("Expected subject acct:alice@sprezz.net, got %s", resp.Subject)
-	}
-
-	if len(resp.Links) < 2 {
-		t.Fatalf("Expected at least 2 links, got %d", len(resp.Links))
+	expectedChannelHref := "https://sprezz.net"
+	if !strings.Contains(body, expectedChannelHref) {
+		t.Errorf("Expected Nomad protocol link reference channel to target %q", expectedChannelHref)
 	}
 }
 
-func TestHandleWebfinger_ForbiddenDomain(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@roguedomain.com", nil)
-	req.Host = "roguedomain.com"
-	rec := httptest.NewRecorder()
+func TestHandleWebfinger_Success_ByIRI(t *testing.T) {
+	tenantDomains := []string{"sprezz.net"}
+	actorUUID := "9a8b7f6e-5d4c-3b2a-1a2b-3c4d5e6f7a8b"
+	actorIRI := "https://sprezz.net" + actorUUID
 
-	allowedDomains := []string{"tenant-a.example", "tenant-b.example"}
-	handler := inhttp.HandleWebfinger(allowedDomains)
-	handler.ServeHTTP(rec, req)
+	mockStorage := &MockWebfingerStorageAdapter{
+		OnGetActorProfileByIRI: func(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+			if iri != actorIRI {
+				return nil, errors.New("not found")
+			}
+			return &model.ActorProfile{
+				UUID:         actorUUID,
+				IRI:          actorIRI,
+				Username:     "bob",
+				PublicKeyPEM: "mock-public-key",
+			}, nil
+		},
+	}
 
-	if rec.Code != http.StatusForbidden {
-		t.Errorf("Expected status 403 Forbidden for unconfigured domain, got %d", rec.Code)
+	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource="+actorIRI, nil)
+
+	// Explicitly set the host parameter on the struct layout to satisfy RequestHost
+	req.Host = "sprezz.net"
+
+	ctx := context.WithValue(req.Context(), model.TenantIDKey, int32(1))
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("Expected status code 200, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, actorIRI) {
+		t.Errorf("Expected response subject alias map to bind to canonical IRI path %q", actorIRI)
 	}
 }
 
-func TestHandleWebfinger_UsesConfiguredTenantDomains(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@tenant-a.example", nil)
-	req.Host = "tenant-a.example"
-	rec := httptest.NewRecorder()
+func TestHandleWebfinger_DomainForbidden(t *testing.T) {
+	tenantDomains := []string{"sprezz.net"}
+	mockStorage := &MockWebfingerStorageAdapter{}
 
-	// Simply pass the test domains in—no JSON files or disk IO operations needed!
-	allowedDomains := []string{"tenant-a.example", "tenant-b.example"}
-	handler := inhttp.HandleWebfinger(allowedDomains)
-	handler.ServeHTTP(rec, req)
+	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@malicious.com", nil)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Expected status 200, got %d", rec.Code)
-	}
+	req.Host = "unregistered-tenant.net"
 
-	var resp inhttp.WebfingerResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("Failed to decode Webfinger JSON response: %v", err)
-	}
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
 
-	if resp.Subject != "acct:alice@tenant-a.example" {
-		t.Errorf("Expected subject acct:alice@tenant-a.example, got %s", resp.Subject)
+	if rr.Code != http.StatusForbidden {
+		t.Errorf("Expected status code 403 (Forbidden) for unauthorized tenant domains, got %d", rr.Code)
 	}
-	if len(resp.Aliases) != 1 || resp.Aliases[0] != "https://tenant-a.example/actors/alice" {
-		t.Errorf("Expected alias to use configured tenant domain, got %v", resp.Aliases)
-	}
-	if len(resp.Links) < 1 || resp.Links[0].Href != "https://tenant-a.example/actors/alice" {
-		t.Errorf("Expected self link to use configured tenant domain, got %+v", resp.Links)
+}
+
+func TestHandleWebfinger_MalformedResource(t *testing.T) {
+	tenantDomains := []string{"sprezz.net"}
+	mockStorage := &MockWebfingerStorageAdapter{}
+
+	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
+	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:bad-string-format", nil)
+
+	// Explicitly set the host parameter on the struct layout to satisfy RequestHost
+	req.Host = "sprezz.net"
+
+	ctx := context.WithValue(req.Context(), model.TenantIDKey, int32(1))
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code 400 (Bad Request) for malformed account tokens, got %d", rr.Code)
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/postgres/db"
@@ -435,4 +436,79 @@ func uuidFromPG(value pgtype.UUID) (uuid.UUID, error) {
 // Clean context lifecycle binding wrapper to eliminate hanging database network sockets.
 func (s *PostgresStorage) safeRollback(ctx context.Context, tx pgx.Tx) {
 	_ = tx.Rollback(ctx)
+}
+
+func (s *PostgresStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
+	tenantDomain, err := s.queries().GetTenantDomainByID(ctx, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map tenant context to domain name: %w", err)
+	}
+
+	tenantActorPrefix := fmt.Sprintf("https://%s/actor/%%", tenantDomain)
+
+	rows, err := s.queries().GetActorQuadsByUsername(ctx, db.GetActorQuadsByUsernameParams{
+		Username:     username,
+		TenantPrefix: tenantActorPrefix,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed scanning quad store for actor handle: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("actor profile graph not found for handle %q", username)
+	}
+
+	profile := &model.ActorProfile{
+		IRI:      rows[0].Subject,
+		Username: username,
+	}
+
+	// 1. Process fields iteratively for the UsernameRow slice layout
+	for _, row := range rows {
+		s.mapQuadPredicateToProfile(profile, row.Predicate, row.Object)
+	}
+
+	return s.finalizeProfileIdentity(profile), nil
+}
+
+func (s *PostgresStorage) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
+	rows, err := s.queries().GetActorQuadsByIRI(ctx, iri)
+	if err != nil {
+		return nil, fmt.Errorf("failed scanning quad store for actor IRI: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, fmt.Errorf("actor profile graph not found for IRI %q", iri)
+	}
+
+	profile := &model.ActorProfile{
+		IRI: iri,
+	}
+
+	// 2. Process fields iteratively for the IRIRow slice layout (Resolving type lock)
+	for _, row := range rows {
+		s.mapQuadPredicateToProfile(profile, row.Predicate, row.Object)
+	}
+
+	return s.finalizeProfileIdentity(profile), nil
+}
+
+// mapQuadPredicateToProfile unifies graph edge vocabulary mappings cleanly
+func (s *PostgresStorage) mapQuadPredicateToProfile(profile *model.ActorProfile, predicate, object string) {
+	cleanObject := strings.Trim(object, `"'`)
+
+	switch predicate {
+	case model.PredicatePreferredUsername:
+		profile.Username = cleanObject
+	case model.PredicatePublicKeyPem:
+		profile.PublicKeyPEM = cleanObject
+	case model.PredicateNomadGUID:
+		profile.NomadGUID = cleanObject
+	}
+}
+
+// finalizeProfileIdentity extracts stable protocol UUIDv4 blocks inside a localized routine (Blueprint Section 3.1)
+func (s *PostgresStorage) finalizeProfileIdentity(profile *model.ActorProfile) *model.ActorProfile {
+	if parts := strings.Split(profile.IRI, "/"); len(parts) > 0 {
+		profile.UUID = parts[len(parts)-1]
+	}
+	return profile
 }
