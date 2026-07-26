@@ -1,78 +1,97 @@
 package config
 
 import (
+	"flag"
 	"fmt"
+	"os"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
 
 type DatabaseConfig struct {
-	Host     string `env:"POSTGRES_HOST" env-default:"localhost"`
-	Port     string `env:"POSTGRES_PORT" env-default:"5432"`
-	User     string `env:"POSTGRES_USER" env-default:"sprezz_user"`
-	Password string `env:"POSTGRES_PASSWORD"`
-	Database string `env:"POSTGRES_DB" env-default:"sprezz"`
-	SSLMode  string `env:"POSTGRES_SSLMODE" env-default:"disable"`
-	URL      string `env:"DATABASE_URL"`
+	Host     string `yaml:"host" env:"POSTGRES_HOST" env-default:"localhost"`
+	Port     string `yaml:"port" env:"POSTGRES_PORT" env-default:"5433"`
+	User     string `yaml:"user" env:"POSTGRES_USER" env-default:"sprezz_user"`
+	Password string `yaml:"password" env:"POSTGRES_PASSWORD"`
+	DBName   string `yaml:"dbname" env:"POSTGRES_DB" env-default:"sprezz"`
+	SSLMode  string `yaml:"sslmode" env:"POSTGRES_SSLMODE" env-default:"disable"`
 }
 
 type MinIOConfig struct {
-	RootUser     string `env:"MINIO_ROOT_USER" env-default:"minio_admin"`
-	RootPassword string `env:"MINIO_ROOT_PASSWORD"`
-	Endpoint     string `env:"MINIO_ENDPOINT" env-default:"localhost:9000"`
-	UseSSL       bool   `env:"MINIO_USESSL" env-default:"false"`
-	BucketName   string `env:"MINIO_BUCKET_NAME" env-default:"sprezz-media"`
+	Endpoint     string `yaml:"endpoint" env:"MINIO_ENDPOINT" env-default:"localhost:9000"`
+	RootUser     string `yaml:"root_user" env:"MINIO_ROOT_USER" env-default:"minio_admin"`
+	RootPassword string `yaml:"root_password" env:"MINIO_ROOT_PASSWORD"`
+	BucketName   string `yaml:"bucket_name" env:"MINIO_BUCKET_NAME" env-default:"sprezz-media"`
+	UseSSL       bool   `yaml:"use_ssl" env:"MINIO_USE_SSL" env-default:"false"`
 }
 
-type AppConfig struct {
-	// CleanEnv requires nested structs to either have tags or have their internal tags explicitly processed
-	Database DatabaseConfig
-	MinIO    MinIOConfig
-	Port     string `env:"PORT" env-default:"8080"`
-	// CleanEnv handles slices by splitting a comma-separated string from the environment variable
-	TenantDomains []string `env:"TENANT_DOMAINS" env-separator:","`
+type Config struct {
+	AppEnv        string         `yaml:"app_env" env:"APP_ENV" env-default:"local"`
+	Port          string         `yaml:"port" env:"PORT" env-default:"8080"`
+	TenantDomains []string       `yaml:"tenant_domains" env:"TENANT_DOMAINS" env-separator:","`
+	Database      DatabaseConfig `yaml:"database"`
+	MinIO         MinIOConfig    `yaml:"minio"`
+	DatabaseURL   string         `env:"DATABASE_URL"`
 }
 
-func LoadConfig() (*AppConfig, error) {
-	var cfg AppConfig
+// GetDSN dynamically builds the connection string or prioritizes a raw DATABASE_URL override.
+func (c *Config) GetDSN() string {
+	if c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		c.Database.User,
+		c.Database.Password,
+		c.Database.Host,
+		c.Database.Port,
+		c.Database.DBName,
+		c.Database.SSLMode,
+	)
+}
 
-	// ReadEnv parses tags sequentially into the structured fields
-	if err := cleanenv.ReadEnv(&cfg); err != nil {
-		return nil, fmt.Errorf("failed to read environment variables: %w", err)
+// LoadConfig parses flags, reads the targeted YAML file, and applies system environment overrides.
+func LoadConfig() (*Config, error) {
+	var cfg Config
+
+	// 1. Check for command-line parameter first (-env=dev)
+	var envFlag string
+	flag.StringVar(&envFlag, "env", "", "Target environment profile (e.g. local, dev, production)")
+	flag.Parse()
+
+	// 2. Fall back to the APP_ENV environment variable if the CLI flag is blank
+	targetEnv := envFlag
+	if targetEnv == "" {
+		targetEnv = os.Getenv("APP_ENV")
+	}
+	if targetEnv == "" {
+		targetEnv = "local" // Default baseline profile
 	}
 
-	// Validate configuration
-	if err := validateConfig(&cfg); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %w", err)
+	// Construct the canonical YAML file path name.
+	yamlPath := fmt.Sprintf("%s.yaml", targetEnv)
+
+	// 3. Execute CleanEnv hierarchy processing:
+	// It reads the yaml file first, then scans active environment variables to override values.
+	if _, err := os.Stat(yamlPath); err == nil {
+		if err := cleanenv.ReadConfig(yamlPath, &cfg); err != nil {
+			return nil, fmt.Errorf("failed to process config file %s: %w", yamlPath, err)
+		}
+	} else {
+		// If the specific file is missing, fallback to scanning environment variables directly.
+		if err := cleanenv.ReadEnv(&cfg); err != nil {
+			return nil, fmt.Errorf("failed to process system environment fields: %w", err)
+		}
+	}
+
+	// 4. Assert core cryptographic safety rules established in the Sprezz spec.
+	if cfg.Database.Password == "" && cfg.DatabaseURL == "" {
+		return nil, fmt.Errorf("invalid configuration: either POSTGRES_PASSWORD or DATABASE_URL must be explicitly set")
+	}
+
+	// 5. Explicit validation guard forcing operational security constraints for MinIO asset flows.
+	if cfg.MinIO.RootPassword == "" {
+		return nil, fmt.Errorf("invalid configuration: MINIO_ROOT_PASSWORD must be explicitly set")
 	}
 
 	return &cfg, nil
-}
-
-func validateConfig(cfg *AppConfig) error {
-	// Validate database configuration
-	if cfg.Database.Password == "" && cfg.Database.URL == "" {
-		return fmt.Errorf("either POSTGRES_PASSWORD or DATABASE_URL must be set")
-	}
-
-	// Validate MinIO configuration
-	if cfg.MinIO.RootPassword == "" {
-		return fmt.Errorf("MINIO_ROOT_PASSWORD must be set")
-	}
-
-	// Validate tenant configuration
-	if len(cfg.TenantDomains) == 0 {
-		return fmt.Errorf("at least one tenant domain must be configured (TENANT_DOMAINS)")
-	}
-
-	return nil
-}
-
-func (c *AppConfig) GetDSN() string {
-	if c.Database.URL != "" {
-		return c.Database.URL
-	}
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		c.Database.User, c.Database.Password, c.Database.Host, c.Database.Port,
-		c.Database.Database, c.Database.SSLMode)
 }

@@ -1,0 +1,19 @@
+app_env: "local"
+port: "8080"
+tenant_domains:
+  - "localhost"
+  - "local.sprezz.net"
+
+database:
+  host: "localhost"
+  port: "5433"
+  user: "sprezz_user"
+  # password:
+  dbname: "sprezz"
+  sslmode: "disable"
+
+minio:
+  endpoint: "localhost:9000"
+  # RootPassword:
+  bucket_name: "sprezz-media"
+  use_ssl: false
