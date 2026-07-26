@@ -293,15 +293,46 @@ The implementation is functionally aligned with this blueprint when the followin
 - pgx/sqlc integration tests cover UUIDs, JSONB, PostgreSQL arrays, transactions, and row-locking behavior.
 - A parser or quad persistence failure leaves no orphaned graph version.
 
-## 12. Implementation Status
+## 12. Database Migration Subsystem
 
-The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, and a transaction-isolated database persistence mapping engine.
+The Sprezz server enforces programmatic database schema evolution to guarantee structural parity across multi-tenant deployments without relying on external orchestration tools or shell dependencies inside production container images. The migration subsystem operates as an integrated lifecycle hook that sits ahead of all core domain services, driving adapters, and background engines.
+
+### 12.1 Structural and Compilation Boundaries
+
+1. **Single Source of Truth**: Schema state is defined solely by sequential SQL migration files. The application's object-relational mapping layer (`sqlc`) points directly to the active migrations directory as its schema source. This prevents the emergence of split-brain schemas or disconnected metadata definitions.
+2. **Binary Embedding (`go:embed`)**: All database schema evolution scripts (`.sql`) are baked directly into the Go executable binary at compile time using static filesystem embedding. The production container image requires no loose SQL scripts on disk and does not expose a database migration CLI or raw binary tooling within the runtime shell environment.
+3. **Driver Isolation & Interoperability**: While the application leverages high-performance, transaction-bound connection pools (`pgx/v5`) for routine operational pathways, the migration engine wraps the active pool configuration using a standard compatibility lifecycle driver (`pgx/v5/stdlib`). This allows the migration coordinator to open an atomic, standard-compliant relational socket exclusively for DDL execution without polluting core domain connection pools with long-running schema locks.
+
+### 12.2 Execution Sequencing and Reliability
+
+```mermaid
+flowchart TD
+    Start[Application Boot] --> Config[Load CleanEnv Configurations]
+    Config --> DBConnect[Initialize pgxpool connection]
+    DBConnect --> DBPing{Execute db.Ping}
+    DBPing -- Fail --> Crash[Log.Fatal & Halt Process]
+    DBPing -- Success --> Migrations[Invoke RunDatabaseMigrations]
+    Migrations --> CheckLock[Acquire Distributed Migration Lock]
+    CheckLock --> RunDDL[Apply Pending Schema Updates]
+    RunDDL -- Error --> Rollback[Atomic Rollback & Log.Fatal]
+    RunDDL -- Success --> Release[Release Locks & Close stdlib DB]
+    Release --> StartServices[Initialize Domain Services & Workers]
+    StartServices --> StartServer[Open Driving HTTP Chi Router]
+```
+
+1. **Pre-Flight Execution Guard**: Database migrations are invoked immediately after confirming connection pool viability via `db.Ping()`, but strictly *before* initializing any driven adapters, domain services, driving HTTP routers, or background worker threads (`BatchWorkerEngine`).
+2. **Fail-Fast Boot Failure**: If a migration script contains syntactic errors, deployment phase discrepancies, or structural failures, the startup sequence issues an immediate `log.Fatalf` command to drop execution and terminate the process. This prevents the server from entering a corrupted execution state where active services target non-existent tables or column definitions.
+3. **Transactional DDL Isolation**: Each migration script executes within an explicit database transaction block. If an individual statement fails, the entire migration generation rolls back completely to maintain database schema cleanliness. Non-transactional elements (such as custom Enum typings) are isolated within dedicated statement block boundaries (`-- +goose StatementBegin/End`) to align with PostgreSQL isolation constraints.
+4. **Log Masking**: Structural changes and schema initialization phases use strict log masking. Raw SQL arguments, custom schema parameters, and database metadata are prevented from leaking into the standard system logs, preserving information perimeter boundaries.
+
+## 13. Implementation Status
+
+The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, and full privacy-aware timeline traversal filters across indexed collection resources.
+
+Additionally, the **Database Migration Subsystem** is fully operational. It leverages embedded filesystem compilation (`go:embed`), standard runtime interoperability adapters (`pgx/v5/stdlib`), and a fail-fast boot sequence execution block to cleanly isolate structural DDL schema synchronization tasks ahead of downstream worker pools.
 
 The remaining architectural work is to:
 
 - Connect the completed multi-part attachment media workflow to a concrete driving application use case.
-- Apply full privacy-aware timeline traversal filters across your indexed collection resources.
 - Add PostgreSQL integration coverage for transaction and concurrency guarantees.
-- Implement **Pre-Flight Storage Quota Queries** inside `internal/adapters/out/postgres` to aggregate current byte usage per `tenant_id`.
-- Create **Dynamic Tenant Limits Configuration Schema Table** (`tenant_storage_policies`) to manage storage rules over SQL instead of hardcoded app constants.
 - Add **Quota Verification Guard Middleware** or service verification hooks to intercept driving multipart form file extraction channels inside `internal/adapters/in/http`.
