@@ -31,7 +31,8 @@ services:
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in environment or .env file}"
     volumes:
       - miniodata:/data
-    command: server /data --console-address ":9001"
+    # Enforces external bridge access binding on API port 9000
+    command: server /data --address ":9000" --console-address ":9001"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 5s
