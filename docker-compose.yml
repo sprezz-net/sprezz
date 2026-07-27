@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD must be set in environment or .env file}"
       POSTGRES_DB: ${POSTGRES_DB:-sprezz}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
