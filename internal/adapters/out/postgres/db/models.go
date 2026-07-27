@@ -101,11 +101,12 @@ type InboundActivityQueue struct {
 }
 
 type LocalActorCredential struct {
-	ActorIri      string      `json:"actor_iri"`
-	IdentityGuid  pgtype.Text `json:"identity_guid"`
-	TenantID      int32       `json:"tenant_id"`
-	Username      string      `json:"username"`
-	PrivateKeyPem string      `json:"private_key_pem"`
+	ActorIri             string      `json:"actor_iri"`
+	IdentityGuid         pgtype.Text `json:"identity_guid"`
+	TenantID             int32       `json:"tenant_id"`
+	Username             string      `json:"username"`
+	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
 }
 
 type MediaAttachment struct {

@@ -11,17 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const getActorPrivateKey = `-- name: GetActorPrivateKey :one
-SELECT private_key_pem
+const getActorDualKeys = `-- name: GetActorDualKeys :one
+SELECT private_key_rsa_pem, private_key_ed25519_pem
 FROM local_actor_credentials
 WHERE actor_iri = $1
 `
 
-func (q *Queries) GetActorPrivateKey(ctx context.Context, actorIri string) (string, error) {
-	row := q.db.QueryRow(ctx, getActorPrivateKey, actorIri)
-	var private_key_pem string
-	err := row.Scan(&private_key_pem)
-	return private_key_pem, err
+type GetActorDualKeysRow struct {
+	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
+}
+
+func (q *Queries) GetActorDualKeys(ctx context.Context, actorIri string) (GetActorDualKeysRow, error) {
+	row := q.db.QueryRow(ctx, getActorDualKeys, actorIri)
+	var i GetActorDualKeysRow
+	err := row.Scan(&i.PrivateKeyRsaPem, &i.PrivateKeyEd25519Pem)
+	return i, err
 }
 
 const getIdentityCloneHubs = `-- name: GetIdentityCloneHubs :many

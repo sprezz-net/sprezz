@@ -79,11 +79,15 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 	if envelope.Inbox == "" {
 		return fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
 	}
-	privateKey, err := s.storage.GetActorPrivateKey(ctx, actorIRI)
+
+	dualKeys, err := s.storage.GetActorDualKeys(ctx, actorIRI)
 	if err != nil {
-		return fmt.Errorf("load actor private key: %w", err)
+		return fmt.Errorf("load actor dual-key credentials: %w", err)
 	}
-	return s.forwarder.ForwardFederatedActivity(ctx, envelope.Inbox, actorIRI+"#main-key", privateKey, payload)
+
+	// For legacy compatibility, we pass PrivateKeyRSAPEM to satisfy the current OutboundDispatcher perimeter interface.
+	// Future protocol extensions can naturally consume dualKeys.PrivateKeyEd25519PEM here without additional database hits.
+	return s.forwarder.ForwardFederatedActivity(ctx, envelope.Inbox, actorIRI+"#main-key", dualKeys.PrivateKeyRSAPEM, payload)
 }
 
 func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error) {
@@ -94,7 +98,7 @@ func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI str
 
 	followers := make([]string, 0)
 	for _, q := range quads {
-		// Converted from HasSuffix to strings.Contains to catch any W3C protocol layout
+		// Using strings.Contains to catch any W3C protocol layout
 		// variations variation dynamically (handles both http/https and singular/plural specs).
 		if strings.Contains(q.Predicate, "activitystreams#follower") || strings.Contains(q.Predicate, "activitystreams#followers") {
 			followers = append(followers, q.Object)
@@ -237,8 +241,7 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 		return fmt.Errorf("media storage engine driver is not configured")
 	}
 
-	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated (Section 9)
-	// CHANGED: Removed mediaCtx.Size argument and added sha256Hex assignment
+	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated.
 	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
 	if err != nil {
 		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
@@ -256,7 +259,7 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 		err := writer.SaveGraphVersionWithMedia(ctx, ports.MediaAttachmentParams{
 			ObjectName:   stableKey,
 			OriginalName: mediaCtx.OriginalName,
-			SHA256Hex:    sha256Hex, // ADDED: Pass the captured cryptographic content hash
+			SHA256Hex:    sha256Hex,
 			ContentType:  mediaCtx.ContentType,
 			FileSize:     mediaCtx.Size,
 			TenantID:     mediaCtx.TenantID,

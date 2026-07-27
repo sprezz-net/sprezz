@@ -27,7 +27,7 @@ func (UnimplementedStoragePort) HasActorCredential(ctx context.Context, tenantID
 	return false, nil
 }
 
-func (UnimplementedStoragePort) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyPEM string) error {
+func (UnimplementedStoragePort) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error {
 	return nil
 }
 
@@ -73,8 +73,8 @@ func (UnimplementedStoragePort) RegisterIdentityClone(ctx context.Context, guid 
 	return nil
 }
 
-func (UnimplementedStoragePort) GetActorPrivateKey(ctx context.Context, actorIRI string) (string, error) {
-	return "", nil
+func (UnimplementedStoragePort) GetActorDualKeys(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+	return nil, nil
 }
 
 // Core RDF Event Sourcing Write Operations Stubs
@@ -107,6 +107,10 @@ func (UnimplementedStoragePort) StreamQuadsBySubject(ctx context.Context, subjec
 
 func (UnimplementedStoragePort) GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error) {
 	return nil, nil
+}
+
+func (UnimplementedStoragePort) GetActorIRIByUsername(ctx context.Context, tenantID int32, username string) (string, error) {
+	return "", nil
 }
 
 func (UnimplementedStoragePort) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {

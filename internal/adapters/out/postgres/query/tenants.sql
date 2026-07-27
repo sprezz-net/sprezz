@@ -13,11 +13,11 @@ ON CONFLICT (domain_name) DO UPDATE SET domain_name = EXCLUDED.domain_name
 RETURNING id, domain_name;
 
 -- name: GetActorCredentialsByUsername :one
-SELECT actor_iri, tenant_id, username, private_key_pem
+SELECT actor_iri, tenant_id, username, private_key_rsa_pem, private_key_ed25519_pem
 FROM local_actor_credentials
 WHERE tenant_id = $1 AND username = $2;
 
 -- name: InsertActorCredentials :exec
-INSERT INTO local_actor_credentials (actor_iri, identity_guid, tenant_id, username, private_key_pem)
-VALUES ($1, NULL, $2, $3, $4)
+INSERT INTO local_actor_credentials (actor_iri, identity_guid, tenant_id, username, private_key_rsa_pem, private_key_ed25519_pem)
+VALUES ($1, NULL, $2, $3, $4, $5)
 ON CONFLICT (tenant_id, username) DO NOTHING;

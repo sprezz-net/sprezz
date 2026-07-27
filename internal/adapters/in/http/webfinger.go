@@ -93,6 +93,19 @@ func resolveProfile(ctx context.Context, storage ports.StoragePort, resource, te
 		return nil, err
 	}
 
+	// Dynamic System Actor UUIDv4 Profile Resolution Intercept
+	if strings.EqualFold(username, "server") {
+		// Look up only the canonical destination path string
+		actorIRI, err := storage.GetActorIRIByUsername(ctx, tenantID, "server")
+		if err == nil {
+			// Return a flat, minimal profile
+			return &model.ActorProfile{
+				IRI:      actorIRI,
+				Username: "server",
+			}, nil
+		}
+	}
+
 	profile, err := storage.GetActorProfileFromGraph(ctx, tenantID, username)
 	if err != nil {
 		return nil, fmt.Errorf("actor resource profile not found by handle")
@@ -118,27 +131,31 @@ func parseAndValidateResource(resource, tenantHost string) (string, error) {
 	return username, nil
 }
 
-// buildWebfingerResponse isolates standard JRD document structural assembly matching Section 3.1 & 5.2.
 func buildWebfingerResponse(resource, tenantHost string, profile *model.ActorProfile) WebfingerResponse {
 	resp := WebfingerResponse{
 		Subject:    resource,
-		Aliases:    []string{profile.IRI}, // Outputs stable https://<domain>/actor/<uuidv4> location
+		Aliases:    []string{profile.IRI}, // Outputs the precise, safe UUIDv4 path string
 		Properties: make(map[string]string),
 		Links: []WebfingerReferenceLink{
 			{
 				Rel:  "self",
 				Type: "application/activity+json",
-				Href: profile.IRI,
+				Href: profile.IRI, // Points remote instances strictly to the Actor Profile
 			},
 		},
 	}
 
-	// Section 5.3: Add the Zot6/Nomad protocol pointer link using human-readable handle
+	// Prevent system machine accounts from leaking human Nomadic parameters.
+	if strings.EqualFold(profile.Username, "server") {
+		return resp
+	}
+
+	// Existing human channel Nomadic fallback linkages.
 	if profile.NomadGUID != "" {
 		resp.Links = append(resp.Links, WebfingerReferenceLink{
 			Rel:  "http://purl.org/zot/protocol/6.0#guid",
 			Type: "application/x-zot+json",
-			Href: fmt.Sprintf("https://%s/zot/channel/%s", tenantHost, profile.Username), // Uses username routing token
+			Href: fmt.Sprintf("https://%s/zot/channel/%s", tenantHost, profile.Username),
 		})
 	}
 

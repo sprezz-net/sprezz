@@ -25,7 +25,7 @@ ON CONFLICT (identity_guid, hub_url) DO UPDATE SET
     is_local = EXCLUDED.is_local,
     synchronized_at = NOW();
 
--- name: GetActorPrivateKey :one
-SELECT private_key_pem
+-- name: GetActorDualKeys :one
+SELECT private_key_rsa_pem, private_key_ed25519_pem
 FROM local_actor_credentials
 WHERE actor_iri = $1;

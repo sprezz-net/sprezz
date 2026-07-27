@@ -15,8 +15,8 @@ type StoragePort interface {
 	// HasActorCredential checks if a specific username exists inside a designated tenant partition.
 	HasActorCredential(ctx context.Context, tenantID int32, username string) (bool, error)
 
-	// CreateActorCredential commits a newly generated cryptographic identity to long-term storage.
-	CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyPEM string) error
+	// CreateActorCredential commits a newly generated cryptographic dual-key identity to long-term storage.
+	CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error
 
 	IsDomainBlocked(ctx context.Context, domainName string) (bool, error)
 	EnqueueInbound(ctx context.Context, id string, activityIRI, objectIRI, targetDomain string, payload []byte) error
@@ -31,7 +31,7 @@ type StoragePort interface {
 	GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error)
 	UpsertNomadicIdentity(ctx context.Context, identity *model.NomadicIdentity) error
 	RegisterIdentityClone(ctx context.Context, guid string, hubURL string, isLocal bool) error
-	GetActorPrivateKey(ctx context.Context, actorIRI string) (string, error)
+	GetActorDualKeys(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error)
 
 	// Core RDF Event Sourcing Write Operations
 	CreateGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error)
@@ -44,6 +44,7 @@ type StoragePort interface {
 	StreamQuadsBySubject(ctx context.Context, subjectIRI string) ([]model.Quad, error)
 	GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error)
 
+	GetActorIRIByUsername(ctx context.Context, tenantID int32, username string) (string, error)
 	// GetActorProfileFromGraph searches the quad store matching the tenant ID and username handle,
 	// returning a unified profile structure parsed directly out of the RDF edges.
 	GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)

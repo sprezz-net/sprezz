@@ -7,10 +7,12 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getActorCredentialsByUsername = `-- name: GetActorCredentialsByUsername :one
-SELECT actor_iri, tenant_id, username, private_key_pem
+SELECT actor_iri, tenant_id, username, private_key_rsa_pem, private_key_ed25519_pem
 FROM local_actor_credentials
 WHERE tenant_id = $1 AND username = $2
 `
@@ -21,10 +23,11 @@ type GetActorCredentialsByUsernameParams struct {
 }
 
 type GetActorCredentialsByUsernameRow struct {
-	ActorIri      string `json:"actor_iri"`
-	TenantID      int32  `json:"tenant_id"`
-	Username      string `json:"username"`
-	PrivateKeyPem string `json:"private_key_pem"`
+	ActorIri             string      `json:"actor_iri"`
+	TenantID             int32       `json:"tenant_id"`
+	Username             string      `json:"username"`
+	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
 }
 
 func (q *Queries) GetActorCredentialsByUsername(ctx context.Context, arg GetActorCredentialsByUsernameParams) (GetActorCredentialsByUsernameRow, error) {
@@ -34,7 +37,8 @@ func (q *Queries) GetActorCredentialsByUsername(ctx context.Context, arg GetActo
 		&i.ActorIri,
 		&i.TenantID,
 		&i.Username,
-		&i.PrivateKeyPem,
+		&i.PrivateKeyRsaPem,
+		&i.PrivateKeyEd25519Pem,
 	)
 	return i, err
 }
@@ -51,16 +55,17 @@ func (q *Queries) GetTenantByDomain(ctx context.Context, domainName string) (Ser
 }
 
 const insertActorCredentials = `-- name: InsertActorCredentials :exec
-INSERT INTO local_actor_credentials (actor_iri, identity_guid, tenant_id, username, private_key_pem)
-VALUES ($1, NULL, $2, $3, $4)
+INSERT INTO local_actor_credentials (actor_iri, identity_guid, tenant_id, username, private_key_rsa_pem, private_key_ed25519_pem)
+VALUES ($1, NULL, $2, $3, $4, $5)
 ON CONFLICT (tenant_id, username) DO NOTHING
 `
 
 type InsertActorCredentialsParams struct {
-	ActorIri      string `json:"actor_iri"`
-	TenantID      int32  `json:"tenant_id"`
-	Username      string `json:"username"`
-	PrivateKeyPem string `json:"private_key_pem"`
+	ActorIri             string      `json:"actor_iri"`
+	TenantID             int32       `json:"tenant_id"`
+	Username             string      `json:"username"`
+	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
 }
 
 func (q *Queries) InsertActorCredentials(ctx context.Context, arg InsertActorCredentialsParams) error {
@@ -68,7 +73,8 @@ func (q *Queries) InsertActorCredentials(ctx context.Context, arg InsertActorCre
 		arg.ActorIri,
 		arg.TenantID,
 		arg.Username,
-		arg.PrivateKeyPem,
+		arg.PrivateKeyRsaPem,
+		arg.PrivateKeyEd25519Pem,
 	)
 	return err
 }

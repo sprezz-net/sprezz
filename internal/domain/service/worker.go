@@ -141,15 +141,16 @@ func NewOutboundWorkerEngine(cfg OutboundWorkerConfig, storage ports.StoragePort
 	}
 
 	runFn := func(ctx context.Context, task model.InboundTask) {
-		privateKey, err := storage.GetActorPrivateKey(ctx, task.ObjectIRI)
+		dualKeys, err := storage.GetActorDualKeys(ctx, task.ObjectIRI)
 		if err != nil {
-			_ = storage.MarkInboundFailed(ctx, task.ID, fmt.Sprintf("failed to resolve actor key: %v", err))
+			_ = storage.MarkInboundFailed(ctx, task.ID, fmt.Sprintf("failed to resolve actor dual-key credentials: %v", err))
 			return
 		}
 
 		keyID := task.ObjectIRI + "#main-key"
 
-		err = dispatcher.ForwardFederatedActivity(ctx, task.ActivityIRI, keyID, privateKey, task.Payload)
+		// Use the PrivateKeyRSAPEM key from the dual-key record to maintain backward federation compatibility.
+		err = dispatcher.ForwardFederatedActivity(ctx, task.ActivityIRI, keyID, dualKeys.PrivateKeyRSAPEM, task.Payload)
 		if err != nil {
 			reason := fmt.Sprintf("outbound transport dispatch failure: %v", err)
 			_ = storage.MarkInboundFailed(ctx, task.ID, reason)

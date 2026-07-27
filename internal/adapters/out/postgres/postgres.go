@@ -65,16 +65,16 @@ func (s *PostgresStorage) HasActorCredential(ctx context.Context, tenantID int32
 	return true, nil
 }
 
-func (s *PostgresStorage) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyPEM string) error {
-	// Persist the secure cryptographic system identity parameters to disk [source: 3]
+func (s *PostgresStorage) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error {
 	err := s.queries().InsertActorCredentials(ctx, db.InsertActorCredentialsParams{
-		ActorIri:      actorIRI,
-		TenantID:      tenantID,
-		Username:      username,
-		PrivateKeyPem: privateKeyPEM,
+		ActorIri:              actorIRI,
+		TenantID:              tenantID,
+		Username:              username,
+		PrivateKeyRsaPem:      privateKeyRSAPEM,
+		PrivateKeyEd25519Pem: pgtype.Text{String: privateKeyEd25519PEM, Valid: true},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to write programmatic actor credentials to storage: %w", err)
+		return fmt.Errorf("failed to write dual-key actor credentials to storage: %w", err)
 	}
 	return nil
 }
@@ -208,8 +208,16 @@ func (s *PostgresStorage) RegisterIdentityClone(ctx context.Context, guid, hubUR
 	return s.queries().RegisterIdentityClone(ctx, db.RegisterIdentityCloneParams{IdentityGuid: guid, HubUrl: hubURL, IsLocal: pgtype.Bool{Bool: isLocal, Valid: true}})
 }
 
-func (s *PostgresStorage) GetActorPrivateKey(ctx context.Context, actorIRI string) (string, error) {
-	return s.queries().GetActorPrivateKey(ctx, actorIRI)
+func (s *PostgresStorage) GetActorDualKeys(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+	row, err := s.queries().GetActorDualKeys(ctx, actorIRI)
+	if err != nil {
+		return nil, fmt.Errorf("failed fetching dual-key credential rows: %w", err)
+	}
+
+	return &model.ActorDualKeys{
+		PrivateKeyRSAPEM:     row.PrivateKeyRsaPem,
+		PrivateKeyEd25519PEM: row.PrivateKeyEd25519Pem.String, // Converts pgtype.Text safely
+	}, nil
 }
 
 func (s *PostgresStorage) CreateGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error) {
@@ -493,6 +501,17 @@ func uuidFromPG(value pgtype.UUID) (uuid.UUID, error) {
 // Clean context lifecycle binding wrapper to eliminate hanging database network sockets.
 func (s *PostgresStorage) safeRollback(ctx context.Context, tx pgx.Tx) {
 	_ = tx.Rollback(ctx)
+}
+
+func (s *PostgresStorage) GetActorIRIByUsername(ctx context.Context, tenantID int32, username string) (string, error) {
+	row, err := s.queries().GetActorCredentialsByUsername(ctx, db.GetActorCredentialsByUsernameParams{
+		TenantID: tenantID,
+		Username: username,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed fetching actor row for username lookup: %w", err)
+	}
+	return row.ActorIri, nil
 }
 
 func (s *PostgresStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {

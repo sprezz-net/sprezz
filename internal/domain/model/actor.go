@@ -8,3 +8,8 @@ type ActorProfile struct {
 	PublicKeyPEM string `json:"public_key_pem"` // Reconstructed signing key string
 	NomadGUID    string `json:"nomad_guid"`     // Zot6 global identifier string; empty if vanilla AP
 }
+
+type ActorDualKeys struct {
+	PrivateKeyRSAPEM      string
+	PrivateKeyEd25519PEM  string
+}
