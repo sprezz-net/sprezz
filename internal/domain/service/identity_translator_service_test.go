@@ -4,18 +4,17 @@ import (
 	"context"
 	"testing"
 
+	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
 )
 
-type mockIdentityTranslaterStorage struct {
-	portstub.UnimplementedStoragePort
-}
-
 func TestIdentityTranslatorService_InjectNomadicTriples_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	// 1. Initialize our clean, isolated translator layer
-	storageMock := &mockIdentityTranslaterStorage{}
+	storageMock := portmock.NewStoragePortMock(mc)
 	translator := service.NewIdentityTranslatorService(storageMock)
 
 	// 2. Setup mock target variables

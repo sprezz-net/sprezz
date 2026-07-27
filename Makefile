@@ -6,10 +6,10 @@ COVERAGE_FILE=coverage.out
 -include .env
 export
 
-.PHONY: all tidy sqlc-gen sqlc-check fmt lint test cover clean run build
+.PHONY: all tidy sqlc-gen sqlc-check mock-gen fmt lint test cover clean run build
 
 # Default target runs code generation and verification to guarantee a pristine repository state
-all: tidy sqlc-gen fmt lint test
+all: tidy sqlc-gen mock-gen fmt lint test
 
 ## tidy: Run go mod tidy to add missing and prune unused modules
 tidy:
@@ -35,6 +35,11 @@ sqlc-check:
 		echo "ERROR: sqlc command not found. Validation skipped."; \
 		exit 1; \
 	fi
+
+## mock-gen: Generate type-safe mocks for domain ports using minimock
+mock-gen:
+	@echo "=> Generating port mocks using minimock..."
+	go generate -run="go run" ./internal/domain/port/portmock/gen.go
 
 ## fmt: Automatically format all code files according to standard styles
 fmt:

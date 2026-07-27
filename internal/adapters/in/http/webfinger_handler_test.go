@@ -2,58 +2,37 @@ package http_test
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 )
 
-// MockWebfingerStorageAdapter isolates graph reads from live SQL engines.
-type MockWebfingerStorageAdapter struct {
-	portstub.UnimplementedStoragePort
-	OnGetActorProfileFromGraph func(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)
-	OnGetActorProfileByIRI     func(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error)
-}
-
-func (m *MockWebfingerStorageAdapter) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
-	if m.OnGetActorProfileFromGraph != nil {
-		return m.OnGetActorProfileFromGraph(ctx, tenantID, username)
-	}
-	return nil, errors.New("not implemented")
-}
-
-func (m *MockWebfingerStorageAdapter) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
-	if m.OnGetActorProfileByIRI != nil {
-		return m.OnGetActorProfileByIRI(ctx, tenantID, iri)
-	}
-	return nil, errors.New("not implemented")
-}
-
 func TestHandleWebfinger_Success_ByHandle(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	tenantDomains := []string{"sprezz.net"}
 	username := "alice"
 	actorUUID := "8f6c5b4a-2e1d-4c3b-9a8b-7f6e5d4c3b2a"
 	actorIRI := "https://sprezz.net" + actorUUID
 
-	mockStorage := &MockWebfingerStorageAdapter{
-		OnGetActorProfileFromGraph: func(ctx context.Context, tenantID int32, u string) (*model.ActorProfile, error) {
-			if u != username {
-				return nil, errors.New("not found")
-			}
-			return &model.ActorProfile{
-				UUID:         actorUUID,
-				IRI:          actorIRI,
-				Username:     username,
-				NomadGUID:    "nomad-guid-abc-123",
-				PublicKeyPEM: "mock-public-key",
-			}, nil
-		},
-	}
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.GetActorProfileFromGraphMock.Inspect(func(ctx context.Context, tenantID int32, u string) {
+		if u != username {
+			t.Errorf("Expected username %s, got %s", username, u)
+		}
+	}).Return(&model.ActorProfile{
+		UUID:         actorUUID,
+		IRI:          actorIRI,
+		Username:     username,
+		NomadGUID:    "nomad-guid-abc-123",
+		PublicKeyPEM: "mock-public-key",
+	}, nil)
 
 	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@sprezz.net", nil)
@@ -83,23 +62,23 @@ func TestHandleWebfinger_Success_ByHandle(t *testing.T) {
 }
 
 func TestHandleWebfinger_Success_ByIRI(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	tenantDomains := []string{"sprezz.net"}
 	actorUUID := "9a8b7f6e-5d4c-3b2a-1a2b-3c4d5e6f7a8b"
 	actorIRI := "https://sprezz.net" + actorUUID
 
-	mockStorage := &MockWebfingerStorageAdapter{
-		OnGetActorProfileByIRI: func(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
-			if iri != actorIRI {
-				return nil, errors.New("not found")
-			}
-			return &model.ActorProfile{
-				UUID:         actorUUID,
-				IRI:          actorIRI,
-				Username:     "bob",
-				PublicKeyPEM: "mock-public-key",
-			}, nil
-		},
-	}
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.GetActorProfileByIRIMock.Inspect(func(ctx context.Context, tenantID int32, iri string) {
+		if iri != actorIRI {
+			t.Errorf("Expected IRI %s, got %s", actorIRI, iri)
+		}
+	}).Return(&model.ActorProfile{
+		UUID:         actorUUID,
+		IRI:          actorIRI,
+		Username:     "bob",
+		PublicKeyPEM: "mock-public-key",
+	}, nil)
 
 	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource="+actorIRI, nil)
@@ -124,8 +103,10 @@ func TestHandleWebfinger_Success_ByIRI(t *testing.T) {
 }
 
 func TestHandleWebfinger_DomainForbidden(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	tenantDomains := []string{"sprezz.net"}
-	mockStorage := &MockWebfingerStorageAdapter{}
+	mockStorage := portmock.NewStoragePortMock(mc)
 
 	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:alice@malicious.com", nil)
@@ -141,8 +122,10 @@ func TestHandleWebfinger_DomainForbidden(t *testing.T) {
 }
 
 func TestHandleWebfinger_MalformedResource(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	tenantDomains := []string{"sprezz.net"}
-	mockStorage := &MockWebfingerStorageAdapter{}
+	mockStorage := portmock.NewStoragePortMock(mc)
 
 	handler := inhttp.HandleWebfinger(tenantDomains, mockStorage)
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/webfinger?resource=acct:bad-string-format", nil)

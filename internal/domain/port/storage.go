@@ -56,3 +56,9 @@ type StoragePort interface {
 	ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error
 	GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
 }
+
+// StorageAndGraphWriter combines StoragePort and GraphVersionWriter interfaces for testing/mocking convenience.
+type StorageAndGraphWriter interface {
+	StoragePort
+	GraphVersionWriter
+}

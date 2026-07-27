@@ -7,9 +7,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/port"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 )
 
 type mockSignatureVerifier struct {
@@ -23,20 +23,14 @@ func (m *mockSignatureVerifier) Verify(r *http.Request, body []byte) error {
 	return errors.New("signature mismatch")
 }
 
-// MockStorageAdapter implements port.StoragePort for middleware isolation testing.
-type mockStorageStub struct {
-	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
-}
-
-var _ port.StoragePort = (*mockStorageStub)(nil)
-
-// Override only the blocklist method called by the validator middleware
-func (m *mockStorageStub) IsDomainBlocked(ctx context.Context, d string) (bool, error) {
-	return d == "https://malicious.com", nil
-}
-
 func TestSignatureValidator_Handler(t *testing.T) {
-	storage := &mockStorageStub{}
+	mc := minimock.NewController(t)
+
+	storage := portmock.NewStoragePortMock(mc)
+	storage.IsDomainBlockedMock.Set(func(ctx context.Context, d string) (bool, error) {
+		return d == "https://malicious.com", nil
+	})
+
 	verifier := &mockSignatureVerifier{
 		OnVerify: func(r *http.Request, body []byte) error {
 			sig := r.Header.Get("Signature")

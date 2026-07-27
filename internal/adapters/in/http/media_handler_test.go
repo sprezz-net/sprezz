@@ -11,73 +11,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
 )
-
-// Ensure compile-time adherence to both target interface contracts
-var _ port.StoragePort = (*MockStorageAdapter)(nil)
-var _ port.GraphVersionWriter = (*MockStorageAdapter)(nil)
-
-// MockStorageAdapter implements port.StoragePort and port.GraphVersionWriter for isolation testing.
-type MockStorageAdapter struct {
-	portstub.UnimplementedStoragePort // Composite fallback embedded stub
-	OnSaveGraphVersion                func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
-	OnSaveGraphVersionWithMedia       func(ctx context.Context, params port.MediaAttachmentParams) error
-}
-
-// SaveGraphVersion satisfies port.GraphVersionWriter
-func (m *MockStorageAdapter) SaveGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
-	if m.OnSaveGraphVersion != nil {
-		return m.OnSaveGraphVersion(ctx, activityIRI, objectIRI, payload, quads)
-	}
-	return nil
-}
-
-// SaveGraphVersionWithMedia satisfies port.GraphVersionWriter
-func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, params port.MediaAttachmentParams) error {
-	if m.OnSaveGraphVersionWithMedia != nil {
-		return m.OnSaveGraphVersionWithMedia(ctx, params)
-	}
-	return nil
-}
-
-// MockParserAdapter implements port.JSONLDParserPort for isolation testing.
-type MockParserAdapter struct {
-	portstub.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloated layout)
-	OnToQuads                              func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error)
-}
-
-func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
-	if m.OnToQuads != nil {
-		return m.OnToQuads(ctx, graphID, mainObjectIRI, jsonPayload)
-	}
-	return []model.Quad{}, nil
-}
-
-// MockMediaAdapter implements port.MediaStoragePort for isolation testing.
-type MockMediaAdapter struct {
-	portstub.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloated layout)
-	OnPutObject                            func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
-	OnDeleteObject                         func(ctx context.Context, objectName string) error
-}
-
-func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
-	if m.OnPutObject != nil {
-		return m.OnPutObject(ctx, objectName, reader, contentType)
-	}
-	return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
-}
-
-func (m *MockMediaAdapter) DeleteObject(ctx context.Context, objectName string) error {
-	if m.OnDeleteObject != nil {
-		return m.OnDeleteObject(ctx, objectName)
-	}
-	return nil
-}
 
 // createMultipartRequest builds an in-memory body with structured file chunks and JSON-LD fields.
 func createMultipartRequest(t *testing.T, activityJSON string, filenames []string, fileContents []string) (string, *bytes.Buffer) {
@@ -111,6 +51,8 @@ func createMultipartRequest(t *testing.T, activityJSON string, filenames []strin
 }
 
 func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
 
 	// Provision multiple file items to traverse the loop context path
@@ -119,9 +61,20 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
 
 	// Instantiate mock domain boundaries
-	mockStorage := &MockStorageAdapter{}
-	mockParser := &MockParserAdapter{}
-	mockMedia := &MockMediaAdapter{}
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
+		return nil, nil
+	})
+
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.PutObjectMock.Set(func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+		return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
+	})
 
 	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
@@ -148,11 +101,17 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 }
 
 func TestMediaUploadHandler_ServeHTTP_MissingContext(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	filenames := []string{"photo.png"}
 	contents := []string{"bytes"}
 	contentType, body := createMultipartRequest(t, `{"id":"123"}`, filenames, contents)
 
-	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, &MockMediaAdapter{})
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -168,6 +127,8 @@ func TestMediaUploadHandler_ServeHTTP_MissingContext(t *testing.T) {
 }
 
 func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
 	filenames := []string{"first_file.jpg", "second_file.png"}
 	contents := []string{"bytes1", "bytes2"}
@@ -176,23 +137,29 @@ func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
 	purgedKeys := make(map[string]bool)
 	uploadCount := 0
 
-	mockMedia := &MockMediaAdapter{
-		OnPutObject: func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
-			uploadCount++
-			if uploadCount == 2 {
-				// Simulate infrastructure network or storage block issue on item 2
-				return "", "", errors.New("minio node disconnected")
-			}
-			return objectName, "checksum", nil
-		},
-		OnDeleteObject: func(ctx context.Context, objectName string) error {
-			purgedKeys[objectName] = true
-			return nil
-		},
-	}
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.PutObjectMock.Set(func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+		uploadCount++
+		if uploadCount == 2 {
+			// Simulate infrastructure network or storage block issue on item 2
+			return "", "", errors.New("minio node disconnected")
+		}
+		return objectName, "checksum", nil
+	})
+	mockMedia.DeleteObjectMock.Set(func(ctx context.Context, objectName string) error {
+		purgedKeys[objectName] = true
+		return nil
+	})
 
-	mockStorage := &MockStorageAdapter{}
-	mockParser := &MockParserAdapter{}
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
+		return nil, nil
+	})
 
 	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
@@ -218,11 +185,17 @@ func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
 }
 
 func TestMediaUploadHandler_ServeHTTP_MissingActivity(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	filenames := []string{"photo.png"}
 	contents := []string{"bytes"}
 	contentType, body := createMultipartRequest(t, "", filenames, contents) // Empty activity parameter
 
-	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, &MockMediaAdapter{})
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -246,19 +219,31 @@ func TestMediaUploadHandler_ServeHTTP_MissingActivity(t *testing.T) {
 }
 
 func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
 	filenames := []string{"document.pdf"}
 	contents := []string{"pdf-stream"}
 	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
 
-	mockStorage := &MockStorageAdapter{
-		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
-			// Trigger a structural relational failure abort
-			return errors.New("unique constraint violation on indexes")
-		},
-	}
-	mockParser := &MockParserAdapter{}
-	mockMedia := &MockMediaAdapter{}
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
+		// Trigger a structural relational failure abort
+		return errors.New("unique constraint violation on indexes")
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
+		return nil, nil
+	})
+
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.PutObjectMock.Set(func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+		return objectName, "checksum", nil
+	})
+	mockMedia.DeleteObjectMock.Set(func(ctx context.Context, objectName string) error {
+		return nil
+	})
 
 	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
@@ -266,7 +251,7 @@ func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
 	req.Header.Set("Content-Type", contentType)
 
-	// Inject upstream identity values utilizing type-safe constant enumerations (SA1029 Fix)
+	// Inject upstream identity values utilizing type-safe constant enumerations
 	ctx := context.WithValue(req.Context(), model.TenantIDKey, "tenant-alpha")
 	ctx = context.WithValue(ctx, model.ActorIRIKey, "https://sprezz.net")
 	req = req.WithContext(ctx)
@@ -280,32 +265,31 @@ func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 }
 
 func TestProcessInboundMediaTask_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	ctx := context.Background()
 	putInvoked := false
 	saveWithMediaInvoked := false
 
-	mockMedia := &MockMediaAdapter{
-		OnPutObject: func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
-			putInvoked = true
-			return "permanent/key-123", "hash-sha256-string", nil
-		},
-	}
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.PutObjectMock.Set(func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+		putInvoked = true
+		return "permanent/key-123", "hash-sha256-string", nil
+	})
 
-	mockStorage := &MockStorageAdapter{
-		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
-			saveWithMediaInvoked = true
-			if params.ObjectName != "permanent/key-123" || params.SHA256Hex != "hash-sha256-string" {
-				t.Errorf("Mismatched metadata mapping values inside parameters context shape: %+v", params)
-			}
-			return nil
-		},
-	}
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
+		saveWithMediaInvoked = true
+		if params.ObjectName != "permanent/key-123" || params.SHA256Hex != "hash-sha256-string" {
+			t.Errorf("Mismatched metadata mapping values inside parameters context shape: %+v", params)
+		}
+		return nil
+	})
 
-	mockParser := &MockParserAdapter{
-		OnToQuads: func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
-			return []model.Quad{{GraphID: graphID, Subject: "obj", Predicate: "pred", Object: "val"}}, nil
-		},
-	}
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
+		return []model.Quad{{GraphID: graphID, Subject: "obj", Predicate: "pred", Object: "val"}}, nil
+	})
 
 	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 
@@ -336,26 +320,31 @@ func TestProcessInboundMediaTask_Success(t *testing.T) {
 }
 
 func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	ctx := context.Background()
 	deleteInvokedWithKey := ""
 
-	mockMedia := &MockMediaAdapter{
-		OnPutObject: func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
-			return "permanent/isolated-key", "checksum", nil
-		},
-		OnDeleteObject: func(ctx context.Context, objectName string) error {
-			deleteInvokedWithKey = objectName
-			return nil
-		},
-	}
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.PutObjectMock.Set(func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+		return "permanent/isolated-key", "checksum", nil
+	})
+	mockMedia.DeleteObjectMock.Set(func(ctx context.Context, objectName string) error {
+		deleteInvokedWithKey = objectName
+		return nil
+	})
 
-	mockStorage := &MockStorageAdapter{
-		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
-			return errors.New("simulated postgres context deadlock isolation failure")
-		},
-	}
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
+		return errors.New("simulated postgres context deadlock isolation failure")
+	})
 
-	svc := service.NewActivityService(mockStorage, &MockParserAdapter{}, mockMedia)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
+		return nil, nil
+	})
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 
 	mediaCtx := port.InboundMediaContext{
 		ObjectName:  "tmp/failed-task",
@@ -374,19 +363,23 @@ func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
 }
 
 func TestPurgeOrphanedMedia_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+
 	ctx := context.Background()
 	deleteInvoked := false
 
-	mockMedia := &MockMediaAdapter{
-		OnDeleteObject: func(ctx context.Context, objectName string) error {
-			if objectName == "tmp/target-to-purge" {
-				deleteInvoked = true
-			}
-			return nil
-		},
-	}
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.DeleteObjectMock.Set(func(ctx context.Context, objectName string) error {
+		if objectName == "tmp/target-to-purge" {
+			deleteInvoked = true
+		}
+		return nil
+	})
 
-	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, mockMedia)
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 
 	if err := svc.PurgeOrphanedMedia(ctx, "tmp/target-to-purge"); err != nil {
 		t.Fatalf("Unexpected error surface uncovered during operational cleanup interface call: %v", err)

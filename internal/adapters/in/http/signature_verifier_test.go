@@ -1,4 +1,3 @@
-// File: /internal/adapters/in/http/signature_verifier_test.go
 package http_test
 
 import (
@@ -18,21 +17,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 )
-
-type MockVerifierStorage struct {
-	portstub.UnimplementedStoragePort
-	OnGetHistoricalKey func(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
-}
-
-func (m *MockVerifierStorage) GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error) {
-	if m.OnGetHistoricalKey != nil {
-		return m.OnGetHistoricalKey(ctx, actorIRI, keyType, signedAt)
-	}
-	return "", fmt.Errorf("no historical key mocked")
-}
 
 func TestSignatureVerifier_MultiAlgorithm_TableDriven(t *testing.T) {
 	// 1. Setup RSA Test Key Material
@@ -89,6 +77,8 @@ func TestSignatureVerifier_MultiAlgorithm_TableDriven(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			mc := minimock.NewController(t)
+
 			body := []byte(`{"id":"https://remote.example"}`)
 			date := time.Now().UTC().Format(http.TimeFormat)
 
@@ -108,14 +98,12 @@ func TestSignatureVerifier_MultiAlgorithm_TableDriven(t *testing.T) {
 				keyID, tt.algorithmStr, signatureBase64,
 			))
 
-			mockStorage := &MockVerifierStorage{
-				OnGetHistoricalKey: func(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error) {
-					if keyType != tt.keyType {
-						t.Errorf("Expected key type query %q, got %q", tt.keyType, keyType)
-					}
-					return tt.privatePEM, nil
-				},
-			}
+			mockStorage := portmock.NewStoragePortMock(mc)
+			mockStorage.GetHistoricalKeyMock.Inspect(func(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) {
+				if keyType != tt.keyType {
+					t.Errorf("Expected key type query %q, got %q", tt.keyType, keyType)
+				}
+			}).Return(tt.privatePEM, nil)
 
 			verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
 

@@ -1,4 +1,3 @@
-// File: /internal/adapters/out/federation/outbound_worker_test.go
 package federation_test
 
 import (
@@ -8,71 +7,59 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/adapters/out/federation"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/pkg/workers"
 )
 
-type mockOutboundStorage struct {
-	portstub.UnimplementedStoragePort
-	mu           sync.Mutex
-	tasks        []model.InboundTask
-	completedIDs map[string]struct{}
-	failedTasks  map[string]string
-}
-
-func (m *mockOutboundStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	res := m.tasks
-	m.tasks = nil
-	return res, nil
-}
-
-func (m *mockOutboundStorage) MarkInboundComplete(ctx context.Context, id string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.completedIDs[id] = struct{}{}
-	return nil
-}
-
-func (m *mockOutboundStorage) MarkInboundFailed(ctx context.Context, id, r string) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.failedTasks[id] = r
-	return nil
-}
-
-func (m *mockOutboundStorage) GetActorDualKeys(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
-	return &model.ActorDualKeys{
-		PrivateKeyRSAPEM:     "-----BEGIN RSA PRIVATE KEY-----",
-		PrivateKeyEd25519PEM: "-----BEGIN PRIVATE KEY-----",
-	}, nil
-}
-
-type mockOutboundDispatcher struct {
-	failInbox string
-}
-
-func (m *mockOutboundDispatcher) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
-	if targetInbox == m.failInbox {
-		return errors.New("network dispatch exception")
-	}
-	return nil
-}
-
 func TestOutboundWorkerEngine_Lifecycle(t *testing.T) {
-	storage := &mockOutboundStorage{
-		tasks: []model.InboundTask{
-			{ID: "outbound-success-1", ActivityIRI: "https://remote.com", ObjectIRI: "https://sprezz.net", Payload: []byte(`{}`)},
-			{ID: "outbound-failure-2", ActivityIRI: "https://blocked.com", ObjectIRI: "https://sprezz.net", Payload: []byte(`{}`)},
-		},
-		completedIDs: make(map[string]struct{}),
-		failedTasks:  make(map[string]string),
-	}
+	mc := minimock.NewController(t)
 
-	dispatcher := &mockOutboundDispatcher{failInbox: "https://blocked.com"}
+	var mu sync.Mutex
+	tasks := []model.InboundTask{
+		{ID: "outbound-success-1", ActivityIRI: "https://remote.com", ObjectIRI: "https://sprezz.net", Payload: []byte(`{}`)},
+		{ID: "outbound-failure-2", ActivityIRI: "https://blocked.com", ObjectIRI: "https://sprezz.net", Payload: []byte(`{}`)},
+	}
+	completedIDs := make(map[string]struct{})
+	failedTasks := make(map[string]string)
+
+	storage := portmock.NewStoragePortMock(mc)
+	storage.ClaimInboundBatchMock.Set(func(ctx context.Context, b int) ([]model.InboundTask, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		res := tasks
+		tasks = nil
+		return res, nil
+	})
+	storage.MarkInboundCompleteMock.Set(func(ctx context.Context, id string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		completedIDs[id] = struct{}{}
+		return nil
+	})
+	storage.MarkInboundFailedMock.Set(func(ctx context.Context, id, r string) error {
+		mu.Lock()
+		defer mu.Unlock()
+		failedTasks[id] = r
+		return nil
+	})
+	storage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		return &model.ActorDualKeys{
+			PrivateKeyRSAPEM:     "-----BEGIN RSA PRIVATE KEY-----",
+			PrivateKeyEd25519PEM: "-----BEGIN PRIVATE KEY-----",
+		}, nil
+	})
+
+	dispatcher := portmock.NewOutboundDispatcherMock(mc)
+	dispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		if targetInbox == "https://blocked.com" {
+			return errors.New("network dispatch exception")
+		}
+		return nil
+	})
+
 	cfg := workers.Config{NumWorkers: 2, BatchSize: 5, PollDelay: 10 * time.Millisecond}
 
 	engine := federation.NewOutboundWorkerEngine(cfg, storage, dispatcher)
@@ -83,13 +70,13 @@ func TestOutboundWorkerEngine_Lifecycle(t *testing.T) {
 	go func() { _ = engine.Start(ctx) }()
 	time.Sleep(20 * time.Millisecond)
 
-	storage.mu.Lock()
-	defer storage.mu.Unlock()
+	mu.Lock()
+	defer mu.Unlock()
 
-	if _, ok := storage.completedIDs["outbound-success-1"]; !ok {
+	if _, ok := completedIDs["outbound-success-1"]; !ok {
 		t.Error("Expected outbound-success-1 to be finalized and marked complete")
 	}
-	if _, ok := storage.failedTasks["outbound-failure-2"]; !ok {
+	if _, ok := failedTasks["outbound-failure-2"]; !ok {
 		t.Error("Expected outbound-failure-2 to report error tracking telemetry")
 	}
 }

@@ -7,37 +7,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/port"
-	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/port/portmock"
 )
 
-type MockInboxStorage struct {
-	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
-	BlockedDomain                     string
-	Enqueued                          bool
-	RecordedIRI                       string
-}
-
-var _ port.StoragePort = (*MockInboxStorage)(nil)
-
-func (m *MockInboxStorage) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
-	return domainName == m.BlockedDomain, nil
-}
-
-func (m *MockInboxStorage) EnqueueInbound(ctx context.Context, id, activityIRI, objectIRI, targetDomain string, payload []byte) error {
-	m.Enqueued = true
-	return nil
-}
-
-func (m *MockInboxStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
-	m.RecordedIRI = actorIRI
-	return nil
-}
-
 func TestInboxHandler_MethodNotAllowed(t *testing.T) {
-	storage := &MockInboxStorage{}
+	mc := minimock.NewController(t)
+
+	storage := portmock.NewStoragePortMock(mc)
 	handler := inhttp.NewInboxHandler(storage)
 
 	req := httptest.NewRequest(http.MethodGet, "/inbox", nil)
@@ -51,7 +30,9 @@ func TestInboxHandler_MethodNotAllowed(t *testing.T) {
 }
 
 func TestInboxHandler_Unauthenticated(t *testing.T) {
-	storage := &MockInboxStorage{}
+	mc := minimock.NewController(t)
+
+	storage := portmock.NewStoragePortMock(mc)
 	handler := inhttp.NewInboxHandler(storage)
 
 	req := httptest.NewRequest(http.MethodPost, "/inbox", bytes.NewReader([]byte(`{}`)))
@@ -65,7 +46,21 @@ func TestInboxHandler_Unauthenticated(t *testing.T) {
 }
 
 func TestInboxHandler_Success(t *testing.T) {
-	storage := &MockInboxStorage{}
+	mc := minimock.NewController(t)
+
+	storage := portmock.NewStoragePortMock(mc)
+	storage.EnqueueInboundMock.Inspect(func(ctx context.Context, id, activityIRI, objectIRI, targetDomain string, payload []byte) {
+		if activityIRI != "https://remote.com" {
+			t.Errorf("Expected activityIRI to be 'https://remote.com', got %s", activityIRI)
+		}
+		if objectIRI != "https://remote.com" {
+			t.Errorf("Expected objectIRI to be 'https://remote.com', got %s", objectIRI)
+		}
+		if targetDomain != "remote.com" {
+			t.Errorf("Expected targetDomain to be 'remote.com', got %s", targetDomain)
+		}
+	}).Return(nil)
+
 	handler := inhttp.NewInboxHandler(storage)
 
 	payload := []byte(`{"id":"https://remote.com","type":"Create","object":{"id":"https://remote.com"}}`)
@@ -81,8 +76,5 @@ func TestInboxHandler_Success(t *testing.T) {
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("Expected status 202 Accepted, got %d. Body: %s", rec.Code, rec.Body.String())
-	}
-	if !storage.Enqueued {
-		t.Error("Expected activity to be enqueued in storage port")
 	}
 }

@@ -4,12 +4,20 @@ import (
 	"context"
 	"testing"
 
+	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
+	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
 )
 
 func TestActivityService_FilterPublicAndAuthorizedQuads(t *testing.T) {
-	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, &MockMediaAdapter{})
+	mc := minimock.NewController(t)
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 	ctx := context.Background()
 
 	readerAlice := "https://sprezz.net/alice"
