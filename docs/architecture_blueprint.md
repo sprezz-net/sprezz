@@ -111,7 +111,6 @@ Driven ports describe capabilities required by the domain. To adhere to idiomati
 
 Adapters implement these capabilities without changing domain terminology or leaking driver-specific types into the core.
 
-
 ## 4. Inbound Activity and Cryptographic Verification Workflow
 
 ### 4.1 Request Acceptance and Native Asymmetric Verification
