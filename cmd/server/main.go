@@ -11,13 +11,16 @@ import (
 
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
+	"sprezz/internal/adapters/in/worker"
 	"sprezz/internal/adapters/out/cache"
+	"sprezz/internal/adapters/out/federation"
 	outhttp "sprezz/internal/adapters/out/http"
 	"sprezz/internal/adapters/out/jsonld"
 	"sprezz/internal/adapters/out/minio"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
 	"sprezz/internal/domain/service"
+	"sprezz/internal/pkg/workers"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -137,27 +140,29 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 }
 
 func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
-	inboundEngine := service.NewInboundWorkerEngine(service.WorkerConfig{
+	// Initialize the Inbound Driving Adapter using non-stuttering config
+	inboundEngine := worker.NewInboundWorkerEngine(workers.Config{
 		NumWorkers: 4,
 		BatchSize:  10,
 		PollDelay:  500 * time.Millisecond,
 	}, deps.postgresStorage, deps.activityService)
 
 	go func() {
-		log.Println("Launching async Inbound Worker Engine...")
+		log.Println("Launching async Driving Inbound Worker Engine...")
 		if err := inboundEngine.Start(ctx); err != nil {
 			log.Printf("Inbound worker engine exited with error: %v", err)
 		}
 	}()
 
-	outboundEngine := service.NewOutboundWorkerEngine(service.OutboundWorkerConfig{
+	// Initialize the Outbound Federation Driven Adapter using non-stuttering config
+	outboundEngine := federation.NewOutboundWorkerEngine(workers.Config{
 		NumWorkers: 4,
 		BatchSize:  10,
 		PollDelay:  500 * time.Millisecond,
 	}, deps.postgresStorage, deps.federatedSigner)
 
 	go func() {
-		log.Println("Launching async Outbound Federation Worker Engine...")
+		log.Println("Launching async Driven Outbound Federation Worker Engine...")
 		if err := outboundEngine.Start(ctx); err != nil {
 			log.Printf("Outbound worker engine exited with error: %v", err)
 		}
