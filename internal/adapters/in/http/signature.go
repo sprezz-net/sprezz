@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
@@ -52,8 +53,8 @@ func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error 
 		return fmt.Errorf("failed to resolve verification key: %w", err)
 	}
 
-	// Extract and decode the PEM block string back to a concrete *rsa.PublicKey object
-	rsaPubKey, err := decodePEMToRSAPublicKey(publicPEM)
+	// Dynamically decode the PEM block into a generic public key interface
+	pubKey, err := decodePEMToPublicKey(publicPEM)
 	if err != nil {
 		return fmt.Errorf("invalid public key structure: %w", err)
 	}
@@ -63,9 +64,20 @@ func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error 
 		return fmt.Errorf("failed to decode base64 signature: %w", err)
 	}
 
-	hashed := sha256.Sum256([]byte(signingString))
-	if err := rsa.VerifyPKCS1v15(rsaPubKey, crypto.SHA256, hashed[:], signatureBytes); err != nil {
-		return fmt.Errorf("cryptographic validation failed: signature mismatch")
+	// Branch out verification logic cleanly by concrete type
+	switch key := pubKey.(type) {
+	case *rsa.PublicKey:
+		hashed := sha256.Sum256([]byte(signingString))
+		if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, hashed[:], signatureBytes); err != nil {
+			return fmt.Errorf("cryptographic validation failed: RSA signature mismatch")
+		}
+	case ed25519.PublicKey:
+		// Ed25519 verifies over the raw signing string text bytes directly, without pre-hashing
+		if !ed25519.Verify(key, []byte(signingString), signatureBytes) {
+			return fmt.Errorf("cryptographic validation failed: Ed25519 signature mismatch")
+		}
+	default:
+		return fmt.Errorf("unsupported public key type encountered during verification pass")
 	}
 
 	return nil
@@ -112,29 +124,36 @@ func (v *FederatedSignatureVerifier) assertActorIdentityHeader(r *http.Request, 
 }
 
 // Isolated helper function to decode PEM text directly back to operational RSA object values cleanly
-func decodePEMToRSAPublicKey(publicPEM string) (*rsa.PublicKey, error) {
+func decodePEMToPublicKey(publicPEM string) (interface{}, error) {
 	block, _ := pem.Decode([]byte(publicPEM))
 	if block == nil {
 		return nil, fmt.Errorf("failed to decode PEM bytes")
 	}
 
-	// Try parsing it as a PKCS1 Private Key string first if it's a local credential block
-	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err == nil {
+	// 1. Try parsing as a standard PKCS8 Private Key (Handles both our local RSA and Ed25519 row contents)
+	if parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes); err == nil {
+		switch key := parsedKey.(type) {
+		case *rsa.PrivateKey:
+			return &key.PublicKey, nil
+		case ed25519.PrivateKey:
+			return key.Public(), nil
+		default:
+			return nil, fmt.Errorf("unsupported PKCS8 private key type")
+		}
+	}
+
+	// 2. Try parsing as a legacy PKCS1 RSA Private Key structure
+	if privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes); err == nil {
 		return &privKey.PublicKey, nil
 	}
 
-	// Otherwise, process standard PKIX public elements natively
+	// 3. Fallback: Parse as a standard PKIX Public Key document
 	pubKey, parseErr := x509.ParsePKIXPublicKey(block.Bytes)
-	if parseErr != nil {
-		return nil, parseErr
+	if parseErr == nil {
+		return pubKey, nil
 	}
 
-	rsaPubKey, ok := pubKey.(*rsa.PublicKey)
-	if !ok {
-		return nil, fmt.Errorf("decoded public key block is not a valid RSA type")
-	}
-	return rsaPubKey, nil
+	return nil, fmt.Errorf("failed to process incoming verification bytes via all parsers: %w", parseErr)
 }
 
 func parseSignatureHeader(header string) map[string]string {
