@@ -6,15 +6,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"sprezz/internal/domain/port"
 	"sync"
-
-	"sprezz/internal/domain/ports"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
-// MinIOStorageAdapter implements ports.MediaStoragePort for the Sprezz federation server.
+// MinIOStorageAdapter implements port.MediaStoragePort for the Sprezz federation server.
 type MinIOStorageAdapter struct {
 	client         *minio.Client
 	bucketName     string
@@ -22,7 +21,7 @@ type MinIOStorageAdapter struct {
 }
 
 // Ensure interface adherence at compile time
-var _ ports.MediaStoragePort = (*MinIOStorageAdapter)(nil)
+var _ port.MediaStoragePort = (*MinIOStorageAdapter)(nil)
 
 // NewMinIOStorageAdapter instantiates the client safely using 5 parameters and custom optional overlays.
 func NewMinIOStorageAdapter(endpoint, accessKey, secretKey, bucketName string, useSSL bool, extraOpts ...minio.Options) (*MinIOStorageAdapter, error) {
@@ -89,7 +88,7 @@ func (m *MinIOStorageAdapter) ensureBucket(ctx context.Context, bucket string) e
 }
 
 // PutObject streams data from the network into MinIO while computing a SHA-256 fingerprint concurrently.
-// This matches the exact contract signature expected by ports.MediaStoragePort.
+// This matches the exact contract signature expected by port.MediaStoragePort.
 func (m *MinIOStorageAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
 	if err := m.ensureBucket(ctx, m.bucketName); err != nil {
 		return "", "", err

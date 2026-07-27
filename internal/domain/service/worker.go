@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
 // WorkerConfig holds the shared performance configuration tuning attributes.
@@ -116,7 +116,7 @@ func (e *BatchWorkerEngine[T]) workerLoop(ctx context.Context, taskChan <-chan T
 }
 
 // NewInboundWorkerEngine initializes the inbound ActivityPub ingestion engine using the generic framework.
-func NewInboundWorkerEngine(cfg WorkerConfig, storage ports.StoragePort, svc ports.ActivityServicePort) *BatchWorkerEngine[model.InboundTask] {
+func NewInboundWorkerEngine(cfg WorkerConfig, storage port.StoragePort, svc port.ActivityServicePort) *BatchWorkerEngine[model.InboundTask] {
 	claimFn := func(ctx context.Context, batchSize int) ([]model.InboundTask, error) {
 		return storage.ClaimInboundBatch(ctx, batchSize)
 	}
@@ -135,7 +135,7 @@ func NewInboundWorkerEngine(cfg WorkerConfig, storage ports.StoragePort, svc por
 }
 
 // NewOutboundWorkerEngine initializes the federation distribution engine using the generic framework.
-func NewOutboundWorkerEngine(cfg OutboundWorkerConfig, storage ports.StoragePort, dispatcher ports.OutboundDispatcher) *BatchWorkerEngine[model.InboundTask] {
+func NewOutboundWorkerEngine(cfg OutboundWorkerConfig, storage port.StoragePort, dispatcher port.OutboundDispatcher) *BatchWorkerEngine[model.InboundTask] {
 	claimFn := func(ctx context.Context, batchSize int) ([]model.InboundTask, error) {
 		return storage.ClaimInboundBatch(ctx, batchSize)
 	}

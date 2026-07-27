@@ -9,18 +9,18 @@ import (
 
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/ports"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port"
+	"sprezz/internal/domain/port/portstub"
 )
 
 type MockInboxStorage struct {
-	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
-	BlockedDomain                      string
-	Enqueued                           bool
-	RecordedIRI                        string
+	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	BlockedDomain                     string
+	Enqueued                          bool
+	RecordedIRI                       string
 }
 
-var _ ports.StoragePort = (*MockInboxStorage)(nil)
+var _ port.StoragePort = (*MockInboxStorage)(nil)
 
 func (m *MockInboxStorage) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
 	return domainName == m.BlockedDomain, nil

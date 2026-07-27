@@ -8,22 +8,22 @@ import (
 	"time"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port"
+	"sprezz/internal/domain/port/portstub"
 	"sprezz/internal/domain/service"
 )
 
-var _ ports.StoragePort = (*MockStorageAdapter)(nil)
+var _ port.StoragePort = (*MockStorageAdapter)(nil)
 
 type MockStorageAdapter struct {
-	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
 	OnCreateGraphVersion               func(activityIRI, objectIRI string, payload []byte) (int64, error)
 	OnSaveQuads                        func(quads []model.Quad) error
 	OnStreamQuadsBySubject             func(subjectIRI string) ([]model.Quad, error)
 	GetCollectionPayloadsFunc          func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
 
 	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
-	OnSaveGraphVersionWithMedia func(ctx context.Context, params ports.MediaAttachmentParams) error
+	OnSaveGraphVersionWithMedia func(ctx context.Context, params port.MediaAttachmentParams) error
 
 	// Dual-key orchestration mock hooks
 	OnGetActorCredentials   func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error)
@@ -56,7 +56,7 @@ func (m *MockStorageAdapter) SaveGraphVersion(ctx context.Context, activityIRI, 
 	return nil
 }
 
-func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, params ports.MediaAttachmentParams) error {
+func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, params port.MediaAttachmentParams) error {
 	if m.OnSaveGraphVersionWithMedia != nil {
 		return m.OnSaveGraphVersionWithMedia(ctx, params)
 	}
@@ -98,10 +98,10 @@ func (m *MockStorageAdapter) ArchiveKeyHistory(ctx context.Context, actorIRI str
 	return nil
 }
 
-var _ ports.JSONLDParserPort = (*MockParserAdapter)(nil)
+var _ port.JSONLDParserPort = (*MockParserAdapter)(nil)
 
 type MockParserAdapter struct {
-	portstest.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloating layout)
+	portstub.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloating layout)
 	OnToQuads                               func(graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error)
 }
 
@@ -112,9 +112,9 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 	return []model.Quad{}, nil
 }
 
-// MockMediaAdapter implements ports.MediaStoragePort for testing.
+// MockMediaAdapter implements port.MediaStoragePort for testing.
 type MockMediaAdapter struct {
-	portstest.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloating layout)
+	portstub.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloating layout)
 	PutObjectFunc                           func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
 	DeleteObjectFunc                        func(ctx context.Context, objectName string) error
 }

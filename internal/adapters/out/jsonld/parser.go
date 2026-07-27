@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 
 	"github.com/piprate/json-gold/ld"
 )
@@ -32,7 +32,7 @@ func NewJSONLDParser() *JSONLDParser {
 	}
 }
 
-var _ ports.JSONLDParserPort = (*JSONLDParser)(nil)
+var _ port.JSONLDParserPort = (*JSONLDParser)(nil)
 
 func (p *JSONLDParser) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
 	proc := ld.NewJsonLdProcessor()

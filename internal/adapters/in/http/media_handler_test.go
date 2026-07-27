@@ -13,23 +13,23 @@ import (
 
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port"
+	"sprezz/internal/domain/port/portstub"
 	"sprezz/internal/domain/service"
 )
 
 // Ensure compile-time adherence to both target interface contracts
-var _ ports.StoragePort = (*MockStorageAdapter)(nil)
-var _ ports.GraphVersionWriter = (*MockStorageAdapter)(nil)
+var _ port.StoragePort = (*MockStorageAdapter)(nil)
+var _ port.GraphVersionWriter = (*MockStorageAdapter)(nil)
 
-// MockStorageAdapter implements ports.StoragePort and ports.GraphVersionWriter for isolation testing.
+// MockStorageAdapter implements port.StoragePort and port.GraphVersionWriter for isolation testing.
 type MockStorageAdapter struct {
-	portstest.UnimplementedStoragePort // Composite fallback embedded stub
-	OnSaveGraphVersion                 func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
-	OnSaveGraphVersionWithMedia        func(ctx context.Context, params ports.MediaAttachmentParams) error
+	portstub.UnimplementedStoragePort // Composite fallback embedded stub
+	OnSaveGraphVersion                func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
+	OnSaveGraphVersionWithMedia       func(ctx context.Context, params port.MediaAttachmentParams) error
 }
 
-// SaveGraphVersion satisfies ports.GraphVersionWriter
+// SaveGraphVersion satisfies port.GraphVersionWriter
 func (m *MockStorageAdapter) SaveGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
 	if m.OnSaveGraphVersion != nil {
 		return m.OnSaveGraphVersion(ctx, activityIRI, objectIRI, payload, quads)
@@ -37,27 +37,27 @@ func (m *MockStorageAdapter) SaveGraphVersion(ctx context.Context, activityIRI, 
 	return nil
 }
 
-// SaveGraphVersionWithMedia satisfies ports.GraphVersionWriter
-func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, params ports.MediaAttachmentParams) error {
+// SaveGraphVersionWithMedia satisfies port.GraphVersionWriter
+func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, params port.MediaAttachmentParams) error {
 	if m.OnSaveGraphVersionWithMedia != nil {
 		return m.OnSaveGraphVersionWithMedia(ctx, params)
 	}
 	return nil
 }
 
-// MockParserAdapter implements ports.JSONLDParserPort for isolation testing.
+// MockParserAdapter implements port.JSONLDParserPort for isolation testing.
 type MockParserAdapter struct {
-	portstest.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloated layout)
+	portstub.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloated layout)
 }
 
 func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
 	return []model.Quad{}, nil
 }
 
-// MockMediaAdapter implements ports.MediaStoragePort for isolation testing.
+// MockMediaAdapter implements port.MediaStoragePort for isolation testing.
 type MockMediaAdapter struct {
-	portstest.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloated layout)
-	OnPutObject                             func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
+	portstub.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloated layout)
+	OnPutObject                            func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
 }
 
 func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
@@ -182,7 +182,7 @@ func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 	contentType, body := createMultipartRequest(t, activityPayload, "document.pdf", "pdf-stream")
 
 	mockStorage := &MockStorageAdapter{
-		OnSaveGraphVersionWithMedia: func(ctx context.Context, params ports.MediaAttachmentParams) error {
+		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
 			// Trigger a structural relational failure abort
 			return errors.New("unique constraint violation on indexes")
 		},

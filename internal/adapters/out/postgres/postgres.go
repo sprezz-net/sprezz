@@ -10,7 +10,7 @@ import (
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/postgres/db"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -27,8 +27,8 @@ func NewPostgresStorage(db *pgxpool.Pool, cache *cache.DictionaryCache) *Postgre
 	return &PostgresStorage{db: db, cache: cache}
 }
 
-var _ ports.StoragePort = (*PostgresStorage)(nil)
-var _ ports.GraphVersionWriter = (*PostgresStorage)(nil)
+var _ port.StoragePort = (*PostgresStorage)(nil)
+var _ port.GraphVersionWriter = (*PostgresStorage)(nil)
 
 func (s *PostgresStorage) queries() *db.Queries { return db.New(s.db) }
 
@@ -85,10 +85,10 @@ func (s *PostgresStorage) GetActorCredentials(ctx context.Context, tenantID int3
 
 func (s *PostgresStorage) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error {
 	err := s.queries().InsertActorCredentials(ctx, db.InsertActorCredentialsParams{
-		ActorIri:              actorIRI,
-		TenantID:              tenantID,
-		Username:              username,
-		PrivateKeyRsaPem:      privateKeyRSAPEM,
+		ActorIri:             actorIRI,
+		TenantID:             tenantID,
+		Username:             username,
+		PrivateKeyRsaPem:     privateKeyRSAPEM,
 		PrivateKeyEd25519Pem: pgtype.Text{String: privateKeyEd25519PEM, Valid: true},
 	})
 	if err != nil {
@@ -266,7 +266,7 @@ func (s *PostgresStorage) SaveGraphVersion(ctx context.Context, activityIRI, obj
 	return tx.Commit(ctx)
 }
 
-func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params ports.MediaAttachmentParams) error {
+func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params port.MediaAttachmentParams) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err

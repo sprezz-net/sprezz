@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/ports"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port"
+	"sprezz/internal/domain/port/portstub"
 )
 
 type mockSignatureVerifier struct {
@@ -23,12 +23,12 @@ func (m *mockSignatureVerifier) Verify(r *http.Request, body []byte) error {
 	return errors.New("signature mismatch")
 }
 
-// MockStorageAdapter implements ports.StoragePort for middleware isolation testing.
+// MockStorageAdapter implements port.StoragePort for middleware isolation testing.
 type mockStorageStub struct {
-	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
 }
 
-var _ ports.StoragePort = (*mockStorageStub)(nil)
+var _ port.StoragePort = (*mockStorageStub)(nil)
 
 // Override only the blocklist method called by the validator middleware
 func (m *mockStorageStub) IsDomainBlocked(ctx context.Context, d string) (bool, error) {

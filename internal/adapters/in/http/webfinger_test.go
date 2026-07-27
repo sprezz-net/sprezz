@@ -10,12 +10,12 @@ import (
 
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port/portstub"
 )
 
 // MockWebfingerStorageAdapter isolates graph reads from live SQL engines.
 type MockWebfingerStorageAdapter struct {
-	portstest.UnimplementedStoragePort
+	portstub.UnimplementedStoragePort
 	OnGetActorProfileFromGraph func(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)
 	OnGetActorProfileByIRI     func(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error)
 }

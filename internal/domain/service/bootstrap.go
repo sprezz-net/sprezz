@@ -6,16 +6,16 @@ import (
 	"log"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 
 	"github.com/google/uuid"
 )
 
 type BootstrapService struct {
-	storagePort ports.StoragePort
+	storagePort port.StoragePort
 }
 
-func NewBootstrapService(sp ports.StoragePort) *BootstrapService {
+func NewBootstrapService(sp port.StoragePort) *BootstrapService {
 	return &BootstrapService{storagePort: sp}
 }
 

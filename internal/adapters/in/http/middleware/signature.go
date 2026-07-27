@@ -5,7 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
 // The shared package-visible contextKey is natively inherited from tenant.go.
@@ -18,10 +18,10 @@ type SignatureVerifier interface {
 
 type SignatureValidator struct {
 	verifier SignatureVerifier
-	storage  ports.StoragePort
+	storage  port.StoragePort
 }
 
-func NewSignatureValidator(verifier SignatureVerifier, storage ports.StoragePort) *SignatureValidator {
+func NewSignatureValidator(verifier SignatureVerifier, storage port.StoragePort) *SignatureValidator {
 	return &SignatureValidator{
 		verifier: verifier,
 		storage:  storage,

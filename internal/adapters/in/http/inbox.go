@@ -7,18 +7,18 @@ import (
 	"strings"
 
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 type InboxHandler struct {
-	storage ports.StoragePort
+	storage port.StoragePort
 }
 
 // NewInboxHandler initializes a clean, decoupled handler. Verification is handled at the edge routing middleware.
-func NewInboxHandler(storage ports.StoragePort) *InboxHandler {
+func NewInboxHandler(storage port.StoragePort) *InboxHandler {
 	return &InboxHandler{storage: storage}
 }
 

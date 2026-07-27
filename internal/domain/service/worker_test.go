@@ -8,17 +8,17 @@ import (
 	"time"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port/portstub"
 	"sprezz/internal/domain/service"
 )
 
 type mockWorkerStorage struct {
-	portstest.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
-	mu                                 sync.Mutex
-	tasks                              []model.InboundTask
-	completedIDs                       map[string]struct{}
-	failedTasks                        map[string]string
-	privateKey                         string
+	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
+	mu                                sync.Mutex
+	tasks                             []model.InboundTask
+	completedIDs                      map[string]struct{}
+	failedTasks                       map[string]string
+	privateKey                        string
 }
 
 func (m *mockWorkerStorage) ClaimInboundBatch(ctx context.Context, b int) ([]model.InboundTask, error) {

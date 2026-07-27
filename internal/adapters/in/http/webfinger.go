@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
 type WebfingerResponse struct {
@@ -27,7 +27,7 @@ type WebfingerReferenceLink struct {
 }
 
 // HandleWebfinger takes the configured tenant domains and reads actors dynamically out of the RDF store.
-func HandleWebfinger(tenantDomains []string, storage ports.StoragePort) http.HandlerFunc {
+func HandleWebfinger(tenantDomains []string, storage port.StoragePort) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		resource := r.URL.Query().Get("resource")
@@ -74,7 +74,7 @@ func isTenantAllowed(tenantHost string, tenantDomains []string) bool {
 }
 
 // resolveProfile routes lookups either through direct stable IRIs or human-readable handles.
-func resolveProfile(ctx context.Context, storage ports.StoragePort, resource, tenantHost string, tenantID int32) (*model.ActorProfile, error) {
+func resolveProfile(ctx context.Context, storage port.StoragePort, resource, tenantHost string, tenantID int32) (*model.ActorProfile, error) {
 	// If the resource is a direct URL pointer (e.g. https://yourdomain.com/actor/<uuidv4>)
 	if strings.HasPrefix(resource, "https://") {
 		if !strings.Contains(resource, tenantHost) {

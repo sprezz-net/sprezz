@@ -1,5 +1,5 @@
 // File: /internal/domain/ports/portstest/driven_stub.go
-package portstest
+package portstub
 
 import (
 	"context"
@@ -7,16 +7,16 @@ import (
 	"time"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
-// UnimplementedStoragePort implements every method of ports.StoragePort with non-operational, zero-value fallbacks.
+// UnimplementedStoragePort implements every method of port.StoragePort with non-operational, zero-value fallbacks.
 // Embed this into any test mock struct across your application to inherit default behaviors and maintain
-// interface compliance automatically when new methods are added to ports.StoragePort.
+// interface compliance automatically when new methods are added to port.StoragePort.
 type UnimplementedStoragePort struct{}
 
-// Assert at compilation that this stub fully satisfies the ports.StoragePort interface contract
-var _ ports.StoragePort = (*UnimplementedStoragePort)(nil)
+// Assert at compilation that this stub fully satisfies the port.StoragePort interface contract
+var _ port.StoragePort = (*UnimplementedStoragePort)(nil)
 
 // Domain Routing & Multi-Tenant Isolation Stubs
 
@@ -134,10 +134,10 @@ func (UnimplementedStoragePort) GetHistoricalKey(ctx context.Context, actorIRI s
 	return "", nil
 }
 
-// UnimplementedMediaStoragePort provides zero-value stubs for ports.MediaStoragePort.
+// UnimplementedMediaStoragePort provides zero-value stubs for port.MediaStoragePort.
 type UnimplementedMediaStoragePort struct{}
 
-var _ ports.MediaStoragePort = (*UnimplementedMediaStoragePort)(nil)
+var _ port.MediaStoragePort = (*UnimplementedMediaStoragePort)(nil)
 
 func (UnimplementedMediaStoragePort) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
 	return "", "", nil
@@ -147,10 +147,10 @@ func (UnimplementedMediaStoragePort) DeleteObject(ctx context.Context, objectNam
 	return nil
 }
 
-// UnimplementedJSONLDParserPort provides zero-value stubs for ports.JSONLDParserPort.
+// UnimplementedJSONLDParserPort provides zero-value stubs for port.JSONLDParserPort.
 type UnimplementedJSONLDParserPort struct{}
 
-var _ ports.JSONLDParserPort = (*UnimplementedJSONLDParserPort)(nil)
+var _ port.JSONLDParserPort = (*UnimplementedJSONLDParserPort)(nil)
 
 func (UnimplementedJSONLDParserPort) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
 	return nil, nil

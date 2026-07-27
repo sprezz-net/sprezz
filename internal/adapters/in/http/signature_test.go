@@ -19,11 +19,11 @@ import (
 	"time"
 
 	inhttp "sprezz/internal/adapters/in/http"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port/portstub"
 )
 
 type MockVerifierStorage struct {
-	portstest.UnimplementedStoragePort
+	portstub.UnimplementedStoragePort
 	OnGetHistoricalKey func(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
 }
 

@@ -6,11 +6,11 @@ import (
 
 	"sprezz/internal/domain/identity"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports/portstest"
+	"sprezz/internal/domain/port/portstub"
 )
 
 type mockIdentityStorage struct {
-	portstest.UnimplementedStoragePort
+	portstub.UnimplementedStoragePort
 	OnGetNomadicIdentity func(ctx context.Context, guid string) (*model.NomadicIdentity, error)
 }
 

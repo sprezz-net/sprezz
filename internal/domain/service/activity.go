@@ -9,17 +9,17 @@ import (
 	"time"
 
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
 type ActivityService struct {
-	storage      ports.StoragePort
-	parser       ports.JSONLDParserPort
-	forwarder    ports.OutboundDispatcher
-	mediaStorage ports.MediaStoragePort
+	storage      port.StoragePort
+	parser       port.JSONLDParserPort
+	forwarder    port.OutboundDispatcher
+	mediaStorage port.MediaStoragePort
 }
 
-func NewActivityService(storage ports.StoragePort, parser ports.JSONLDParserPort, media ports.MediaStoragePort, forwarders ...ports.OutboundDispatcher) *ActivityService {
+func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, forwarders ...port.OutboundDispatcher) *ActivityService {
 	service := &ActivityService{
 		storage:      storage,
 		parser:       parser,
@@ -31,12 +31,12 @@ func NewActivityService(storage ports.StoragePort, parser ports.JSONLDParserPort
 	return service
 }
 
-var _ ports.ActivityServicePort = (*ActivityService)(nil)
+var _ port.ActivityServicePort = (*ActivityService)(nil)
 
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
 	// If the storage instance implements the composite GraphVersionWriter interface,
 	// utilize the transaction-wrapped batch writing method.
-	if writer, ok := s.storage.(ports.GraphVersionWriter); ok {
+	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
 		quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
 		if err != nil {
 			return fmt.Errorf("failed to parse activity payload to quads: %w", err)
@@ -256,8 +256,8 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 	}
 
 	// 3. Delegate atomic multi-table execution down to the transaction writer engine
-	if writer, ok := s.storage.(ports.GraphVersionWriter); ok {
-		err := writer.SaveGraphVersionWithMedia(ctx, ports.MediaAttachmentParams{
+	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
+		err := writer.SaveGraphVersionWithMedia(ctx, port.MediaAttachmentParams{
 			ObjectName:   stableKey,
 			OriginalName: mediaCtx.OriginalName,
 			SHA256Hex:    sha256Hex,

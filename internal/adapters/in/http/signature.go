@@ -15,14 +15,14 @@ import (
 	"time"
 
 	"sprezz/internal/adapters/in/http/middleware"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
 type FederatedSignatureVerifier struct {
-	storage ports.StoragePort
+	storage port.StoragePort
 }
 
-func NewFederatedSignatureVerifier(s ports.StoragePort) *FederatedSignatureVerifier {
+func NewFederatedSignatureVerifier(s port.StoragePort) *FederatedSignatureVerifier {
 	return &FederatedSignatureVerifier{storage: s}
 }
 

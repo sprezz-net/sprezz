@@ -3,14 +3,14 @@ package identity
 import (
 	"context"
 	"sprezz/internal/domain/model"
-	"sprezz/internal/domain/ports"
+	"sprezz/internal/domain/port"
 )
 
 type IdentityTranslator struct {
-	storage ports.StoragePort
+	storage port.StoragePort
 }
 
-func NewIdentityTranslator(storage ports.StoragePort) *IdentityTranslator {
+func NewIdentityTranslator(storage port.StoragePort) *IdentityTranslator {
 	return &IdentityTranslator{storage: storage}
 }
 
