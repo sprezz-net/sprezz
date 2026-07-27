@@ -21,22 +21,37 @@ The system must support the following functional outcomes:
 ## 2. System Behavior
 
 ```mermaid
-flowchart LR
+flowchart TD
     Remote[Remote ActivityPub or Nomad server] --> HTTP[HTTP driving adapter]
     HTTP --> Verify[Signature and request validation]
-    Verify --> Queue[Inbound queue]
+
+    %% Standard Path
+    Verify -->|Standard Payload| Queue[Inbound queue]
     Queue --> Worker[Generic BatchWorkerEngine pool]
     Worker --> Service[Activity service]
     Service --> Parser[Offline JSON-LD parser]
     Service --> Store[PostgreSQL and sqlc adapter]
     Store --> Graph[RDF graph and quad history]
-    HTTP --> Collections[Actor and collection resources]
     Service --> Outbound[Signed outbound dispatcher]
     Outbound --> Remote
-    Service --> Media[MinIO media adapter]
+
+    %% Multipart Upload Loop Path
+    Verify -->|Multipart Attachment Form Array| QuotaGuard{Pre-Flight Quota Guard}
+    QuotaGuard -->|Ceiling Exceeded| Fail413[HTTP 413 Payload Too Large]
+    QuotaGuard -->|Authorized| TeeStream[io.TeeReader Stream Hashing]
+    TeeStream --> MediaPort[MinIO Media Storage Port]
+    MediaPort -->|PutObject Success| AtomicDB[SaveGraphVersionWithMedia Transaction]
+
+    %% Rollback Branch
+    AtomicDB -->|Transaction Error / Mid-Loop Abort| Rollback[Compensating Loop Cleanup]
+    Rollback -->|PurgeOrphanedMedia| DeleteMedia[MinIO Object Deletion]
+
+    HTTP --> Collections[Actor and collection resources]
 ```
 
-The request path performs validation and durable queueing only. Parsing, graph persistence, identity enrichment, and downstream delivery happen asynchronously unless a specific operation explicitly requires an immediate read.
+The request path performs validation and durable queueing only for standard non-media payloads. Parsing, graph persistence, identity enrichment, and downstream delivery happen asynchronously unless a specific operation explicitly requires an immediate read.
+
+When a multipart media payload is intercepted, the driving HTTP adapter intercepts the pipeline to run synchronous **Pre-Flight Ingestion Verification** loops. It maps byte footprints against dynamic ledger thresholds before executing resource-isolated `io.TeeReader` operations, streaming files directly to the object storage node ahead of transactional relational database commits. If any single tracking transaction fails or encounters unexpected errors mid-loop, a tight backward-walking **Compensating Rollback** walker fires instantly to clean up and delete any raw blobs generated during that specific multi-part lifecycle request.
 
 ## 3. Architectural Boundaries
 
@@ -86,7 +101,7 @@ The service owns business sequencing and error semantics. It does not own connec
 
 ### 3.3 Driven Ports
 
-Driven ports describe capabilities required by the domain:
+Driven ports describe capabilities required by the domain. To adhere to idiomatic Go development philosophies, abstract service layer contracts are aggregated cleanly within a singular package namespace (`internal/domain/port/`):
 
 - Storage of queues, tenants, identities, graph versions, quads, and collection data.
 - High-performance, zero-allocation database stream writing via compact 64-bit integer mappings (`model.QuadID`).
@@ -95,6 +110,7 @@ Driven ports describe capabilities required by the domain:
 - Media object storage.
 
 Adapters implement these capabilities without changing domain terminology or leaking driver-specific types into the core.
+
 
 ## 4. Inbound Activity and Cryptographic Verification Workflow
 
@@ -144,6 +160,7 @@ The system decouples asynchronous background scheduling mechanics from domain us
 ### 5.1 Tenant Routing and File Naming Symmetries
 
 To guarantee high scannability and separate technical utility components from active HTTP controllers, the driving infrastructure layer enforces strict file name suffix structures:
+
 - **Driving Entry Controllers (`*_handler.go`)**: All files directly exposing an `http.HandlerFunc` or returning network payloads use this identifier (`inbox_handler.go`, `actor_handler.go`, `webfinger_handler.go`).
 - **Technical Adapters (`*_verifier.go` / `http.go`)**: Standalone helper modules or cryptographic parsing layers retain pure operational descriptors without handler suffixes (`signature_verifier.go`, `http.go`).
 
@@ -266,13 +283,41 @@ The MinIO adapter stores federated attachments by opaque object name and content
 
 ### 9.2 Content-Addressable Hashing & Operational Rollbacks
 
-Incoming binary attachments are processed using a stack-allocated `io.TeeReader` loop. This pipeline computes a cryptographic SHA-256 content fingerprint on the fly while streaming the data to MinIO, eliminating redundant memory buffering. Media upload actions execute ahead of relational persistence. If a database transaction, quad conversion, or dictionary mapping aborts, a compensating deletion routine triggers automatically to prune orphaned files from the central bucket.
+Incoming binary attachments are processed using a stack-allocated `io.TeeReader` loop. This pipeline computes a cryptographic SHA-256 content fingerprint on the fly while streaming the data to MinIO, eliminating redundant memory buffering. Media upload actions execute ahead of relational persistence.
+
+If a database transaction, quad conversion, or dictionary mapping aborts, an automatic **Operational Rollback Mechanism** invokes a sequential compensating deletion routine (`PurgeOrphanedMedia`). This walker walks backward through the execution tracking manifest to immediately drop all stranded files from the central bucket, preserving clean storage boundaries.
 
 ### 9.3 Dynamic Storage Quota Subsystem
 
 1. **Multi-Tenant Accounting**: Storage metrics MUST be audited at the tenant boundary level (`server_tenants`) and aggregated by the distinct ActivityPub actor identifier (`actor_media_ownership.actor_iri`).
 2. **Pre-Flight Ingestion Verification**: Driving multi-part adapters MUST perform an isolated database read query of the current storage utilization footprint *before* allocating chunks or initializing a MinIO multi-part chunked upload sequence.
-3. **Hard Ceiling Thresholds**: If a request's incoming payload `header.Size` causes a tenant or actor to cross its dynamically allocated threshold envelope, the execution path MUST drop the stream immediately and reject the request with HTTP Status `413 Payload Too Large`.
+3. **Hard Ceiling Thresholds**: If a request's incoming payload `header.Size` causes a tenant or actor to cross its dynamically allocated threshold envelope, the execution path MUST drop the stream immediately, execute immediate rollback purges on any previously processed items in the loop, and reject the request with HTTP Status `413 Payload Too Large`.
+
+### 9.4 Multipart Media Form Attachment Upload Loop
+
+To safely swallow multiple concurrent attachments under streaming loads, the incoming HTTP Driving Adapter plane implements a strict, sequential multi-part form loop:
+
+```text
+[Incoming HTTP Multipart Payload]
+                │
+                ├── r.MultipartForm.File["attachment"] (Array Matrix Lookup)
+                │
+     ┌──────────┴──────────┐
+     ▼                     ▼
+[Attachment 1]        [Attachment 2]  ... (Processed Sequentially for Memory Isolation)
+     │                     │
+     ├── 1. Pre-Flight Ingestion Quota Audit (Hard Ceiling Guard)
+     ├── 2. Open Stream Block Allocation (32MB Max In-Memory Cache Buffer)
+     ├── 3. Stack-Allocated Hashing (io.TeeReader stream to MinIO)
+     └── 4. Atomic Transaction Group Commit (SaveGraphVersionWithMedia via Core Service)
+                │
+                └─► [Any Failure Condition Triggered Mid-Loop]
+                            │
+                            └─► Execute Compensating Rollback (PurgeOrphanedMedia)
+```
+
+1. **Memory Isolation Strategy**: The handler processes files using an explicit `for...range` loop instead of unbounded concurrent routines. File descriptors are deterministically closed at the footer of each iteration block rather than deferred, preventing unmanaged socket spikes and allocation leaks during massive multi-part batch intake.
+2. **Atomic Context Coupling**: Every attachment item maps its metadata payload, object identifiers, binary storage paths, and calculated SHA-256 signatures down to a unified transaction block (`SaveGraphVersionWithMedia`) where quads and files are registered within a context-bound database connection slice.
 
 ## 10. Operational Requirements
 
@@ -304,6 +349,13 @@ The implementation is functionally aligned with this blueprint when the followin
 - Nomad identity clones can be registered repeatedly without duplicate records.
 - pgx/sqlc integration tests cover UUIDs, JSONB, PostgreSQL arrays, transactions, and row-locking behavior.
 - A parser or quad persistence failure leaves no orphaned graph version.
+
+### 11.1 Multipart Media Form Attachment Upload Loop Criteria
+
+- **Array Param Intake Validation**: The HTTP driving adapter successfully parses multi-part form requests where multiple individual files populate the same `attachment` array parameter key, iterating through them sequentially to prevent execution thread OOM crashes.
+- **Pre-Flight Hard-Ceiling Rejection**: Incoming payloads featuring a `header.Size` configuration that exceeds an actor or tenant's active threshold ledger slice immediately drop the incoming socket and return an HTTP `413 Payload Too Large` status code without initiating a MinIO chunk allocation stream.
+- **Zero-Allocation Inline Hashing Verification**: Media attachments are validated against binary tampering using standard `io.TeeReader` piping layers, ensuring that SHA-256 string fingerprints are populated entirely on-the-fly during the data-streaming window to MinIO.
+- **Backward-Walking Rollback Guarantee**: When an upload request containing 3 valid files encounters a transactional database failure or infrastructure timeout on the 3rd item, the system executes an automated reverse loop (`PurgeOrphanedMedia`) to target, locate, and delete file 1 and file 2 from the central bucket bucket space, leaving zero stranded storage orphans behind.
 
 ## 12. Database Migration Subsystem
 
