@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
@@ -278,4 +279,41 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 
 	_ = s.mediaStorage.DeleteObject(ctx, stableKey)
 	return fmt.Errorf("storage port does not implement required GraphVersionWriter extension")
+}
+
+func (s *ActivityService) RotateLocalActorKeys(ctx context.Context, tenantID int32, username string) (string, error) {
+	actorIRI, dualKeys, err := s.storage.GetActorCredentials(ctx, tenantID, username)
+	if err != nil {
+		return "", fmt.Errorf("rotation aborted: failed to locate existing actor: %w", err)
+	}
+
+	now := time.Now().UTC()
+	validFrom := now.Add(-24 * time.Hour)
+
+	// Archive steps remain compact [source: 2]
+	rsaPubKeyPEM, err := model.ExtractRSAPublicKey(dualKeys.PrivateKeyRSAPEM)
+	if err == nil {
+		_ = s.storage.ArchiveKeyHistory(ctx, actorIRI, "RSA", rsaPubKeyPEM, validFrom, now)
+	}
+
+	if dualKeys.PrivateKeyEd25519PEM != "" {
+		edPubKeyPEM, err := model.ExtractEd25519PublicKey(dualKeys.PrivateKeyEd25519PEM)
+		if err == nil {
+			_ = s.storage.ArchiveKeyHistory(ctx, actorIRI, "Ed25519", edPubKeyPEM, validFrom, now)
+		}
+	}
+
+	// NEW: Reuse the identical centralized key minting function [source: 2]
+	newKeys, err := model.MintNewKeyPair()
+	if err != nil {
+		return "", fmt.Errorf("failed to mint fresh keys during rotation: %w", err)
+	}
+
+	// Overwrite the row, discarding old private keys from memory [source: 2]
+	err = s.storage.CreateActorCredential(ctx, actorIRI, tenantID, username, newKeys.RSAPrivatePEM, newKeys.Ed25519PrivatePEM)
+	if err != nil {
+		return "", fmt.Errorf("failed to overwrite current local credentials: %w", err)
+	}
+
+	return actorIRI, nil
 }

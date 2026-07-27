@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"testing"
+	"time"
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
@@ -23,6 +24,11 @@ type MockStorageAdapter struct {
 
 	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
 	OnSaveGraphVersionWithMedia func(ctx context.Context, params ports.MediaAttachmentParams) error
+
+	// Dual-key orchestration mock hooks
+	OnGetActorCredentials   func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error)
+	OnCreateActorCredential func(ctx context.Context, actorIRI string, tenantID int32, username string, rsaPEM, edPEM string) error
+	OnArchiveKeyHistory     func(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom, validTo time.Time) error
 }
 
 func (m *MockStorageAdapter) StreamQuadsBySubject(ctx context.Context, s string) ([]model.Quad, error) {
@@ -69,6 +75,27 @@ func (m *MockStorageAdapter) GetCollectionPayloads(ctx context.Context, a, c str
 		return m.GetCollectionPayloadsFunc(ctx, a, c, l, o)
 	}
 	return nil, nil
+}
+
+func (m *MockStorageAdapter) GetActorCredentials(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+	if m.OnGetActorCredentials != nil {
+		return m.OnGetActorCredentials(ctx, tenantID, username)
+	}
+	return "https://sprezz.net", &model.ActorDualKeys{}, nil
+}
+
+func (m *MockStorageAdapter) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, rsaPEM, edPEM string) error {
+	if m.OnCreateActorCredential != nil {
+		return m.OnCreateActorCredential(ctx, actorIRI, tenantID, username, rsaPEM, edPEM)
+	}
+	return nil
+}
+
+func (m *MockStorageAdapter) ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom, validTo time.Time) error {
+	if m.OnArchiveKeyHistory != nil {
+		return m.OnArchiveKeyHistory(ctx, actorIRI, keyType, publicKeyPEM, validFrom, validTo)
+	}
+	return nil
 }
 
 var _ ports.JSONLDParserPort = (*MockParserAdapter)(nil)
@@ -277,5 +304,55 @@ func TestActivityService_GetCollectionTimeline_PrivacyScoping(t *testing.T) {
 	}
 	if len(anonResults) != 1 {
 		t.Errorf("Expected Anonymous reader to see only 1 Public activity, got %d", len(anonResults))
+	}
+}
+
+func TestRotateLocalActorKeys_Success(t *testing.T) {
+	ctx := context.Background()
+	actorIRI := "https://example.com"
+
+	// Mock existing seed private/public credentials configuration setup
+	seedKeys, err := model.MintNewKeyPair()
+	if err != nil {
+		t.Fatalf("failed setup: %v", err)
+	}
+
+	archiveCount := 0
+	overwriteInvoked := false
+
+	mockStorage := &MockStorageAdapter{
+		OnGetActorCredentials: func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+			return actorIRI, &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     seedKeys.RSAPrivatePEM,
+				PrivateKeyEd25519PEM: seedKeys.Ed25519PrivatePEM,
+			}, nil
+		},
+		OnArchiveKeyHistory: func(ctx context.Context, targetIRI string, keyType string, pubKeyPEM string, validFrom, validTo time.Time) error {
+			archiveCount++
+			return nil
+		},
+		OnCreateActorCredential: func(ctx context.Context, targetIRI string, tenantID int32, username string, rsaPEM, edPEM string) error {
+			overwriteInvoked = true
+			if rsaPEM == seedKeys.RSAPrivatePEM {
+				t.Error("rotation failed to overwrite legacy private key with fresh material")
+			}
+			return nil
+		},
+	}
+
+	svc := service.NewActivityService(mockStorage, &MockParserAdapter{}, &MockMediaAdapter{})
+
+	resIRI, err := svc.RotateLocalActorKeys(ctx, 1, "server")
+	if err != nil {
+		t.Fatalf("unexpected key rotation failure: %v", err)
+	}
+	if resIRI != actorIRI {
+		t.Errorf("expected target IRI %q, got %q", actorIRI, resIRI)
+	}
+	if archiveCount != 2 {
+		t.Errorf("expected exactly 2 archival history logs (RSA + Ed25519), got %d", archiveCount)
+	}
+	if !overwriteInvoked {
+		t.Error("rotation pipeline skipped storage row write sequence")
 	}
 }

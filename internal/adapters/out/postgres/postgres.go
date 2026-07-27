@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"sprezz/internal/adapters/out/cache"
 	"sprezz/internal/adapters/out/postgres/db"
@@ -63,6 +64,23 @@ func (s *PostgresStorage) HasActorCredential(ctx context.Context, tenantID int32
 		return false, fmt.Errorf("failed checking database actor registration availability: %w", err)
 	}
 	return true, nil
+}
+
+func (s *PostgresStorage) GetActorCredentials(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+	// 1. Execute the type-safe multi-column selection query from your tenants.sql [source: 3]
+	row, err := s.queries().GetActorCredentialsByUsername(ctx, db.GetActorCredentialsByUsernameParams{
+		TenantID: tenantID,
+		Username: username,
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("failed looking up dual-key credentials row: %w", err)
+	}
+
+	// 2. Return the stable actor_iri and map variables securely to the domain structure.
+	return row.ActorIri, &model.ActorDualKeys{
+		PrivateKeyRSAPEM:     row.PrivateKeyRsaPem,
+		PrivateKeyEd25519PEM: row.PrivateKeyEd25519Pem.String, // Safely handles the nullable string.
+	}, nil
 }
 
 func (s *PostgresStorage) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error {
@@ -565,6 +583,39 @@ func (s *PostgresStorage) GetActorProfileByIRI(ctx context.Context, tenantID int
 	}
 
 	return s.finalizeProfileIdentity(profile), nil
+}
+
+// Cryptographic Public Key History Persistence Handlers
+
+func (s *PostgresStorage) ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error {
+	// CORRECTED: Wrap standard Go time.Time structs into type-safe pgtype.Timestamptz wrappers
+	err := s.queries().InsertHistoricalKey(ctx, db.InsertHistoricalKeyParams{
+		ActorIri:     actorIRI,
+		KeyType:      keyType,
+		PublicKeyPem: publicKeyPEM,
+		ValidFrom:    pgtype.Timestamptz{Time: validFrom, Valid: true},
+		ValidTo:      pgtype.Timestamptz{Time: validTo, Valid: true},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to archive historical %s public key entry for %s: %w", keyType, actorIRI, err)
+	}
+	return nil
+}
+
+func (s *PostgresStorage) GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error) {
+	// Execute lookup passing our timestamp directly into the single named field
+	publicKeyPEM, err := s.queries().FindHistoricalKeyInWindow(ctx, db.FindHistoricalKeyInWindowParams{
+		ActorIri: actorIRI,
+		KeyType:  keyType,
+		SignedAt: pgtype.Timestamptz{Time: signedAt, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("no historical %s key found for actor %s matching timestamp %s", keyType, actorIRI, signedAt.Format(time.RFC3339))
+		}
+		return "", fmt.Errorf("failed querying historical key verification logs: %w", err)
+	}
+	return publicKeyPEM, nil
 }
 
 // mapQuadPredicateToProfile unifies graph edge vocabulary mappings cleanly

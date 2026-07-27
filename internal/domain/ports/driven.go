@@ -3,6 +3,8 @@ package ports
 import (
 	"context"
 	"io"
+	"time"
+
 	"sprezz/internal/domain/model"
 )
 
@@ -14,6 +16,7 @@ type StoragePort interface {
 
 	// HasActorCredential checks if a specific username exists inside a designated tenant partition.
 	HasActorCredential(ctx context.Context, tenantID int32, username string) (bool, error)
+	GetActorCredentials(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error)
 
 	// CreateActorCredential commits a newly generated cryptographic dual-key identity to long-term storage.
 	CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error
@@ -49,6 +52,9 @@ type StoragePort interface {
 	// returning a unified profile structure parsed directly out of the RDF edges.
 	GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)
 	GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error)
+
+	ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error
+	GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
 }
 
 // MediaStoragePort defines the driven port for federated media object storage.

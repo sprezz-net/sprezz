@@ -4,6 +4,7 @@ package portstest
 import (
 	"context"
 	"io"
+	"time"
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/ports"
@@ -25,6 +26,10 @@ func (UnimplementedStoragePort) GetOrCreateTenantByDomain(ctx context.Context, d
 
 func (UnimplementedStoragePort) HasActorCredential(ctx context.Context, tenantID int32, username string) (bool, error) {
 	return false, nil
+}
+
+func (UnimplementedStoragePort) GetActorCredentials(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+	return "", nil, nil
 }
 
 func (UnimplementedStoragePort) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error {
@@ -119,6 +124,14 @@ func (UnimplementedStoragePort) GetActorProfileFromGraph(ctx context.Context, te
 
 func (UnimplementedStoragePort) GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error) {
 	return nil, nil
+}
+
+func (UnimplementedStoragePort) ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error {
+	return nil
+}
+
+func (UnimplementedStoragePort) GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error) {
+	return "", nil
 }
 
 // UnimplementedMediaStoragePort provides zero-value stubs for ports.MediaStoragePort.

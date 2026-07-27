@@ -75,6 +75,16 @@ type ActorMediaOwnership struct {
 	MediaAttachmentID pgtype.UUID `json:"media_attachment_id"`
 }
 
+type ActorPublicKeyHistory struct {
+	ID           int64              `json:"id"`
+	ActorIri     string             `json:"actor_iri"`
+	KeyType      string             `json:"key_type"`
+	PublicKeyPem string             `json:"public_key_pem"`
+	ValidFrom    pgtype.Timestamptz `json:"valid_from"`
+	ValidTo      pgtype.Timestamptz `json:"valid_to"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
 type BlockedDomain struct {
 	DomainName string             `json:"domain_name"`
 	BlockedAt  pgtype.Timestamptz `json:"blocked_at"`
