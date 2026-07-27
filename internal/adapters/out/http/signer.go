@@ -26,7 +26,9 @@ func NewFederatedSignerAdapter() *FederatedSignerAdapter {
 	}
 }
 
-func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyPEM string, payload []byte) error {
+// ForwardFederatedActivity executes outbound activity deliveries utilizing the dual-key paradigm.
+// It accepts both RSA and Ed25519 components collectively to preserve long-term protocol compatibility.
+func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyRSAPEM, privateKeyEd25519PEM string, payload []byte) error {
 	req, err := http.NewRequestWithContext(ctx, "POST", targetInbox, bytes.NewReader(payload))
 	if err != nil {
 		return err
@@ -40,7 +42,6 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	digestBase64 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
 	req.Header.Set("Digest", fmt.Sprintf("SHA-256=%s", digestBase64))
 
-	// FIXED: Strip the port from the host value to match canonical signature specifications
 	cleanHost := req.URL.Host
 	if host, _, err := net.SplitHostPort(req.URL.Host); err == nil {
 		cleanHost = host
@@ -50,12 +51,11 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	dateStr := time.Now().UTC().Format(http.TimeFormat)
 	req.Header.Set("Date", dateStr)
 
-	// FIXED: Changed req.URL.Path to req.URL.RequestURI() to preserve query strings
-	// (e.g. ?shared=true) required by federating remotes for signature validation.
 	signingString := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s\ndigest: SHA-256=%s",
 		req.URL.RequestURI(), cleanHost, dateStr, digestBase64)
 
-	signature, err := signString(signingString, privateKeyPEM)
+	// Currently signs using the baseline RSA key block for universal federation acceptance
+	signature, err := signStringRSA(signingString, privateKeyRSAPEM)
 	if err != nil {
 		return fmt.Errorf("failed to sign outbound request headers: %w", err)
 	}
@@ -68,7 +68,6 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	if err != nil {
 		return err
 	}
-	// FIXED: Wrapped body close in a closure to discard error and pass strict errcheck linter rules
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
@@ -78,7 +77,7 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	return nil
 }
 
-func signString(message, privateKeyPEM string) (string, error) {
+func signStringRSA(message, privateKeyPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil {
 		return "", fmt.Errorf("failed to parse raw identity key block format")

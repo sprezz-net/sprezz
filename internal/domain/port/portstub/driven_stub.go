@@ -64,6 +64,10 @@ func (UnimplementedStoragePort) RecordActorInboxDelivery(ctx context.Context, ac
 	return nil
 }
 
+func (UnimplementedStoragePort) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+	return nil
+}
+
 // Nomadic Identity Management Stubs
 
 func (UnimplementedStoragePort) GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error) {

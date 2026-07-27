@@ -71,7 +71,7 @@ type mockOutboundDispatcher struct {
 	failInbox string
 }
 
-func (m *mockOutboundDispatcher) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyPEM string, payload []byte) error {
+func (m *mockOutboundDispatcher) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyRSAPEM, privateKeyEd25519PEM string, payload []byte) error {
 	if targetInbox == m.failInbox {
 		return errors.New("network dispatch exception")
 	}

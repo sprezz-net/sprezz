@@ -81,7 +81,7 @@ type GraphVersionWriter interface {
 }
 
 type OutboundDispatcher interface {
-	ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyPEM string, payload []byte) error
+	ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, privateKeyRSAPEM, privateKeyEd25519PEM string, payload []byte) error
 }
 
 // MediaAttachmentParams unifies all relational parameters required to link the

@@ -86,9 +86,18 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 		return fmt.Errorf("load actor dual-key credentials: %w", err)
 	}
 
+	targetKeyID := actorIRI + "#main-key"
+
 	// For legacy compatibility, we pass PrivateKeyRSAPEM to satisfy the current OutboundDispatcher perimeter interface.
 	// Future protocol extensions can naturally consume dualKeys.PrivateKeyEd25519PEM here without additional database hits.
-	return s.forwarder.ForwardFederatedActivity(ctx, envelope.Inbox, actorIRI+"#main-key", dualKeys.PrivateKeyRSAPEM, payload)
+	return s.forwarder.ForwardFederatedActivity(
+		ctx,
+		envelope.Inbox,
+		targetKeyID,
+		dualKeys.PrivateKeyRSAPEM,
+		dualKeys.PrivateKeyEd25519PEM, // Pass the newly available Ed25519 parameter down
+		payload,
+	)
 }
 
 func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error) {

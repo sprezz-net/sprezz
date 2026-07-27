@@ -149,8 +149,14 @@ func NewOutboundWorkerEngine(cfg OutboundWorkerConfig, storage port.StoragePort,
 
 		keyID := task.ObjectIRI + "#main-key"
 
-		// Use the PrivateKeyRSAPEM key from the dual-key record to maintain backward federation compatibility.
-		err = dispatcher.ForwardFederatedActivity(ctx, task.ActivityIRI, keyID, dualKeys.PrivateKeyRSAPEM, task.Payload)
+		err = dispatcher.ForwardFederatedActivity(
+			ctx,
+			task.ActivityIRI,
+			keyID,
+			dualKeys.PrivateKeyRSAPEM,
+			dualKeys.PrivateKeyEd25519PEM,
+			task.Payload,
+		)
 		if err != nil {
 			reason := fmt.Sprintf("outbound transport dispatch failure: %v", err)
 			_ = storage.MarkInboundFailed(ctx, task.ID, reason)
