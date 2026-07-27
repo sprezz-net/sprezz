@@ -31,27 +31,29 @@ func NewMediaUploadHandler(svc *service.ActivityService, maxMemoryLimit int64) *
 func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// 1. Constrain memory footprint spike limits
+	// Re-inject context identity extraction using domain model keys (SA1029 compliant)
+	tenantID, _ := ctx.Value(model.TenantIDKey).(string)
+	actorIRI, _ := ctx.Value(model.ActorIRIKey).(string)
+	if tenantID == "" || actorIRI == "" {
+		h.writeError(w, http.StatusUnauthorized, "Missing routing or identity multi-tenant boundaries")
+		return
+	}
+
+	// 1. Enforce explicit multipart form buffer allocation rules
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		h.writeError(w, http.StatusBadRequest, "Malformed multipart payload")
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
 
-	tenantID, _ := ctx.Value(model.TenantIDKey).(string)
-	actorIRI, _ := ctx.Value(model.ActorIRIKey).(string)
-	if tenantID == "" || actorIRI == "" {
-		h.writeError(w, http.StatusUnauthorized, "Missing tenant or identity boundaries")
-		return
-	}
-
-	// Extract the ActivityPub event payload from the multipart request
-	activityJSON := r.FormValue("activity")
-	// Explicitly catch empty string payloads before unmarshaling to prevent JSON parsing errors
-	if activityJSON == "" {
+	// 2. Access form value collections safely from the verified multi-part map
+	activityValues := r.MultipartForm.Value["activity"]
+	if len(activityValues) == 0 || activityValues[0] == "" {
 		h.writeError(w, http.StatusBadRequest, "Missing structural 'activity' parameter metadata")
 		return
 	}
+	activityJSON := activityValues[0]
+
 	var envelope struct {
 		ID     string `json:"id"`
 		Object string `json:"object"`
@@ -61,16 +63,16 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Fetch the collection array instead of a single form file
+	// 3. Fetch the file collection array matrix
 	files := r.MultipartForm.File["attachment"]
 	if len(files) == 0 {
-		h.writeError(w, http.StatusBadRequest, "No attachments found under 'attachment' key")
+		h.writeError(w, http.StatusBadRequest, "Target attachment part parameter 'attachment' not found or empty")
 		return
 	}
 
 	var completedObjectKeys []string
 
-	// 3. Sequential Multi-File Streaming Loop
+	// 4. Sequential Multi-File Streaming Loop (Preserves tenantID and actorIRI context visibility)
 	for _, fileHeader := range files {
 		fileStream, err := fileHeader.Open()
 		if err != nil {
@@ -79,19 +81,17 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Handle both return values from uuid.NewV7()
 		taskUUID, err := uuid.NewV7()
 		if err != nil {
 			_ = fileStream.Close()
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusInternalServerError, "Failed to generate unique task identifier")
+			h.writeError(w, http.StatusInternalServerError, "Entropy initialization failure")
 			return
 		}
 
 		taskID := taskUUID.String()
 		tempObjectKey := fmt.Sprintf("tmp/%s", taskID)
 
-		// Pack parameters into the single structure matching your exact service parameters
 		mediaCtx := port.InboundMediaContext{
 			TenantID:     tenantID,
 			ActorIRI:     actorIRI,
@@ -124,7 +124,9 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 7. Success Manifest Response Writeout
 	w.Header().Set(headerContentType, "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	_, _ = w.Write([]byte(`{"status":"committed"}`))
+
+	responseBytes := fmt.Appendf(nil, `{"status":"committed","object_keys":%v}`, h.marshalKeysJSON(completedObjectKeys))
+	_, _ = w.Write(responseBytes)
 }
 
 // executeCompensatingCleanup runs a reverse pruning sequence if an iteration fails mid-loop
@@ -141,4 +143,17 @@ func (h *MediaUploadHandler) writeError(w http.ResponseWriter, status int, msg s
 	// Replaced memory allocation loop using zero-allocation byte block appends
 	errorBytes := fmt.Appendf(nil, `{"error":%q}`, msg)
 	_, _ = w.Write(errorBytes)
+}
+
+// marshalKeysJSON processes the tracked string slice into a raw JSON array
+// without triggering standard interface reflection or redundant heap copies.
+func (h *MediaUploadHandler) marshalKeysJSON(keys []string) string {
+	if len(keys) == 0 {
+		return "[]"
+	}
+	bytes, err := json.Marshal(keys)
+	if err != nil {
+		return "[]"
+	}
+	return string(bytes)
 }
