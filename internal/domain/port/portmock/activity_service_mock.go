@@ -27,6 +27,13 @@ type ActivityServicePortMock struct {
 	beforeDispatchOutboundActivityCounter uint64
 	DispatchOutboundActivityMock          mActivityServicePortMockDispatchOutboundActivity
 
+	funcGetCollectionTimeline          func(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int) (baa1 [][]byte, err error)
+	funcGetCollectionTimelineOrigin    string
+	inspectFuncGetCollectionTimeline   func(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int)
+	afterGetCollectionTimelineCounter  uint64
+	beforeGetCollectionTimelineCounter uint64
+	GetCollectionTimelineMock          mActivityServicePortMockGetCollectionTimeline
+
 	funcGetFollowersTimeline          func(ctx context.Context, actorIRI string, limit int, offset int) (sa1 []string, err error)
 	funcGetFollowersTimelineOrigin    string
 	inspectFuncGetFollowersTimeline   func(ctx context.Context, actorIRI string, limit int, offset int)
@@ -66,6 +73,9 @@ func NewActivityServicePortMock(t minimock.Tester) *ActivityServicePortMock {
 
 	m.DispatchOutboundActivityMock = mActivityServicePortMockDispatchOutboundActivity{mock: m}
 	m.DispatchOutboundActivityMock.callArgs = []*ActivityServicePortMockDispatchOutboundActivityParams{}
+
+	m.GetCollectionTimelineMock = mActivityServicePortMockGetCollectionTimeline{mock: m}
+	m.GetCollectionTimelineMock.callArgs = []*ActivityServicePortMockGetCollectionTimelineParams{}
 
 	m.GetFollowersTimelineMock = mActivityServicePortMockGetFollowersTimeline{mock: m}
 	m.GetFollowersTimelineMock.callArgs = []*ActivityServicePortMockGetFollowersTimelineParams{}
@@ -485,6 +495,473 @@ func (m *ActivityServicePortMock) MinimockDispatchOutboundActivityInspect() {
 	if !m.DispatchOutboundActivityMock.invocationsDone() && afterDispatchOutboundActivityCounter > 0 {
 		m.t.Errorf("Expected %d calls to ActivityServicePortMock.DispatchOutboundActivity at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.DispatchOutboundActivityMock.expectedInvocations), m.DispatchOutboundActivityMock.expectedInvocationsOrigin, afterDispatchOutboundActivityCounter)
+	}
+}
+
+type mActivityServicePortMockGetCollectionTimeline struct {
+	optional           bool
+	mock               *ActivityServicePortMock
+	defaultExpectation *ActivityServicePortMockGetCollectionTimelineExpectation
+	expectations       []*ActivityServicePortMockGetCollectionTimelineExpectation
+
+	callArgs []*ActivityServicePortMockGetCollectionTimelineParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// ActivityServicePortMockGetCollectionTimelineExpectation specifies expectation struct of the ActivityServicePort.GetCollectionTimeline
+type ActivityServicePortMockGetCollectionTimelineExpectation struct {
+	mock               *ActivityServicePortMock
+	params             *ActivityServicePortMockGetCollectionTimelineParams
+	paramPtrs          *ActivityServicePortMockGetCollectionTimelineParamPtrs
+	expectationOrigins ActivityServicePortMockGetCollectionTimelineExpectationOrigins
+	results            *ActivityServicePortMockGetCollectionTimelineResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// ActivityServicePortMockGetCollectionTimelineParams contains parameters of the ActivityServicePort.GetCollectionTimeline
+type ActivityServicePortMockGetCollectionTimelineParams struct {
+	ctx            context.Context
+	readerActorIRI string
+	actorIRI       string
+	collection     string
+	limit          int
+	offset         int
+}
+
+// ActivityServicePortMockGetCollectionTimelineParamPtrs contains pointers to parameters of the ActivityServicePort.GetCollectionTimeline
+type ActivityServicePortMockGetCollectionTimelineParamPtrs struct {
+	ctx            *context.Context
+	readerActorIRI *string
+	actorIRI       *string
+	collection     *string
+	limit          *int
+	offset         *int
+}
+
+// ActivityServicePortMockGetCollectionTimelineResults contains results of the ActivityServicePort.GetCollectionTimeline
+type ActivityServicePortMockGetCollectionTimelineResults struct {
+	baa1 [][]byte
+	err  error
+}
+
+// ActivityServicePortMockGetCollectionTimelineOrigins contains origins of expectations of the ActivityServicePort.GetCollectionTimeline
+type ActivityServicePortMockGetCollectionTimelineExpectationOrigins struct {
+	origin               string
+	originCtx            string
+	originReaderActorIRI string
+	originActorIRI       string
+	originCollection     string
+	originLimit          string
+	originOffset         string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Optional() *mActivityServicePortMockGetCollectionTimeline {
+	mmGetCollectionTimeline.optional = true
+	return mmGetCollectionTimeline
+}
+
+// Expect sets up expected params for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Expect(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by ExpectParams functions")
+	}
+
+	mmGetCollectionTimeline.defaultExpectation.params = &ActivityServicePortMockGetCollectionTimelineParams{ctx, readerActorIRI, actorIRI, collection, limit, offset}
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetCollectionTimeline.expectations {
+		if minimock.Equal(e.params, mmGetCollectionTimeline.defaultExpectation.params) {
+			mmGetCollectionTimeline.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetCollectionTimeline.defaultExpectation.params)
+		}
+	}
+
+	return mmGetCollectionTimeline
+}
+
+// ExpectCtxParam1 sets up expected param ctx for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) ExpectCtxParam1(ctx context.Context) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.params != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Expect")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs == nil {
+		mmGetCollectionTimeline.defaultExpectation.paramPtrs = &ActivityServicePortMockGetCollectionTimelineParamPtrs{}
+	}
+	mmGetCollectionTimeline.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetCollectionTimeline
+}
+
+// ExpectReaderActorIRIParam2 sets up expected param readerActorIRI for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) ExpectReaderActorIRIParam2(readerActorIRI string) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.params != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Expect")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs == nil {
+		mmGetCollectionTimeline.defaultExpectation.paramPtrs = &ActivityServicePortMockGetCollectionTimelineParamPtrs{}
+	}
+	mmGetCollectionTimeline.defaultExpectation.paramPtrs.readerActorIRI = &readerActorIRI
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.originReaderActorIRI = minimock.CallerInfo(1)
+
+	return mmGetCollectionTimeline
+}
+
+// ExpectActorIRIParam3 sets up expected param actorIRI for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) ExpectActorIRIParam3(actorIRI string) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.params != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Expect")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs == nil {
+		mmGetCollectionTimeline.defaultExpectation.paramPtrs = &ActivityServicePortMockGetCollectionTimelineParamPtrs{}
+	}
+	mmGetCollectionTimeline.defaultExpectation.paramPtrs.actorIRI = &actorIRI
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.originActorIRI = minimock.CallerInfo(1)
+
+	return mmGetCollectionTimeline
+}
+
+// ExpectCollectionParam4 sets up expected param collection for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) ExpectCollectionParam4(collection string) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.params != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Expect")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs == nil {
+		mmGetCollectionTimeline.defaultExpectation.paramPtrs = &ActivityServicePortMockGetCollectionTimelineParamPtrs{}
+	}
+	mmGetCollectionTimeline.defaultExpectation.paramPtrs.collection = &collection
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.originCollection = minimock.CallerInfo(1)
+
+	return mmGetCollectionTimeline
+}
+
+// ExpectLimitParam5 sets up expected param limit for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) ExpectLimitParam5(limit int) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.params != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Expect")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs == nil {
+		mmGetCollectionTimeline.defaultExpectation.paramPtrs = &ActivityServicePortMockGetCollectionTimelineParamPtrs{}
+	}
+	mmGetCollectionTimeline.defaultExpectation.paramPtrs.limit = &limit
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.originLimit = minimock.CallerInfo(1)
+
+	return mmGetCollectionTimeline
+}
+
+// ExpectOffsetParam6 sets up expected param offset for ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) ExpectOffsetParam6(offset int) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{}
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.params != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Expect")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation.paramPtrs == nil {
+		mmGetCollectionTimeline.defaultExpectation.paramPtrs = &ActivityServicePortMockGetCollectionTimelineParamPtrs{}
+	}
+	mmGetCollectionTimeline.defaultExpectation.paramPtrs.offset = &offset
+	mmGetCollectionTimeline.defaultExpectation.expectationOrigins.originOffset = minimock.CallerInfo(1)
+
+	return mmGetCollectionTimeline
+}
+
+// Inspect accepts an inspector function that has same arguments as the ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Inspect(f func(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int)) *mActivityServicePortMockGetCollectionTimeline {
+	if mmGetCollectionTimeline.mock.inspectFuncGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("Inspect function is already set for ActivityServicePortMock.GetCollectionTimeline")
+	}
+
+	mmGetCollectionTimeline.mock.inspectFuncGetCollectionTimeline = f
+
+	return mmGetCollectionTimeline
+}
+
+// Return sets up results that will be returned by ActivityServicePort.GetCollectionTimeline
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Return(baa1 [][]byte, err error) *ActivityServicePortMock {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	if mmGetCollectionTimeline.defaultExpectation == nil {
+		mmGetCollectionTimeline.defaultExpectation = &ActivityServicePortMockGetCollectionTimelineExpectation{mock: mmGetCollectionTimeline.mock}
+	}
+	mmGetCollectionTimeline.defaultExpectation.results = &ActivityServicePortMockGetCollectionTimelineResults{baa1, err}
+	mmGetCollectionTimeline.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetCollectionTimeline.mock
+}
+
+// Set uses given function f to mock the ActivityServicePort.GetCollectionTimeline method
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Set(f func(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int) (baa1 [][]byte, err error)) *ActivityServicePortMock {
+	if mmGetCollectionTimeline.defaultExpectation != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.GetCollectionTimeline method")
+	}
+
+	if len(mmGetCollectionTimeline.expectations) > 0 {
+		mmGetCollectionTimeline.mock.t.Fatalf("Some expectations are already set for the ActivityServicePort.GetCollectionTimeline method")
+	}
+
+	mmGetCollectionTimeline.mock.funcGetCollectionTimeline = f
+	mmGetCollectionTimeline.mock.funcGetCollectionTimelineOrigin = minimock.CallerInfo(1)
+	return mmGetCollectionTimeline.mock
+}
+
+// When sets expectation for the ActivityServicePort.GetCollectionTimeline which will trigger the result defined by the following
+// Then helper
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) When(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int) *ActivityServicePortMockGetCollectionTimelineExpectation {
+	if mmGetCollectionTimeline.mock.funcGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.mock.t.Fatalf("ActivityServicePortMock.GetCollectionTimeline mock is already set by Set")
+	}
+
+	expectation := &ActivityServicePortMockGetCollectionTimelineExpectation{
+		mock:               mmGetCollectionTimeline.mock,
+		params:             &ActivityServicePortMockGetCollectionTimelineParams{ctx, readerActorIRI, actorIRI, collection, limit, offset},
+		expectationOrigins: ActivityServicePortMockGetCollectionTimelineExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetCollectionTimeline.expectations = append(mmGetCollectionTimeline.expectations, expectation)
+	return expectation
+}
+
+// Then sets up ActivityServicePort.GetCollectionTimeline return parameters for the expectation previously defined by the When method
+func (e *ActivityServicePortMockGetCollectionTimelineExpectation) Then(baa1 [][]byte, err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockGetCollectionTimelineResults{baa1, err}
+	return e.mock
+}
+
+// Times sets number of times ActivityServicePort.GetCollectionTimeline should be invoked
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Times(n uint64) *mActivityServicePortMockGetCollectionTimeline {
+	if n == 0 {
+		mmGetCollectionTimeline.mock.t.Fatalf("Times of ActivityServicePortMock.GetCollectionTimeline mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetCollectionTimeline.expectedInvocations, n)
+	mmGetCollectionTimeline.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetCollectionTimeline
+}
+
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) invocationsDone() bool {
+	if len(mmGetCollectionTimeline.expectations) == 0 && mmGetCollectionTimeline.defaultExpectation == nil && mmGetCollectionTimeline.mock.funcGetCollectionTimeline == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetCollectionTimeline.mock.afterGetCollectionTimelineCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetCollectionTimeline.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetCollectionTimeline implements mm_port.ActivityServicePort
+func (mmGetCollectionTimeline *ActivityServicePortMock) GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit int, offset int) (baa1 [][]byte, err error) {
+	mm_atomic.AddUint64(&mmGetCollectionTimeline.beforeGetCollectionTimelineCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetCollectionTimeline.afterGetCollectionTimelineCounter, 1)
+
+	mmGetCollectionTimeline.t.Helper()
+
+	if mmGetCollectionTimeline.inspectFuncGetCollectionTimeline != nil {
+		mmGetCollectionTimeline.inspectFuncGetCollectionTimeline(ctx, readerActorIRI, actorIRI, collection, limit, offset)
+	}
+
+	mm_params := ActivityServicePortMockGetCollectionTimelineParams{ctx, readerActorIRI, actorIRI, collection, limit, offset}
+
+	// Record call args
+	mmGetCollectionTimeline.GetCollectionTimelineMock.mutex.Lock()
+	mmGetCollectionTimeline.GetCollectionTimelineMock.callArgs = append(mmGetCollectionTimeline.GetCollectionTimelineMock.callArgs, &mm_params)
+	mmGetCollectionTimeline.GetCollectionTimelineMock.mutex.Unlock()
+
+	for _, e := range mmGetCollectionTimeline.GetCollectionTimelineMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.baa1, e.results.err
+		}
+	}
+
+	if mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.params
+		mm_want_ptrs := mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.paramPtrs
+
+		mm_got := ActivityServicePortMockGetCollectionTimelineParams{ctx, readerActorIRI, actorIRI, collection, limit, offset}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.readerActorIRI != nil && !minimock.Equal(*mm_want_ptrs.readerActorIRI, mm_got.readerActorIRI) {
+				mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameter readerActorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.originReaderActorIRI, *mm_want_ptrs.readerActorIRI, mm_got.readerActorIRI, minimock.Diff(*mm_want_ptrs.readerActorIRI, mm_got.readerActorIRI))
+			}
+
+			if mm_want_ptrs.actorIRI != nil && !minimock.Equal(*mm_want_ptrs.actorIRI, mm_got.actorIRI) {
+				mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameter actorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.originActorIRI, *mm_want_ptrs.actorIRI, mm_got.actorIRI, minimock.Diff(*mm_want_ptrs.actorIRI, mm_got.actorIRI))
+			}
+
+			if mm_want_ptrs.collection != nil && !minimock.Equal(*mm_want_ptrs.collection, mm_got.collection) {
+				mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameter collection, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.originCollection, *mm_want_ptrs.collection, mm_got.collection, minimock.Diff(*mm_want_ptrs.collection, mm_got.collection))
+			}
+
+			if mm_want_ptrs.limit != nil && !minimock.Equal(*mm_want_ptrs.limit, mm_got.limit) {
+				mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameter limit, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.originLimit, *mm_want_ptrs.limit, mm_got.limit, minimock.Diff(*mm_want_ptrs.limit, mm_got.limit))
+			}
+
+			if mm_want_ptrs.offset != nil && !minimock.Equal(*mm_want_ptrs.offset, mm_got.offset) {
+				mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameter offset, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.originOffset, *mm_want_ptrs.offset, mm_got.offset, minimock.Diff(*mm_want_ptrs.offset, mm_got.offset))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetCollectionTimeline.t.Errorf("ActivityServicePortMock.GetCollectionTimeline got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetCollectionTimeline.GetCollectionTimelineMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetCollectionTimeline.t.Fatal("No results are set for the ActivityServicePortMock.GetCollectionTimeline")
+		}
+		return (*mm_results).baa1, (*mm_results).err
+	}
+	if mmGetCollectionTimeline.funcGetCollectionTimeline != nil {
+		return mmGetCollectionTimeline.funcGetCollectionTimeline(ctx, readerActorIRI, actorIRI, collection, limit, offset)
+	}
+	mmGetCollectionTimeline.t.Fatalf("Unexpected call to ActivityServicePortMock.GetCollectionTimeline. %v %v %v %v %v %v", ctx, readerActorIRI, actorIRI, collection, limit, offset)
+	return
+}
+
+// GetCollectionTimelineAfterCounter returns a count of finished ActivityServicePortMock.GetCollectionTimeline invocations
+func (mmGetCollectionTimeline *ActivityServicePortMock) GetCollectionTimelineAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetCollectionTimeline.afterGetCollectionTimelineCounter)
+}
+
+// GetCollectionTimelineBeforeCounter returns a count of ActivityServicePortMock.GetCollectionTimeline invocations
+func (mmGetCollectionTimeline *ActivityServicePortMock) GetCollectionTimelineBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetCollectionTimeline.beforeGetCollectionTimelineCounter)
+}
+
+// Calls returns a list of arguments used in each call to ActivityServicePortMock.GetCollectionTimeline.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetCollectionTimeline *mActivityServicePortMockGetCollectionTimeline) Calls() []*ActivityServicePortMockGetCollectionTimelineParams {
+	mmGetCollectionTimeline.mutex.RLock()
+
+	argCopy := make([]*ActivityServicePortMockGetCollectionTimelineParams, len(mmGetCollectionTimeline.callArgs))
+	copy(argCopy, mmGetCollectionTimeline.callArgs)
+
+	mmGetCollectionTimeline.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetCollectionTimelineDone returns true if the count of the GetCollectionTimeline invocations corresponds
+// the number of defined expectations
+func (m *ActivityServicePortMock) MinimockGetCollectionTimelineDone() bool {
+	if m.GetCollectionTimelineMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetCollectionTimelineMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetCollectionTimelineMock.invocationsDone()
+}
+
+// MinimockGetCollectionTimelineInspect logs each unmet expectation
+func (m *ActivityServicePortMock) MinimockGetCollectionTimelineInspect() {
+	for _, e := range m.GetCollectionTimelineMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to ActivityServicePortMock.GetCollectionTimeline at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetCollectionTimelineCounter := mm_atomic.LoadUint64(&m.afterGetCollectionTimelineCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetCollectionTimelineMock.defaultExpectation != nil && afterGetCollectionTimelineCounter < 1 {
+		if m.GetCollectionTimelineMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to ActivityServicePortMock.GetCollectionTimeline at\n%s", m.GetCollectionTimelineMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to ActivityServicePortMock.GetCollectionTimeline at\n%s with params: %#v", m.GetCollectionTimelineMock.defaultExpectation.expectationOrigins.origin, *m.GetCollectionTimelineMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetCollectionTimeline != nil && afterGetCollectionTimelineCounter < 1 {
+		m.t.Errorf("Expected call to ActivityServicePortMock.GetCollectionTimeline at\n%s", m.funcGetCollectionTimelineOrigin)
+	}
+
+	if !m.GetCollectionTimelineMock.invocationsDone() && afterGetCollectionTimelineCounter > 0 {
+		m.t.Errorf("Expected %d calls to ActivityServicePortMock.GetCollectionTimeline at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetCollectionTimelineMock.expectedInvocations), m.GetCollectionTimelineMock.expectedInvocationsOrigin, afterGetCollectionTimelineCounter)
 	}
 }
 
@@ -1956,6 +2433,8 @@ func (m *ActivityServicePortMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockDispatchOutboundActivityInspect()
 
+			m.MinimockGetCollectionTimelineInspect()
+
 			m.MinimockGetFollowersTimelineInspect()
 
 			m.MinimockProcessInboundMediaTaskInspect()
@@ -1987,6 +2466,7 @@ func (m *ActivityServicePortMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockDispatchOutboundActivityDone() &&
+		m.MinimockGetCollectionTimelineDone() &&
 		m.MinimockGetFollowersTimelineDone() &&
 		m.MinimockProcessInboundMediaTaskDone() &&
 		m.MinimockProcessInboundTaskDone() &&

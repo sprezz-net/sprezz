@@ -24,4 +24,5 @@ type ActivityServicePort interface {
 	PurgeOrphanedMedia(ctx context.Context, tempObjectKey string) error
 	DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error
 	GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error)
+	GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error)
 }
