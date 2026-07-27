@@ -30,3 +30,7 @@ func (UnimplementedActivityServicePort) DispatchOutboundActivity(ctx context.Con
 func (UnimplementedActivityServicePort) GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error) {
 	return nil, nil
 }
+
+func (UnimplementedActivityServicePort) GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error) {
+	return nil, nil
+}
