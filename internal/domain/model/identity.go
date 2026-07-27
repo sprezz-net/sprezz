@@ -1,107 +1,24 @@
 package model
 
-import (
-	"crypto/ed25519"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
-	"fmt"
-)
-
-type GeneratedDualKeys struct {
-	RSAPrivatePEM     string
-	Ed25519PrivatePEM string
+// ActorProfile represents a local identity reconstructed from the RDF Quad Store graph history [source: 4].
+type ActorProfile struct {
+	UUID         string `json:"uuid"`           // Stable UUIDv4 identifier string [source: 4]
+	IRI          string `json:"iri"`            // Canonical global ActivityPub Actor URI [source: 4]
+	Username     string `json:"username"`       // Extracted local text-based username handle [source: 4]
+	PublicKeyPEM string `json:"public_key_pem"` // Reconstructed signing key string [source: 4]
+	NomadGUID    string `json:"nomad_guid"`     // Zot6 global identifier string; empty if vanilla AP [source: 4]
 }
 
-// MintNewKeyPair centralizes the 2048-bit RSA and Ed25519 key-generation workflow [source: 2].
-func MintNewKeyPair() (*GeneratedDualKeys, error) {
-	// 1. Generate standard RSA 2048-bit key [source: 2]
-	privKeyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate secure RSA matrix: %w", err)
-	}
-	rsaBlock := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privKeyRSA)}
-	rsaPEM := string(pem.EncodeToMemory(rsaBlock))
-
-	// 2. Generate high-performance Ed25519 key [source: 2]
-	_, privKeyEd, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate secure Ed25519 matrix: %w", err)
-	}
-	edBytes, err := x509.MarshalPKCS8PrivateKey(privKeyEd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Ed25519 keys: %w", err)
-	}
-	edBlock := &pem.Block{Type: "PRIVATE KEY", Bytes: edBytes}
-	edPEM := string(pem.EncodeToMemory(edBlock))
-
-	return &GeneratedDualKeys{
-		RSAPrivatePEM:     rsaPEM,
-		Ed25519PrivatePEM: edPEM,
-	}, nil
+// ActorDualKeys maintains the long-term private key parameters for outbound federation [source: 4].
+type ActorDualKeys struct {
+	PrivateKeyRSAPEM     string
+	PrivateKeyEd25519PEM string
 }
 
-// ExtractRSAPublicKey derives a public key block from an RSA private PEM string and outputs it as a public PEM block.
-func ExtractRSAPublicKey(privateKeyPEM string) (string, error) {
-	block, _ := pem.Decode([]byte(privateKeyPEM))
-	if block == nil {
-		return "", fmt.Errorf("failed to decode RSA private key PEM block structure")
-	}
-
-	// Support both standard PKCS1 and modern PKCS8 fallback formats
-	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		parsedKey, err8 := x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err8 != nil {
-			return "", fmt.Errorf("failed parsing private key via PKCS1 (%v) and PKCS8 (%v)", err, err8)
-		}
-		rsaKey, ok := parsedKey.(*rsa.PrivateKey)
-		if !ok {
-			return "", fmt.Errorf("decoded private key block is not an valid RSA type")
-		}
-		privKey = rsaKey
-	}
-
-	pubKeyBytes, err := x509.MarshalPKIXPublicKey(&privKey.PublicKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal PKIX RSA public key payload bytes: %w", err)
-	}
-
-	pubBlock := &pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: pubKeyBytes,
-	}
-
-	return string(pem.EncodeToMemory(pubBlock)), nil
-}
-
-// ExtractEd25519PublicKey derives a public key block from an Ed25519 private PEM string and outputs it as a public PEM block.
-func ExtractEd25519PublicKey(privateKeyPEM string) (string, error) {
-	block, _ := pem.Decode([]byte(privateKeyPEM))
-	if block == nil {
-		return "", fmt.Errorf("failed to decode Ed25519 private key PEM block structure")
-	}
-
-	parsedKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-	if err != nil {
-		return "", fmt.Errorf("failed parsing Ed25519 private key via PKCS8 rules: %w", err)
-	}
-
-	edPrivKey, ok := parsedKey.(ed25519.PrivateKey)
-	if !ok {
-		return "", fmt.Errorf("decoded private key block is not a valid Ed25519 type")
-	}
-
-	pubKeyBytes, err := x509.MarshalPKIXPublicKey(edPrivKey.Public())
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal PKIX Ed25519 public key payload bytes: %w", err)
-	}
-
-	pubBlock := &pem.Block{
-		Type:  "PUBLIC KEY",
-		Bytes: pubKeyBytes,
-	}
-
-	return string(pem.EncodeToMemory(pubBlock)), nil
+// NomadicIdentity manages clone parameters for cross-server channel synchronization [source: 8].
+type NomadicIdentity struct {
+	GUID               string
+	PrimaryHubURL      string
+	MasterPublicKeyPEM string
+	ClonedHubs         []string
 }
