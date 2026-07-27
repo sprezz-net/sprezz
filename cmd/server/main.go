@@ -165,8 +165,7 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 }
 
 func setupRoutingTree(r chi.Router, deps *dependencies) {
-	keyResolver := inhttp.NewHTTPPublicKeyResolver(nil)
-	sigVerifier := inhttp.NewSignatureVerifier(keyResolver)
+	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
 	inboxHandler := inhttp.NewInboxHandler(deps.postgresStorage)
 	actorHandler := inhttp.NewActorHandler(deps.postgresStorage)
 
@@ -174,7 +173,7 @@ func setupRoutingTree(r chi.Router, deps *dependencies) {
 		TenantDomains: deps.cfg.TenantDomains,
 	})
 
-	signatureValidator := middleware.NewSignatureValidator(sigVerifier, deps.postgresStorage)
+	signatureValidator := middleware.NewSignatureValidator(federatedVerifier, deps.postgresStorage)
 
 	r.Group(func(protected chi.Router) {
 		protected.Use(tenantValidator.Handler)
