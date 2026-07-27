@@ -31,6 +31,54 @@ var _ ports.GraphVersionWriter = (*PostgresStorage)(nil)
 
 func (s *PostgresStorage) queries() *db.Queries { return db.New(s.db) }
 
+// Multi-Tenant Bootstrap and Pre-Flight Storage Metric Hooks
+
+func (s *PostgresStorage) GetOrCreateTenantByDomain(ctx context.Context, domainName string) (int32, error) {
+	// Attempt to pull the existing tenant assignment row from our data map [source: 3]
+	row, err := s.queries().GetTenantByDomain(ctx, domainName)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			// CORRECTED: Accept both the returned struct/row value and the error object from sqlc [source: 3]
+			newTenant, err := s.queries().InsertTenant(ctx, domainName)
+			if err != nil {
+				return 0, fmt.Errorf("failed to bootstrap new tenant mapping boundary for %s: %w", domainName, err)
+			}
+			return newTenant.ID, nil
+		}
+		return 0, fmt.Errorf("failed looking up tenant partition details: %w", err)
+	}
+	return row.ID, nil
+}
+
+func (s *PostgresStorage) HasActorCredential(ctx context.Context, tenantID int32, username string) (bool, error) {
+	// Check for database presence using the clean credentials filter query [source: 3]
+	_, err := s.queries().GetActorCredentialsByUsername(ctx, db.GetActorCredentialsByUsernameParams{
+		TenantID: tenantID,
+		Username: username,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed checking database actor registration availability: %w", err)
+	}
+	return true, nil
+}
+
+func (s *PostgresStorage) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyPEM string) error {
+	// Persist the secure cryptographic system identity parameters to disk [source: 3]
+	err := s.queries().InsertActorCredentials(ctx, db.InsertActorCredentialsParams{
+		ActorIri:      actorIRI,
+		TenantID:      tenantID,
+		Username:      username,
+		PrivateKeyPem: privateKeyPEM,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to write programmatic actor credentials to storage: %w", err)
+	}
+	return nil
+}
+
 func (s *PostgresStorage) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
 	return s.queries().IsDomainBlocked(ctx, domainName)
 }
@@ -42,23 +90,34 @@ func (s *PostgresStorage) EnqueueInbound(ctx context.Context, id string, activit
 	}
 	defer s.safeRollback(ctx, tx)
 	queries := db.New(tx)
-	if err := queries.InsertTenant(ctx, targetDomain); err != nil {
-		return err
-	}
-	tenantID, err := queries.GetTenantID(ctx, targetDomain)
+
+	tenantRow, err := queries.InsertTenant(ctx, targetDomain)
 	if err != nil {
-		return fmt.Errorf("resolve tenant %q: %w", targetDomain, err)
+		return fmt.Errorf("failed to auto-provision inbound tenant %q: %w", targetDomain, err)
 	}
+
 	queueID, err := parseUUID(id)
 	if err != nil {
 		return fmt.Errorf("parse inbound queue ID: %w", err)
 	}
-	if err := queries.EnqueueInboundActivity(ctx, db.EnqueueInboundActivityParams{ID: queueID, ActivityIri: activityIRI, ObjectIri: objectIRI, Payload: payload}); err != nil {
+
+	if err := queries.EnqueueInboundActivity(ctx, db.EnqueueInboundActivityParams{
+		ID:          queueID,
+		ActivityIri: activityIRI,
+		ObjectIri:   objectIRI,
+		Payload:     payload,
+	}); err != nil {
 		return err
 	}
-	if err := queries.RecordTenantDelivery(ctx, db.RecordTenantDeliveryParams{ActivityIri: activityIRI, TenantID: tenantID}); err != nil {
+
+	// Use tenantRow.ID directly to link delivery records seamlessly [source: 4]
+	if err := queries.RecordTenantDelivery(ctx, db.RecordTenantDeliveryParams{
+		ActivityIri: activityIRI,
+		TenantID:    tenantRow.ID,
+	}); err != nil {
 		return err
 	}
+
 	return tx.Commit(ctx)
 }
 
@@ -189,8 +248,8 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 	defer s.safeRollback(ctx, tx)
 	queries := db.New(tx)
 
-	// 1. Resolve the string TenantID to the integer tenant ID required by the schema
-	tenantID, err := queries.GetTenantID(ctx, params.TenantID)
+	// 1. Utilize GetTenantByDomain to retrieve the integer tenant ID.
+	tenantRow, err := queries.GetTenantByDomain(ctx, params.TenantID)
 	if err != nil {
 		return fmt.Errorf("failed to resolve tenant %q for media ownership: %w", params.TenantID, err)
 	}
@@ -207,11 +266,10 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to register central media registry entry: %w", err)
 	}
 
-	// 3. Track local multi-tenant storage resource ownership metrics per actor/tenant boundary
-	// params.TenantID (string) has been correctly resolved above to tenantID (int32)
+	// 3. Track local multi-tenant storage resource ownership metrics per actor/tenant boundary.
 	err = queries.RegisterActorMediaOwnership(ctx, db.RegisterActorMediaOwnershipParams{
 		ActorIri:          params.ActorIRI,
-		TenantID:          tenantID,
+		TenantID:          tenantRow.ID,
 		MediaAttachmentID: mediaID,
 	})
 	if err != nil {
@@ -229,7 +287,6 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 	}
 
 	// 5. Connect media entries to graph tracking
-	// Field changed from GraphVersionID to GraphID to exactly match sqlc naming outputs
 	err = queries.LinkAttachmentToGraphVersion(ctx, db.LinkAttachmentToGraphVersionParams{
 		GraphID:           graphID,
 		MediaAttachmentID: mediaID,

@@ -1,16 +1,3 @@
--- name: IsDomainBlocked :one
-SELECT EXISTS(
-    SELECT 1 FROM blocked_domains WHERE domain_name = $1
-) AS blocked;
-
--- name: InsertTenant :exec
-INSERT INTO server_tenants (domain_name)
-VALUES ($1)
-ON CONFLICT (domain_name) DO NOTHING;
-
--- name: GetTenantID :one
-SELECT id FROM server_tenants WHERE domain_name = $1;
-
 -- name: EnqueueInboundActivity :exec
 INSERT INTO inbound_activity_queue (id, activity_iri, object_iri, payload, status, created_at, updated_at)
 VALUES ($1, $2, $3, $4, 'pending', NOW(), NOW())

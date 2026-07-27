@@ -12,9 +12,9 @@ import (
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/adapters/out/cache"
+	outhttp "sprezz/internal/adapters/out/http"
 	"sprezz/internal/adapters/out/jsonld"
 	"sprezz/internal/adapters/out/minio"
-	outhttp "sprezz/internal/adapters/out/http"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
 	"sprezz/internal/domain/service"
@@ -24,22 +24,69 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type dependencies struct {
+	cfg             *config.Config
+	postgresStorage *postgres.PostgresStorage
+	activityService *service.ActivityService
+	federatedSigner *outhttp.FederatedSignerAdapter
+}
+
 func main() {
 	log.Println("Starting Sprezz server...")
 
-	// 1. Initialize CleanEnv Application Configuration
+	// 1. Initialize configuration and structural dependencies
+	deps, pool := initDependencies()
+	defer pool.Close()
+
+	// 2. Provision multi-tenant system boundaries and server actors [source: 2]
+	log.Println("Validating configuration tenant boundaries and server identities...")
+	bootstrapService := service.NewBootstrapService(deps.postgresStorage)
+	if err := bootstrapService.BootstrapTenantsAndServerActors(context.Background(), deps.cfg.TenantDomains); err != nil {
+		log.Fatalf("Critical failure bootstrapping tenant server actor layers: %v", err)
+	}
+	log.Println("Multi-tenant server actor matrices are completely provisioned.")
+
+	// 3. Launch type-safe background batch processor loops [source: 3]
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	startBackgroundWorkers(ctx, deps)
+
+	// 4. Set up driving router and application server listening sockets [source: 3]
+	r := chi.NewRouter()
+	r.Use(middleware.RealIP)
+	r.Use(chiMiddleware.Logger)
+	r.Use(chiMiddleware.Recoverer)
+	r.Use(chiMiddleware.Timeout(60 * time.Second))
+
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
+	setupRoutingTree(r, deps)
+
+	server := &http.Server{
+		Addr:         ":" + deps.cfg.Port,
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+	}
+
+	// 5. Handle graceful termination signals
+	handleShutdown(server, cancel)
+}
+
+func initDependencies() (*dependencies, *pgxpool.Pool) {
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		log.Fatalf("Configuration bootstrap error: %v", err)
 	}
 
-	// 2. Initialize Ristretto Dictionary Cache (Driven Adapter)
 	dictCache, err := cache.NewDictionaryCache()
 	if err != nil {
 		log.Fatalf("Failed to initialize dictionary cache: %v", err)
 	}
 
-	// 3. Connect to Database using CleanEnv helper DSN string
 	dbConfig, err := pgxpool.ParseConfig(cfg.GetDSN())
 	if err != nil {
 		log.Fatalf("Failed to parse postgres configuration: %v", err)
@@ -52,22 +99,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
 	}
-	defer db.Close()
 
 	if err := db.Ping(context.Background()); err != nil {
 		log.Fatalf("Failed to ping postgres: %v", err)
 	}
 
-	// Execute pending DDL schema statements before initializing services.
-	// Passing context.Background() ensures initialization is fully atomic and
-	// safe from early application boot cancellation routines.
 	log.Println("Executing database schema migration hooks...")
 	if err := postgres.RunDatabaseMigrations(context.Background(), db); err != nil {
 		log.Fatalf("Critical database schema migration failure: %v", err)
 	}
 	log.Println("Database schemas are synchronized and verified.")
 
-	// Initialize MinIO (Driven Adapter)
 	mediaStorage, err := minio.NewMinIOStorageAdapter(
 		cfg.MinIO.Endpoint,
 		cfg.MinIO.RootUser,
@@ -75,28 +117,31 @@ func main() {
 		cfg.MinIO.BucketName,
 		cfg.MinIO.UseSSL,
 	)
-
 	if err != nil {
 		log.Fatalf("Critical storage adapter initialization error: %v", err)
 	}
-	_ = mediaStorage
 
-	// 4. Initialize Driven Adapters & Domain Service Layers
 	postgresStorage := postgres.NewPostgresStorage(db, dictCache)
 	jsonldParser := jsonld.NewJSONLDParser()
 	federatedSigner := outhttp.NewFederatedSignerAdapter()
 	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, federatedSigner)
 
-	// 5. Start Background Batch Worker Engines (Inbound & Outbound)
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	deps := &dependencies{
+		cfg:             cfg,
+		postgresStorage: postgresStorage,
+		activityService: activityService,
+		federatedSigner: federatedSigner,
+	}
 
-	// Inbound Worker Configuration Integration
+	return deps, db
+}
+
+func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 	inboundEngine := service.NewInboundWorkerEngine(service.WorkerConfig{
 		NumWorkers: 4,
 		BatchSize:  10,
 		PollDelay:  500 * time.Millisecond,
-	}, postgresStorage, activityService)
+	}, deps.postgresStorage, deps.activityService)
 
 	go func() {
 		log.Println("Launching async Inbound Worker Engine...")
@@ -105,12 +150,11 @@ func main() {
 		}
 	}()
 
-	// Outbound Federation Worker Configuration Integration
 	outboundEngine := service.NewOutboundWorkerEngine(service.OutboundWorkerConfig{
 		NumWorkers: 4,
 		BatchSize:  10,
 		PollDelay:  500 * time.Millisecond,
-	}, postgresStorage, federatedSigner)
+	}, deps.postgresStorage, deps.federatedSigner)
 
 	go func() {
 		log.Println("Launching async Outbound Federation Worker Engine...")
@@ -118,70 +162,44 @@ func main() {
 			log.Printf("Outbound worker engine exited with error: %v", err)
 		}
 	}()
+}
 
-	// 6. Setup Driving Adapters with Chi Router
-	r := chi.NewRouter()
-
-	// Inject core optimized infrastructure middleware globally
-	r.Use(middleware.RealIP) // Replaced the deprecated chiMiddleware.RealIP with our security-hardened middleware package call
-	r.Use(chiMiddleware.Logger)
-	r.Use(chiMiddleware.Recoverer)
-	r.Use(chiMiddleware.Timeout(60 * time.Second))
-
-	// Global baseline health endpoints (accessible without tenant locks)
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
-	})
-
-	// Setup Inbound Activity Handlers
+func setupRoutingTree(r chi.Router, deps *dependencies) {
 	keyResolver := inhttp.NewHTTPPublicKeyResolver(nil)
 	sigVerifier := inhttp.NewSignatureVerifier(keyResolver)
-	inboxHandler := inhttp.NewInboxHandler(postgresStorage)
-	actorHandler := inhttp.NewActorHandler(postgresStorage)
+	inboxHandler := inhttp.NewInboxHandler(deps.postgresStorage)
+	actorHandler := inhttp.NewActorHandler(deps.postgresStorage)
 
-	// Instantiate the tenant validator from middleware package
 	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{
-		TenantDomains: cfg.TenantDomains,
+		TenantDomains: deps.cfg.TenantDomains,
 	})
 
-	// Instantiate the cryptographic signature validator middleware
-	signatureValidator := middleware.NewSignatureValidator(sigVerifier, postgresStorage)
+	signatureValidator := middleware.NewSignatureValidator(sigVerifier, deps.postgresStorage)
 
-	// Wrap federated multi-tenant endpoints inside a protected routing group
 	r.Group(func(protected chi.Router) {
 		protected.Use(tenantValidator.Handler)
 
-		// WebFinger Discovery Endpoint
-		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(cfg.TenantDomains, postgresStorage))
+		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(deps.cfg.TenantDomains, deps.postgresStorage))
 
-		// Scoped activity routers
 		protected.Route("/actors", func(router chi.Router) {
 			router.Handle("/", actorHandler)
 			router.Handle("/{actor}", actorHandler)
 		})
 
-		// Scoped cryptographic validation group explicitly targeting the /inbox delivery channel
 		protected.Route("/inbox", func(router chi.Router) {
-			router.Use(signatureValidator.Handler) // Enforces valid HTTP Signatures before task ingestion
+			router.Use(signatureValidator.Handler)
 			router.Handle("/", inboxHandler)
 			router.Handle("/{actor}", inboxHandler)
 		})
 	})
+}
 
-	server := &http.Server{
-		Addr:         ":" + cfg.Port,
-		Handler:      r, // Pass the Chi router tree directly into the server
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	}
-
-	// 7. Graceful Shutdown Signal Handler
+func handleShutdown(server *http.Server, cancel context.CancelFunc) {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		log.Printf("Sprezz server running via Chi on http://localhost:%s for domains: %v", cfg.Port, cfg.TenantDomains)
+		log.Printf("Sprezz server running seamlessly via Chi on port 8080")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server error: %v", err)
 		}
@@ -197,6 +215,6 @@ func main() {
 		log.Printf("Server shutdown error: %v", err)
 	}
 
-	cancel() // Cancel context to safely stop background engines
+	cancel()
 	log.Println("Sprezz server stopped gracefully.")
 }

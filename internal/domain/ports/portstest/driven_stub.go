@@ -1,3 +1,4 @@
+// File: /internal/domain/ports/portstest/driven_stub.go
 package portstest
 
 import (
@@ -15,6 +16,24 @@ type UnimplementedStoragePort struct{}
 
 // Assert at compilation that this stub fully satisfies the ports.StoragePort interface contract
 var _ ports.StoragePort = (*UnimplementedStoragePort)(nil)
+
+// Domain Routing & Multi-Tenant Isolation Stubs
+
+func (UnimplementedStoragePort) GetOrCreateTenantByDomain(ctx context.Context, domainName string) (int32, error) {
+	return 0, nil
+}
+
+func (UnimplementedStoragePort) HasActorCredential(ctx context.Context, tenantID int32, username string) (bool, error) {
+	return false, nil
+}
+
+func (UnimplementedStoragePort) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyPEM string) error {
+	return nil
+}
+
+func (UnimplementedStoragePort) GetTenantStorageMetrics(ctx context.Context, tenantID int32) (int64, int64, error) {
+	return 0, 0, nil
+}
 
 func (UnimplementedStoragePort) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
 	return false, nil
@@ -40,6 +59,8 @@ func (UnimplementedStoragePort) RecordActorInboxDelivery(ctx context.Context, ac
 	return nil
 }
 
+// Nomadic Identity Management Stubs
+
 func (UnimplementedStoragePort) GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error) {
 	return nil, nil
 }
@@ -56,6 +77,8 @@ func (UnimplementedStoragePort) GetActorPrivateKey(ctx context.Context, actorIRI
 	return "", nil
 }
 
+// Core RDF Event Sourcing Write Operations Stubs
+
 func (UnimplementedStoragePort) CreateGraphVersion(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error) {
 	return 0, nil
 }
@@ -71,6 +94,8 @@ func (UnimplementedStoragePort) SaveQuadIDs(ctx context.Context, quadIDs []model
 func (UnimplementedStoragePort) RemoveQuadEdge(ctx context.Context, subject, predicate, object string) error {
 	return nil
 }
+
+// Core RDF Graph Read Operations Stubs
 
 func (UnimplementedStoragePort) GetLatestPayload(ctx context.Context, objectIRI string) ([]byte, error) {
 	return nil, nil

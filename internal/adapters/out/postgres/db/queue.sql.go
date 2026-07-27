@@ -75,41 +75,6 @@ func (q *Queries) EnqueueInboundActivity(ctx context.Context, arg EnqueueInbound
 	return err
 }
 
-const getTenantID = `-- name: GetTenantID :one
-SELECT id FROM server_tenants WHERE domain_name = $1
-`
-
-func (q *Queries) GetTenantID(ctx context.Context, domainName string) (int32, error) {
-	row := q.db.QueryRow(ctx, getTenantID, domainName)
-	var id int32
-	err := row.Scan(&id)
-	return id, err
-}
-
-const insertTenant = `-- name: InsertTenant :exec
-INSERT INTO server_tenants (domain_name)
-VALUES ($1)
-ON CONFLICT (domain_name) DO NOTHING
-`
-
-func (q *Queries) InsertTenant(ctx context.Context, domainName string) error {
-	_, err := q.db.Exec(ctx, insertTenant, domainName)
-	return err
-}
-
-const isDomainBlocked = `-- name: IsDomainBlocked :one
-SELECT EXISTS(
-    SELECT 1 FROM blocked_domains WHERE domain_name = $1
-) AS blocked
-`
-
-func (q *Queries) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
-	row := q.db.QueryRow(ctx, isDomainBlocked, domainName)
-	var blocked bool
-	err := row.Scan(&blocked)
-	return blocked, err
-}
-
 const markInboundComplete = `-- name: MarkInboundComplete :exec
 UPDATE inbound_activity_queue
 SET status = 'completed', updated_at = NOW()
