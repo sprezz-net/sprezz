@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"strings"
 	"time"
@@ -12,17 +11,6 @@ import (
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
 )
-
-// InboundMediaContext matches the boundary schema structure passing from your handler
-type InboundMediaContext struct {
-	TenantID     string
-	ActorIRI     string
-	ObjectName   string
-	OriginalName string
-	ContentType  string
-	Size         int64
-	MediaStream  io.Reader
-}
 
 type ActivityService struct {
 	storage      port.StoragePort
@@ -81,7 +69,7 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 }
 
 // ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
-func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx InboundMediaContext, task model.InboundTask) error {
+func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) error {
 	if s.mediaStorage == nil {
 		return fmt.Errorf("media storage engine driver is not configured")
 	}

@@ -309,7 +309,7 @@ func TestProcessInboundMediaTask_Success(t *testing.T) {
 
 	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
 
-	mediaCtx := service.InboundMediaContext{
+	mediaCtx := port.InboundMediaContext{
 		TenantID:     "tenant-1",
 		ActorIRI:     "https://sprezz.net",
 		ObjectName:   "tmp/upload-id",
@@ -357,7 +357,7 @@ func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
 
 	svc := service.NewActivityService(mockStorage, &MockParserAdapter{}, mockMedia)
 
-	mediaCtx := service.InboundMediaContext{
+	mediaCtx := port.InboundMediaContext{
 		ObjectName:  "tmp/failed-task",
 		MediaStream: strings.NewReader("bytes"),
 	}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"sprezz/internal/domain/model"
+	"sprezz/internal/domain/port"
 	"sprezz/internal/domain/service"
 
 	"github.com/google/uuid"
@@ -101,7 +102,7 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		tempObjectKey := fmt.Sprintf("tmp/%s", taskID.String())
 
 		// Pack parameters into the single structure matching your exact service parameters
-		mediaCtx := service.InboundMediaContext{
+		mediaCtx := port.InboundMediaContext{
 			TenantID:     tenantID,
 			ActorIRI:     actorIRI,
 			ObjectName:   tempObjectKey,

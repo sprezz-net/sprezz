@@ -1,9 +1,7 @@
-// File: /internal/domain/ports/portstest/driven_stub.go
 package portstub
 
 import (
 	"context"
-	"io"
 	"time"
 
 	"sprezz/internal/domain/model"
@@ -11,8 +9,6 @@ import (
 )
 
 // UnimplementedStoragePort implements every method of port.StoragePort with non-operational, zero-value fallbacks.
-// Embed this into any test mock struct across your application to inherit default behaviors and maintain
-// interface compliance automatically when new methods are added to port.StoragePort.
 type UnimplementedStoragePort struct{}
 
 // Assert at compilation that this stub fully satisfies the port.StoragePort interface contract
@@ -36,10 +32,6 @@ func (UnimplementedStoragePort) CreateActorCredential(ctx context.Context, actor
 	return nil
 }
 
-func (UnimplementedStoragePort) GetTenantStorageMetrics(ctx context.Context, tenantID int32) (int64, int64, error) {
-	return 0, 0, nil
-}
-
 func (UnimplementedStoragePort) IsDomainBlocked(ctx context.Context, domainName string) (bool, error) {
 	return false, nil
 }
@@ -61,10 +53,6 @@ func (UnimplementedStoragePort) MarkInboundFailed(ctx context.Context, id string
 }
 
 func (UnimplementedStoragePort) RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error {
-	return nil
-}
-
-func (UnimplementedStoragePort) ForwardFederatedActivity(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
 	return nil
 }
 
@@ -136,26 +124,4 @@ func (UnimplementedStoragePort) ArchiveKeyHistory(ctx context.Context, actorIRI 
 
 func (UnimplementedStoragePort) GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error) {
 	return "", nil
-}
-
-// UnimplementedMediaStoragePort provides zero-value stubs for port.MediaStoragePort.
-type UnimplementedMediaStoragePort struct{}
-
-var _ port.MediaStoragePort = (*UnimplementedMediaStoragePort)(nil)
-
-func (UnimplementedMediaStoragePort) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
-	return "", "", nil
-}
-
-func (UnimplementedMediaStoragePort) DeleteObject(ctx context.Context, objectName string) error {
-	return nil
-}
-
-// UnimplementedJSONLDParserPort provides zero-value stubs for port.JSONLDParserPort.
-type UnimplementedJSONLDParserPort struct{}
-
-var _ port.JSONLDParserPort = (*UnimplementedJSONLDParserPort)(nil)
-
-func (UnimplementedJSONLDParserPort) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
-	return nil, nil
 }
