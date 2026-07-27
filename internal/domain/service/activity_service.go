@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"time"
 
@@ -12,18 +13,29 @@ import (
 	"sprezz/internal/domain/port"
 )
 
+// InboundMediaContext matches the boundary schema structure passing from your handler
+type InboundMediaContext struct {
+	TenantID     string
+	ActorIRI     string
+	ObjectName   string
+	OriginalName string
+	ContentType  string
+	Size         int64
+	MediaStream  io.Reader
+}
+
 type ActivityService struct {
 	storage      port.StoragePort
+	mediaStorage port.MediaStoragePort
 	parser       port.JSONLDParserPort
 	forwarder    port.OutboundDispatcher
-	mediaStorage port.MediaStoragePort
 }
 
 func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, forwarders ...port.OutboundDispatcher) *ActivityService {
 	service := &ActivityService{
 		storage:      storage,
-		parser:       parser,
 		mediaStorage: media,
+		parser:       parser,
 	}
 	if len(forwarders) > 0 {
 		service.forwarder = forwarders[0]
@@ -33,6 +45,7 @@ func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, 
 
 var _ port.ActivityServicePort = (*ActivityService)(nil)
 
+// ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
 	// If the storage instance implements the composite GraphVersionWriter interface,
 	// utilize the transaction-wrapped batch writing method.
@@ -67,6 +80,67 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	return nil
 }
 
+// ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
+func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx InboundMediaContext, task model.InboundTask) error {
+	if s.mediaStorage == nil {
+		return fmt.Errorf("media storage engine driver is not configured")
+	}
+
+	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated.
+	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
+	if err != nil {
+		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
+	}
+
+	// 2. Parse the JSON-LD payload into quads before triggering the database routine
+	quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
+	if err != nil {
+		_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Compensating removal
+		return fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
+	}
+
+	// 3. Delegate atomic multi-table execution down to the transaction writer engine
+	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
+		err := writer.SaveGraphVersionWithMedia(ctx, port.MediaAttachmentParams{
+			ObjectName:   stableKey,
+			OriginalName: mediaCtx.OriginalName,
+			SHA256Hex:    sha256Hex,
+			ContentType:  mediaCtx.ContentType,
+			FileSize:     mediaCtx.Size,
+			TenantID:     mediaCtx.TenantID,
+			ActorIRI:     mediaCtx.ActorIRI,
+			ActivityIRI:  task.ActivityIRI,
+			ObjectIRI:    task.ObjectIRI,
+			Payload:      task.Payload,
+			Quads:        quads,
+		})
+		if err != nil {
+			_ = s.mediaStorage.DeleteObject(ctx, stableKey)
+			return fmt.Errorf("failed to commit graph and media attachment relationships: %w", err)
+		}
+		return nil
+	}
+
+	_ = s.mediaStorage.DeleteObject(ctx, stableKey)
+	return fmt.Errorf("storage port does not implement required GraphVersionWriter extension")
+}
+
+// PurgeOrphanedMedia provides the domain coordination step for clearing stranded files.
+// It directly drives the media storage port while applying strict structural masking to standard system logging.
+func (s *ActivityService) PurgeOrphanedMedia(ctx context.Context, tempObjectKey string) error {
+	if s.mediaStorage == nil || tempObjectKey == "" {
+		return nil
+	}
+
+	if err := s.mediaStorage.DeleteObject(ctx, tempObjectKey); err != nil {
+		// Strict operational log masking. Excludes request keys, signatures, or raw blobs.
+		log.Printf("[ERR] Sprezz Core: Failed to execute compensating storage rollback for key: %s", tempObjectKey)
+		return err
+	}
+
+	return nil
+}
+
 func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error {
 	if s.forwarder == nil {
 		return fmt.Errorf("outbound dispatcher is not configured")
@@ -88,14 +162,12 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 
 	targetKeyID := actorIRI + "#main-key"
 
-	// For legacy compatibility, we pass PrivateKeyRSAPEM to satisfy the current OutboundDispatcher perimeter interface.
-	// Future protocol extensions can naturally consume dualKeys.PrivateKeyEd25519PEM here without additional database hits.
 	return s.forwarder.ForwardFederatedActivity(
 		ctx,
 		envelope.Inbox,
 		targetKeyID,
 		dualKeys.PrivateKeyRSAPEM,
-		dualKeys.PrivateKeyEd25519PEM, // Pass the newly available Ed25519 parameter down
+		dualKeys.PrivateKeyEd25519PEM,
 		payload,
 	)
 }
@@ -233,63 +305,6 @@ func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActor
 	return authorizedPayloads, nil
 }
 
-// InboundMediaContext encapsulates the execution boundary variables
-// for streaming attachments to adhere to the 7-parameter limit.
-type InboundMediaContext struct {
-	TenantID     string
-	ActorIRI     string
-	OriginalName string
-	ObjectName   string
-	ContentType  string
-	Size         int64
-	MediaStream  io.Reader
-}
-
-// ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
-func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx InboundMediaContext, task model.InboundTask) error {
-	if s.mediaStorage == nil {
-		return fmt.Errorf("media storage engine driver is not configured")
-	}
-
-	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated.
-	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
-	if err != nil {
-		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
-	}
-
-	// 2. Parse the JSON-LD payload into quads before triggering the database routine
-	quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
-	if err != nil {
-		_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Compensating removal
-		return fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
-	}
-
-	// 3. Delegate atomic multi-table execution down to the transaction writer engine
-	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
-		err := writer.SaveGraphVersionWithMedia(ctx, port.MediaAttachmentParams{
-			ObjectName:   stableKey,
-			OriginalName: mediaCtx.OriginalName,
-			SHA256Hex:    sha256Hex,
-			ContentType:  mediaCtx.ContentType,
-			FileSize:     mediaCtx.Size,
-			TenantID:     mediaCtx.TenantID,
-			ActorIRI:     mediaCtx.ActorIRI,
-			ActivityIRI:  task.ActivityIRI,
-			ObjectIRI:    task.ObjectIRI,
-			Payload:      task.Payload,
-			Quads:        quads,
-		})
-		if err != nil {
-			_ = s.mediaStorage.DeleteObject(ctx, stableKey)
-			return fmt.Errorf("failed to commit graph and media attachment relationships: %w", err)
-		}
-		return nil
-	}
-
-	_ = s.mediaStorage.DeleteObject(ctx, stableKey)
-	return fmt.Errorf("storage port does not implement required GraphVersionWriter extension")
-}
-
 func (s *ActivityService) RotateLocalActorKeys(ctx context.Context, tenantID int32, username string) (string, error) {
 	actorIRI, dualKeys, err := s.storage.GetActorCredentials(ctx, tenantID, username)
 	if err != nil {
@@ -299,7 +314,7 @@ func (s *ActivityService) RotateLocalActorKeys(ctx context.Context, tenantID int
 	now := time.Now().UTC()
 	validFrom := now.Add(-24 * time.Hour)
 
-	// Archive steps remain compact [source: 2]
+	// Archive steps remain compact
 	rsaPubKeyPEM, err := model.ExtractRSAPublicKey(dualKeys.PrivateKeyRSAPEM)
 	if err == nil {
 		_ = s.storage.ArchiveKeyHistory(ctx, actorIRI, "RSA", rsaPubKeyPEM, validFrom, now)
@@ -312,13 +327,13 @@ func (s *ActivityService) RotateLocalActorKeys(ctx context.Context, tenantID int
 		}
 	}
 
-	// NEW: Reuse the identical centralized key minting function [source: 2]
+	// Reuse the identical centralized key minting function
 	newKeys, err := model.MintNewKeyPair()
 	if err != nil {
 		return "", fmt.Errorf("failed to mint fresh keys during rotation: %w", err)
 	}
 
-	// Overwrite the row, discarding old private keys from memory [source: 2]
+	// Overwrite the row, discarding old private keys from memory
 	err = s.storage.CreateActorCredential(ctx, actorIRI, tenantID, username, newKeys.RSAPrivatePEM, newKeys.Ed25519PrivatePEM)
 	if err != nil {
 		return "", fmt.Errorf("failed to overwrite current local credentials: %w", err)

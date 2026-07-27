@@ -14,6 +14,7 @@ import (
 )
 
 var _ port.StoragePort = (*MockStorageAdapter)(nil)
+var _ port.GraphVersionWriter = (*MockStorageAdapter)(nil)
 
 type MockStorageAdapter struct {
 	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
@@ -96,6 +97,13 @@ func (m *MockStorageAdapter) ArchiveKeyHistory(ctx context.Context, actorIRI str
 		return m.OnArchiveKeyHistory(ctx, actorIRI, keyType, publicKeyPEM, validFrom, validTo)
 	}
 	return nil
+}
+
+func (m *MockStorageAdapter) GetActorDualKeys(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+	return &model.ActorDualKeys{
+		PrivateKeyRSAPEM:     "---BEGIN RSA PRIVATE KEY--- mock",
+		PrivateKeyEd25519PEM: "---BEGIN PRIVATE KEY--- mock",
+	}, nil
 }
 
 var _ port.JSONLDParserPort = (*MockParserAdapter)(nil)

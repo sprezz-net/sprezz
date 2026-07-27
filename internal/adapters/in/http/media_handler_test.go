@@ -48,9 +48,13 @@ func (m *MockStorageAdapter) SaveGraphVersionWithMedia(ctx context.Context, para
 // MockParserAdapter implements port.JSONLDParserPort for isolation testing.
 type MockParserAdapter struct {
 	portstub.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloated layout)
+	OnToQuads                              func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error)
 }
 
 func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
+	if m.OnToQuads != nil {
+		return m.OnToQuads(ctx, graphID, mainObjectIRI, jsonPayload)
+	}
 	return []model.Quad{}, nil
 }
 
@@ -58,6 +62,7 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 type MockMediaAdapter struct {
 	portstub.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloated layout)
 	OnPutObject                            func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
+	OnDeleteObject                         func(ctx context.Context, objectName string) error
 }
 
 func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
@@ -67,8 +72,15 @@ func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, rea
 	return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
 }
 
+func (m *MockMediaAdapter) DeleteObject(ctx context.Context, objectName string) error {
+	if m.OnDeleteObject != nil {
+		return m.OnDeleteObject(ctx, objectName)
+	}
+	return nil
+}
+
 // createMultipartRequest builds an in-memory body with structured file chunks and JSON-LD fields.
-func createMultipartRequest(t *testing.T, activityJSON, filename, fileContent string) (string, *bytes.Buffer) {
+func createMultipartRequest(t *testing.T, activityJSON string, filenames []string, fileContents []string) (string, *bytes.Buffer) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 
@@ -80,20 +92,18 @@ func createMultipartRequest(t *testing.T, activityJSON, filename, fileContent st
 		}
 	}
 
-	// 2. Append the binary file chunk descriptor segment
-	if filename != "" {
-		part, err := writer.CreateFormFile("file", filename)
+	// Loop over all provided attachments to mock array parameters
+	for i, filename := range filenames {
+		part, err := writer.CreateFormFile("attachment", filename)
 		if err != nil {
 			t.Fatalf("failed to create multipart form attachment file boundary: %v", err)
 		}
-		_, err = io.Copy(part, strings.NewReader(fileContent))
-		if err != nil {
+		if _, err = io.Copy(part, strings.NewReader(fileContents[i])); err != nil {
 			t.Fatalf("failed to populate multipart form binary file content data: %v", err)
 		}
 	}
 
-	err := writer.Close()
-	if err != nil {
+	if err := writer.Close(); err != nil {
 		t.Fatalf("failed to seal multipart structural write boundaries: %v", err)
 	}
 
@@ -102,7 +112,11 @@ func createMultipartRequest(t *testing.T, activityJSON, filename, fileContent st
 
 func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
-	contentType, body := createMultipartRequest(t, activityPayload, "vacation.jpg", "fake-binary-image-data-stream")
+
+	// Provision multiple file items to traverse the loop context path
+	filenames := []string{"vacation.jpg", "document.pdf"}
+	contents := []string{"fake-binary-image-data", "fake-pdf-stream"}
+	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
 
 	// Instantiate mock domain boundaries
 	mockStorage := &MockStorageAdapter{}
@@ -115,7 +129,7 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
 	req.Header.Set("Content-Type", contentType)
 
-	// Inject upstream identity values utilizing type-safe constant enumerations (SA1029 Fix)
+	// Inject upstream identity values utilizing type-safe constant enumerations
 	ctx := context.WithValue(req.Context(), model.TenantIDKey, "tenant-alpha")
 	ctx = context.WithValue(ctx, model.ActorIRIKey, "https://sprezz.net")
 	req = req.WithContext(ctx)
@@ -134,7 +148,9 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 }
 
 func TestMediaUploadHandler_ServeHTTP_MissingContext(t *testing.T) {
-	contentType, body := createMultipartRequest(t, `{"id":"123"}`, "photo.png", "bytes")
+	filenames := []string{"photo.png"}
+	contents := []string{"bytes"}
+	contentType, body := createMultipartRequest(t, `{"id":"123"}`, filenames, contents)
 
 	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, &MockMediaAdapter{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
@@ -151,8 +167,60 @@ func TestMediaUploadHandler_ServeHTTP_MissingContext(t *testing.T) {
 	}
 }
 
+func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
+	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
+	filenames := []string{"first_file.jpg", "second_file.png"}
+	contents := []string{"bytes1", "bytes2"}
+	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
+
+	purgedKeys := make(map[string]bool)
+	uploadCount := 0
+
+	mockMedia := &MockMediaAdapter{
+		OnPutObject: func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+			uploadCount++
+			if uploadCount == 2 {
+				// Simulate infrastructure network or storage block issue on item 2
+				return "", "", errors.New("minio node disconnected")
+			}
+			return objectName, "checksum", nil
+		},
+		OnDeleteObject: func(ctx context.Context, objectName string) error {
+			purgedKeys[objectName] = true
+			return nil
+		},
+	}
+
+	mockStorage := &MockStorageAdapter{}
+	mockParser := &MockParserAdapter{}
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
+	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
+
+	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
+	req.Header.Set("Content-Type", contentType)
+
+	ctx := context.WithValue(req.Context(), model.TenantIDKey, "tenant-alpha")
+	ctx = context.WithValue(ctx, model.ActorIRIKey, "https://sprezz.net")
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Expected internal server error on loop interruption, got %d", rr.Code)
+	}
+
+	// Verify that the first key was tracked and cleaned up on rollback
+	if len(purgedKeys) == 0 {
+		t.Error("Compensating cleanup loop failed to remove previously committed keys after mid-loop abort")
+	}
+}
+
 func TestMediaUploadHandler_ServeHTTP_MissingActivity(t *testing.T) {
-	contentType, body := createMultipartRequest(t, "", "photo.png", "bytes") // Empty activity parameter
+	filenames := []string{"photo.png"}
+	contents := []string{"bytes"}
+	contentType, body := createMultipartRequest(t, "", filenames, contents) // Empty activity parameter
 
 	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, &MockMediaAdapter{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
@@ -160,7 +228,7 @@ func TestMediaUploadHandler_ServeHTTP_MissingActivity(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
 	req.Header.Set("Content-Type", contentType)
 
-	// Inject upstream identity values utilizing type-safe constant enumerations (SA1029 Fix)
+	// Inject upstream identity values utilizing type-safe constant enumerations
 	ctx := context.WithValue(req.Context(), model.TenantIDKey, "tenant-alpha")
 	ctx = context.WithValue(ctx, model.ActorIRIKey, "https://sprezz.net")
 	req = req.WithContext(ctx)
@@ -179,7 +247,9 @@ func TestMediaUploadHandler_ServeHTTP_MissingActivity(t *testing.T) {
 
 func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
-	contentType, body := createMultipartRequest(t, activityPayload, "document.pdf", "pdf-stream")
+	filenames := []string{"document.pdf"}
+	contents := []string{"pdf-stream"}
+	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
 
 	mockStorage := &MockStorageAdapter{
 		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
@@ -206,5 +276,123 @@ func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 
 	if rr.Code != http.StatusInternalServerError {
 		t.Errorf("Expected status code %d (Internal Server Error) on backend crash, got %d", http.StatusInternalServerError, rr.Code)
+	}
+}
+
+func TestProcessInboundMediaTask_Success(t *testing.T) {
+	ctx := context.Background()
+	putInvoked := false
+	saveWithMediaInvoked := false
+
+	mockMedia := &MockMediaAdapter{
+		OnPutObject: func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+			putInvoked = true
+			return "permanent/key-123", "hash-sha256-string", nil
+		},
+	}
+
+	mockStorage := &MockStorageAdapter{
+		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
+			saveWithMediaInvoked = true
+			if params.ObjectName != "permanent/key-123" || params.SHA256Hex != "hash-sha256-string" {
+				t.Errorf("Mismatched metadata mapping values inside parameters context shape: %+v", params)
+			}
+			return nil
+		},
+	}
+
+	mockParser := &MockParserAdapter{
+		OnToQuads: func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
+			return []model.Quad{{GraphID: graphID, Subject: "obj", Predicate: "pred", Object: "val"}}, nil
+		},
+	}
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
+
+	mediaCtx := service.InboundMediaContext{
+		TenantID:     "tenant-1",
+		ActorIRI:     "https://sprezz.net",
+		ObjectName:   "tmp/upload-id",
+		OriginalName: "photo.jpg",
+		ContentType:  "image/jpeg",
+		Size:         1024,
+		MediaStream:  strings.NewReader("dummy-bytes"),
+	}
+
+	task := model.InboundTask{
+		ID:          "task-1",
+		ActivityIRI: "https://sprezz.net",
+		ObjectIRI:   "https://sprezz.net",
+		Payload:     []byte(`{}`),
+	}
+
+	if err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task); err != nil {
+		t.Fatalf("Expected successful execution of individual media stream iteration block, got error: %v", err)
+	}
+
+	if !putInvoked || !saveWithMediaInvoked {
+		t.Error("Pipeline sequences skipped out bounds object storage processing or database commit adapters")
+	}
+}
+
+func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
+	ctx := context.Background()
+	deleteInvokedWithKey := ""
+
+	mockMedia := &MockMediaAdapter{
+		OnPutObject: func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
+			return "permanent/isolated-key", "checksum", nil
+		},
+		OnDeleteObject: func(ctx context.Context, objectName string) error {
+			deleteInvokedWithKey = objectName
+			return nil
+		},
+	}
+
+	mockStorage := &MockStorageAdapter{
+		OnSaveGraphVersionWithMedia: func(ctx context.Context, params port.MediaAttachmentParams) error {
+			return errors.New("simulated postgres context deadlock isolation failure")
+		},
+	}
+
+	svc := service.NewActivityService(mockStorage, &MockParserAdapter{}, mockMedia)
+
+	mediaCtx := service.InboundMediaContext{
+		ObjectName:  "tmp/failed-task",
+		MediaStream: strings.NewReader("bytes"),
+	}
+	task := model.InboundTask{Payload: []byte(`{}`)}
+
+	err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+	if err == nil {
+		t.Fatal("Expected functional bubble up error from internal service tracking due to database failure context, got nil")
+	}
+
+	if deleteInvokedWithKey != "permanent/isolated-key" {
+		t.Errorf("Compensating rollback mechanism failed to purge un-indexed asset file entry from object storage node. Got key: %q", deleteInvokedWithKey)
+	}
+}
+
+func TestPurgeOrphanedMedia_Success(t *testing.T) {
+	ctx := context.Background()
+	deleteInvoked := false
+
+	mockMedia := &MockMediaAdapter{
+		OnDeleteObject: func(ctx context.Context, objectName string) error {
+			if objectName == "tmp/target-to-purge" {
+				deleteInvoked = true
+			}
+			return nil
+		},
+	}
+
+	svc := service.NewActivityService(&MockStorageAdapter{}, &MockParserAdapter{}, mockMedia)
+
+	if err := svc.PurgeOrphanedMedia(ctx, "tmp/target-to-purge"); err != nil {
+		t.Fatalf("Unexpected error surface uncovered during operational cleanup interface call: %v", err)
+	}
+
+	if !deleteInvoked {
+		t.Error("Compensating domain action failed to propagate target deletion instruction down into infrastructural driver ports")
 	}
 }
