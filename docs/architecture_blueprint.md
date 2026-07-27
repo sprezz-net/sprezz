@@ -96,65 +96,85 @@ Driven ports describe capabilities required by the domain:
 
 Adapters implement these capabilities without changing domain terminology or leaking driver-specific types into the core.
 
-## 4. Inbound Activity Workflow
+## 4. Inbound Activity and Cryptographic Verification Workflow
 
-### 4.1 Request Acceptance
+### 4.1 Request Acceptance and Native Asymmetric Verification
 
-For every inbox request, the server performs these checks in order:
+For every inbox request, the server executes a native, standard-library driven signature verification pipeline entirely decoupled from external, third-party cryptographic frameworks.
 
-1. Accept only the configured HTTP method and enforce a maximum body size.
-2. Normalize the receiving host and reject a blocked receiving domain.
-3. Validate the `Digest` header against the raw request body.
-4. Parse the HTTP Signature and require the signed request target, host, date, and digest components.
-5. Resolve the remote public key through an HTTPS-only resolver that rejects private, loopback, link-local, and unspecified addresses.
-6. Verify the RSA-SHA256 signature and reject stale requests outside the configured freshness window.
-7. Parse the JSON activity and derive its activity and object identifiers.
-8. Extract the sender actor domain and reject it when it is blocklisted.
-9. Enqueue the activity and record the receiving tenant transactionally.
-10. Record actor-specific inbox delivery when the request targets an actor inbox.
+```mermaid
+flowchart TD
+    In[Incoming HTTP POST Request] --> ParseHeader[Extract keyId and base64 signature attributes]
+    ParseHeader --> ExtractDate[Read Date header for chronological mapping]
+    ExtractDate --> CheckSkew{Is clock skew > 5 mins?}
+    CheckSkew -- Yes --> Fail401[HTTP 401 Unauthorized]
+    CheckSkew -- No --> CheckHost{Does keyId contain local r.Host?}
 
-Invalid requests must not create queue, tenant-delivery, graph, or inbox-delivery records.
+    CheckHost -- Yes --> FetchHistory[Query actor_public_key_history table for request timestamp]
+    FetchHistory -- Row Found --> DecodePEM[Decode historical PEM string to native crypto object]
+    FetchHistory -- No Row --> FetchActive[Fallback: Read active local dual-key credentials row]
+    FetchActive --> DecodePEM
 
-### 4.2 Queue Processing
+    CheckHost -- No --> FetchRemote[Execute remote federated profile back-channel lookups]
+    FetchRemote --> DecodePEM
 
-Inbound queue records have four states:
+    DecodePEM --> DetectAlgo{Evaluate Public Key Type}
+    DetectAlgo -- *rsa.PublicKey --> VerifyRSA[rsa.VerifyPKCS1v15 using SHA256 digest]
+    DetectAlgo -- ed25519.PublicKey --> VerifyEd[ed25519.Verify over raw signing string bytes]
 
-- `pending`: accepted and waiting for a worker.
-- `processing`: claimed by a worker.
-- `completed`: graph persistence succeeded.
-- `failed`: processing failed and the record may be retried according to policy.
+    VerifyRSA -- Valid --> InjectHeader[Set X-Actor-IRI header & Pass to handler]
+    VerifyEd -- Valid --> InjectHeader
+```
 
-The background subsystem orchestrates both ingestion task loops and outbound federation distributions using a unified, type-safe generic scheduling framework (`BatchWorkerEngine[T]`). This engine decouples queue polling, thread-pool resource management, and graceful context cancellations from the concrete execution steps. The unique task behaviors are injected cleanly at initialization using functional closures.
+1. **Clock Skew Anti-Replay Guard**: The system reads the standard HTTP `Date` header. If the timestamp deviates from the current system context by more than 5 minutes, the perimeter layer terminates the socket immediately.
+2. **Chronological Key History Window Routing**: If the signature's `keyId` points to a local domain, the system uses a compound index lookup to extract the public key that was valid *at the exact time the message was signed*. If no historical block is archived, it falls back to the current active credentials row.
+3. **Multi-Algorithm Validation Decoupling**: The extracted PEM string is decoded natively. The verification engine branches dynamically: **RSA signatures** are evaluated via `rsa.VerifyPKCS1v15` using pre-calculated SHA-256 digests, while modern **Ed25519 signatures** bypass hashing entirely and verify raw text bytes directly via `ed25519.Verify`.
+4. **Identity Assertion**: Upon successful cryptographic validation, the verifier binds the canonical sender to the request context via the `X-Actor-IRI` header, signaling downstream filters.
 
-Workers claim records using explicit row-level database locking (`FOR UPDATE SKIP LOCKED`). This guarantees that concurrent execution threads process disjoint batches and prevents race conditions under high load.
+### 4.2 Split Hexagonal Queue Processing Boundaries
 
-The activity identifier is globally unique. Tenant and actor delivery tables provide local fan-out without duplicating graph parsing work.
+The system decouples asynchronous background scheduling mechanics from domain use cases by segregating polling execution directions across explicit hexagonal boundaries:
 
-## 5. Identity and Tenant Functions
+- **The Generic Concurrency Frame (`internal/pkg/workers/`)**: Houses an abstraction-bound thread-pool utility (`Config` and `BatchEngine[T]`) operating on channel primitives and generic types `[T any]`. It manages lifecycle loops and graceful context cancellations (`<-ctx.Done()`) with zero awareness of ActivityPub vocabularies or SQL schemas.
+- **The Driving Inbound Worker (`internal/adapters/in/worker/inbound_worker.go`)**: Acts as a primary entry channel. It wraps the generic engine to pull pending tasks from database logs and actively drives execution downward into the core application logic via `ActivityServicePort`.
+- **The Driven Outbound Worker (`internal/adapters/out/federation/outbound_worker.go`)**: Acts as a secondary destination integration. It wraps the generic engine to pull outbound transport requests, resolves structural dual-keys from the lockbox layer, and dispatches signed activities out to external remote environments via `OutboundDispatcher`.
 
-### 5.1 Tenant Routing
+## 5. Identity, Key Rotation, and Tenant Functions
 
-The receiving hostname identifies the local tenant. Tenant registration is idempotent and occurs within the same transaction as the first delivery record.
+### 5.1 Tenant Routing and File Naming Symmetries
 
-The sender hostname is a separate value derived from the verified actor or key identity. It is used for federation policy and blocklist checks, never as a substitute for the receiving tenant.
+To guarantee high scannability and separate technical utility components from active HTTP controllers, the driving infrastructure layer enforces strict file name suffix structures:
+- **Driving Entry Controllers (`*_handler.go`)**: All files directly exposing an `http.HandlerFunc` or returning network payloads use this identifier (`inbox_handler.go`, `actor_handler.go`, `webfinger_handler.go`).
+- **Technical Adapters (`*_verifier.go` / `http.go`)**: Standalone helper modules or cryptographic parsing layers retain pure operational descriptors without handler suffixes (`signature_verifier.go`, `http.go`).
 
-Tenant-specific delivery records must prevent duplicate `(activity, tenant)` pairs. Actor inbox records must prevent duplicate `(actor, activity)` pairs.
+### 5.2 Static ActivityPub Identity and Handle-to-UUID Decoupling
 
-### 5.2 Static ActivityPub Identity
-
-A local actor possesses an immutable Canonical Actor IRI anchored by a unique, randomly generated UUIDv4, a mutable text-based username handle, a multi-tenant server association, and a private cryptographic signing key.
-
-#### 5.2.1 Handle-to-UUID Decoupling Rules
+A local actor possesses an immutable Canonical Actor IRI anchored by a unique, randomly generated UUIDv4, a mutable text-based username handle, a multi-tenant server association, and an active private cryptographic signing key block.
 
 1. **Immutability of the Actor IRI**: The `https://<domain>/actor/<uuidv4>` string serves as the absolute, unchanging object permalink identifier across the fediverse database ecosystem. It must never change.
 2. **Mutability of the Handle**: The `preferredUsername` string literal (e.g., `"alice"`) is volatile metadata stored as an RDF edge inside the quad store. If a user modifies their text handle to `"bob"`, the core system generates an outbound ActivityPub `Update(Actor)` activity block. Remote instances update their visual display text mappings against the stable UUIDv4 without destroying historical follow graphs, network edges, or signature validation keys.
 3. **WebFinger Routing Resolution**: When an external machine queries `acct:username@domain`, the WebFinger discovery adapter scans the active quad store graph to resolve the *current* pointer matching that text handle, returning the stable Canonical Actor IRI as the ultimate payload reference destination target.
 
-### 5.3 Nomad Identity and Cross-Protocol Mapping
+### 5.3 Cryptographic Key Rotation and Archiving Lifecycle
+
+To maintain complete audit trails across long-term data ledgers, the core domain enforces strict separation between an actor's active private signing block and their historical verification footprint.
+
+```text
+[Key Rotation Event Triggered]
+             │
+             ├──> 1. Copy active local public keys from memory
+             ├──> 2. Insert into actor_public_key_history table with [valid_from, NOW()]
+             ├──> 3. Generate brand-new RSA-2048 and Ed25519 keys via model.MintNewKeyPair()
+             └──> 4. Overwrite local_actor_credentials row (Safely destroying old private keys)
+```
+
+1. **Principle of Least Privilege Key Isolation**: Public-facing discovery boundaries (such as WebFinger) must never pull or touch private cryptographic arrays. WebFinger operates strictly as a locator, mapping string vectors to immutable UUIDv4 paths. Cryptographic payloads are delivered exclusively by the actor profile resource handler.
+2. **Atomic Private Overwriting**: When a local actor profile executes a rotation sequence, the application copies the current public keys and commits them to `actor_public_key_history`. It then mints a fresh pair using `model.MintNewKeyPair()`, completely overwriting the row in `local_actor_credentials`. The old private key material is erased permanently from system memory.
+3. **Remote Key Lifecycle Exclusions**: The historical ledger tracks *local server actors only*. When external foreign profiles rotate keys, they propagate standard ActivityPub `Update(Actor)` activities across the network. Sprezz catches these events, drops the stale remote cached profile rows from its local triple-store graph, and refreshes the target key over the wire dynamically.
+
+### 5.4 Nomad Identity and Cross-Protocol Mapping
 
 A Nomad identity represents a global, network-wide persona defined by a permanent, immutable cryptographic string token (**Nomad GUID**), a current primary hub, a master public verification key, and zero or more physical clone hubs.
-
-#### Nomadic Identity Topology Rules
 
 1. **Decoupled Identity Abstraction**: The Nomad identity engine operates independently of local hostnames or ActivityPub-specific path rules. The Nomad GUID is persisted exclusively as a property predicate edge (`http://purl.org/zot/protocol/6.0#guid`) mapping an actor subject to a literal value within the immutable RDF event-sourced quad database.
 2. **Many-to-One Architectural Mapping**: The system explicitly supports binding the same global Nomad GUID to multiple distinct local or remote Actor URIs (`https://<domain>/actor/<uuidv4>`). This configuration allows a user to establish multiple redundant clone endpoints across disparate server domains (e.g., Server A and Server B) for high-availability operational fallback.
@@ -229,22 +249,14 @@ The domain service provides a low-complexity, graph-based privacy filtration pip
 
 Privacy filtering occurs before collection serialization and before pagination so private records do not affect visible counts or page boundaries.
 
-## 8. Outbound Federation
+## 8. Outbound Federation and Dual-Key Alignment
 
-Outbound delivery is requested through the activity service and performed by a signer adapter.
+Outbound delivery tasks are requested through the activity service and performed asynchronously by the driven `out/federation` worker subsystem.
 
-The signer:
-
-- Builds an HTTP POST for the target inbox.
-- Computes a SHA-256 body digest.
-- Adds the date, host, digest, and request-target signature components.
-- Signs with the local actor's RSA private key.
-- Sends the activity using the ActivityPub media type.
-- Treats successful 2xx delivery as complete and reports other responses as failures.
-
-The target inbox, actor key identifier, and retry policy are delivery concerns. The signing adapter must not expose private key material in errors or logs.
-
-The long-term design uses the outbound queue for retryable asynchronous delivery. A worker should claim outbound records, apply bounded retries and backoff, and mark terminal failures for operational inspection.
+- **Stable RSA Outbound Core**: To maintain maximum delivery compatibility with 100% of the active fediverse network, outbound transmissions are locked to generating legacy **RSA-SHA256 signatures** via `rsa.SignPKCS1v15`.
+- **Dual-Key Interface Alignment**: To future-proof the outbound transmission adapters without requiring downstream schema or architectural modifications later, all dispatcher port signatures (`OutboundDispatcher.ForwardFederatedActivity`) natively accept **both the RSA and Ed25519 private key strings collectively** inside their parameter trees. Modern cryptographic components are loaded from disk concurrently and sit idle in memory, completely prepared to handle future signature protocol upgrades.
+- **Privacy Filtration Placement**: Privacy scoping and audience target pruning occur inside the domain logic *before* payloads reach the database serialization and pagination window stages, ensuring that unauthorized graph versions never leak across outbound transport streams.
+- **Error and Log Masking**: The signing adapter handles low-level cryptographic execution and must never expose private key materials or raw untrusted payloads in errors or system logs.
 
 ## 9. Media Storage
 
