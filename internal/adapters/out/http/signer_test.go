@@ -21,8 +21,8 @@ import (
 )
 
 type testKeys struct {
-	rsaPEM        string
-	edPEM         string
+	rsaPEM       string
+	edPEM        string
 	rsaPublicKey *rsa.PublicKey
 }
 
@@ -85,8 +85,8 @@ func generateTestKeys() (*testKeys, error) {
 	edPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: edBytes})
 
 	return &testKeys{
-		rsaPEM:        string(rsaPEM),
-		edPEM:         string(edPEM),
+		rsaPEM:       string(rsaPEM),
+		edPEM:        string(edPEM),
 		rsaPublicKey: &privKeyRSA.PublicKey,
 	}, nil
 }
