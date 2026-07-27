@@ -1,20 +1,21 @@
-package identity
+package service
 
 import (
 	"context"
+
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
 )
 
-type IdentityTranslator struct {
+type IdentityTranslatorService struct {
 	storage port.StoragePort
 }
 
-func NewIdentityTranslator(storage port.StoragePort) *IdentityTranslator {
-	return &IdentityTranslator{storage: storage}
+func NewIdentityTranslatorService(storage port.StoragePort) *IdentityTranslatorService {
+	return &IdentityTranslatorService{storage: storage}
 }
 
-func (t *IdentityTranslator) InjectNomadicTriples(ctx context.Context, graphID int64, actorIRI string, guid string) ([]model.Quad, error) {
+func (t *IdentityTranslatorService) InjectNomadicTriples(ctx context.Context, graphID int64, actorIRI string, guid string) ([]model.Quad, error) {
 	return []model.Quad{
 		{
 			GraphID:   graphID,

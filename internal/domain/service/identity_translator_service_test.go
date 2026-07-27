@@ -1,23 +1,22 @@
-package identity_test
+package service_test
 
 import (
 	"context"
 	"testing"
 
-	"sprezz/internal/domain/identity"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portstub"
+	"sprezz/internal/domain/service"
 )
 
-type mockIdentityStorage struct {
+type mockIdentityTranslaterStorage struct {
 	portstub.UnimplementedStoragePort
-	OnGetNomadicIdentity func(ctx context.Context, guid string) (*model.NomadicIdentity, error)
 }
 
-func TestIdentityTranslator_InjectNomadicTriples_Success(t *testing.T) {
+func TestIdentityTranslatorService_InjectNomadicTriples_Success(t *testing.T) {
 	// 1. Initialize our clean, isolated translator layer
-	storageMock := &mockIdentityStorage{}
-	translator := identity.NewIdentityTranslator(storageMock)
+	storageMock := &mockIdentityTranslaterStorage{}
+	translator := service.NewIdentityTranslatorService(storageMock)
 
 	// 2. Setup mock target variables
 	var targetGraphID int64 = 42
