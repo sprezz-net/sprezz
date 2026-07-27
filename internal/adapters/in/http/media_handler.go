@@ -31,57 +31,47 @@ func NewMediaUploadHandler(svc *service.ActivityService, maxMemoryLimit int64) *
 func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// 1. Constrain memory footprint spikes by applying a strict reading threshold limit
-	r.Body = http.MaxBytesReader(w, r.Body, h.maxFileSize)
-
-	// Allocate a safe in-memory parsing buffer maximized at 32MB
+	// 1. Constrain memory footprint spike limits
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		h.writeError(w, http.StatusBadRequest, "Payload exceeds authorized threshold or is malformed")
+		h.writeError(w, http.StatusBadRequest, "Malformed multipart payload")
 		return
 	}
 	defer func() { _ = r.MultipartForm.RemoveAll() }()
 
-	// 2. Extract tenant and actor routing metadata using type-safe context key constants
 	tenantID, _ := ctx.Value(model.TenantIDKey).(string)
 	actorIRI, _ := ctx.Value(model.ActorIRIKey).(string)
 	if tenantID == "" || actorIRI == "" {
-		h.writeError(w, http.StatusUnauthorized, "Missing routing or identity multi-tenant boundaries")
+		h.writeError(w, http.StatusUnauthorized, "Missing tenant or identity boundaries")
 		return
 	}
 
-	// 3. Isolate the associated ActivityPub event payload embedded within the multi-part body
+	// Extract the ActivityPub event payload from the multipart request
 	activityJSON := r.FormValue("activity")
+	// Explicitly catch empty string payloads before unmarshaling to prevent JSON parsing errors
 	if activityJSON == "" {
 		h.writeError(w, http.StatusBadRequest, "Missing structural 'activity' parameter metadata")
 		return
 	}
-
-	var tempEnvelope struct {
+	var envelope struct {
 		ID     string `json:"id"`
-		Type   string `json:"type"`
 		Object string `json:"object"`
 	}
-	if err := json.Unmarshal([]byte(activityJSON), &tempEnvelope); err != nil {
-		h.writeError(w, http.StatusBadRequest, "Invalid JSON-LD structural payload format")
+	if err := json.Unmarshal([]byte(activityJSON), &envelope); err != nil {
+		h.writeError(w, http.StatusBadRequest, "Invalid Activity metadata format")
 		return
 	}
 
-	// 4. Retrieve variable file attachments
-	multipartForm := r.MultipartForm
-	files := multipartForm.File["attachment"] // Explicit array field lookup
+	// 2. Fetch the collection array instead of a single form file
+	files := r.MultipartForm.File["attachment"]
 	if len(files) == 0 {
-		h.writeError(w, http.StatusBadRequest, "Target attachment part parameter 'attachment' not found or empty")
+		h.writeError(w, http.StatusBadRequest, "No attachments found under 'attachment' key")
 		return
 	}
 
-	// Array to track generated object keys for potential compensating cleanups
 	var completedObjectKeys []string
 
-	// 5. The Multipart Media Form Attachment Upload Loop
-	// Iterates sequentially over incoming streams to preserve tight memory boundaries
+	// 3. Sequential Multi-File Streaming Loop
 	for _, fileHeader := range files {
-
-		// Open the file stream for the individual chunk iteration
 		fileStream, err := fileHeader.Open()
 		if err != nil {
 			h.executeCompensatingCleanup(completedObjectKeys)
@@ -89,17 +79,17 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Generate a unique, time-ordered sequential UUIDv7 token for this attachment
-		taskID, err := uuid.NewV7()
+		// Handle both return values from uuid.NewV7()
+		taskUUID, err := uuid.NewV7()
 		if err != nil {
 			_ = fileStream.Close()
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusInternalServerError, "Failed to provision secure task tracking identifier")
+			h.writeError(w, http.StatusInternalServerError, "Failed to generate unique task identifier")
 			return
 		}
 
-		// Dynamic temporary destination key assignment using the unique execution token
-		tempObjectKey := fmt.Sprintf("tmp/%s", taskID.String())
+		taskID := taskUUID.String()
+		tempObjectKey := fmt.Sprintf("tmp/%s", taskID)
 
 		// Pack parameters into the single structure matching your exact service parameters
 		mediaCtx := port.InboundMediaContext{
@@ -107,53 +97,41 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			ActorIRI:     actorIRI,
 			ObjectName:   tempObjectKey,
 			OriginalName: fileHeader.Filename,
-			ContentType:  fileHeader.Header.Get(headerContentType),
+			ContentType:  fileHeader.Header.Get("Content-Type"),
 			Size:         fileHeader.Size,
 			MediaStream:  fileStream,
 		}
 
 		task := model.InboundTask{
-			ID:          taskID.String(),
-			ActivityIRI: tempEnvelope.ID,
-			ObjectIRI:   tempEnvelope.Object,
+			ID:          taskID,
+			ActivityIRI: envelope.ID,
+			ObjectIRI:   envelope.Object,
 			Payload:     []byte(activityJSON),
 		}
 
-		// 6. Delegate processing down to the domain activity execution core
-		// Pre-flight metrics and hard ceiling validations execute inline within this call
+		// Process single iteration unit
 		if err := h.activitySvc.ProcessInboundMediaTask(ctx, mediaCtx, task); err != nil {
 			_ = fileStream.Close()
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusInternalServerError, fmt.Sprintf("Processing error encountered: %v", err))
+			h.writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		// Append tracked key only after a successful internal domain execution step
 		completedObjectKeys = append(completedObjectKeys, tempObjectKey)
-		_ = fileStream.Close() // Immediate deterministic socket release per loop iteration
+		_ = fileStream.Close() // Immediate deterministic release
 	}
 
 	// 7. Success Manifest Response Writeout
 	w.Header().Set(headerContentType, "application/json")
 	w.WriteHeader(http.StatusAccepted)
-
-	responseBytes := fmt.Appendf(nil, `{"status":"committed","object_keys":%v}`, h.marshalKeysJSON(completedObjectKeys))
-	_, _ = w.Write(responseBytes)
+	_, _ = w.Write([]byte(`{"status":"committed"}`))
 }
 
-// executeCompensatingCleanup runs a reverse pruning sequence if an iteration fails mid-loop (Blueprint 9.2)
-func (h *MediaUploadHandler) executeCompensatingCleanup(objectKeys []string) {
-	for _, key := range objectKeys {
+// executeCompensatingCleanup runs a reverse pruning sequence if an iteration fails mid-loop
+func (h *MediaUploadHandler) executeCompensatingCleanup(keys []string) {
+	for _, key := range keys {
 		_ = h.activitySvc.PurgeOrphanedMedia(context.Background(), key)
 	}
-}
-
-func (h *MediaUploadHandler) marshalKeysJSON(keys []string) string {
-	bytes, err := json.Marshal(keys)
-	if err != nil {
-		return "[]"
-	}
-	return string(bytes)
 }
 
 func (h *MediaUploadHandler) writeError(w http.ResponseWriter, status int, msg string) {
