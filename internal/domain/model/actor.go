@@ -10,6 +10,6 @@ type ActorProfile struct {
 }
 
 type ActorDualKeys struct {
-	PrivateKeyRSAPEM      string
-	PrivateKeyEd25519PEM  string
+	PrivateKeyRSAPEM     string
+	PrivateKeyEd25519PEM string
 }

@@ -17,10 +17,10 @@ var _ port.StoragePort = (*MockStorageAdapter)(nil)
 
 type MockStorageAdapter struct {
 	portstub.UnimplementedStoragePort // Composite fallback embedded stub (de-bloating layout)
-	OnCreateGraphVersion               func(activityIRI, objectIRI string, payload []byte) (int64, error)
-	OnSaveQuads                        func(quads []model.Quad) error
-	OnStreamQuadsBySubject             func(subjectIRI string) ([]model.Quad, error)
-	GetCollectionPayloadsFunc          func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
+	OnCreateGraphVersion              func(activityIRI, objectIRI string, payload []byte) (int64, error)
+	OnSaveQuads                       func(quads []model.Quad) error
+	OnStreamQuadsBySubject            func(subjectIRI string) ([]model.Quad, error)
+	GetCollectionPayloadsFunc         func(ctx context.Context, a, c string, l, o int) ([][]byte, error)
 
 	OnSaveGraphVersion          func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error
 	OnSaveGraphVersionWithMedia func(ctx context.Context, params port.MediaAttachmentParams) error
@@ -102,7 +102,7 @@ var _ port.JSONLDParserPort = (*MockParserAdapter)(nil)
 
 type MockParserAdapter struct {
 	portstub.UnimplementedJSONLDParserPort // Embedded shared base stub (de-bloating layout)
-	OnToQuads                               func(graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error)
+	OnToQuads                              func(graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error)
 }
 
 func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
@@ -115,8 +115,8 @@ func (m *MockParserAdapter) ToQuads(ctx context.Context, graphID int64, mainObje
 // MockMediaAdapter implements port.MediaStoragePort for testing.
 type MockMediaAdapter struct {
 	portstub.UnimplementedMediaStoragePort // Embedded shared base stub (de-bloating layout)
-	PutObjectFunc                           func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
-	DeleteObjectFunc                        func(ctx context.Context, objectName string) error
+	PutObjectFunc                          func(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error)
+	DeleteObjectFunc                       func(ctx context.Context, objectName string) error
 }
 
 func (m *MockMediaAdapter) PutObject(ctx context.Context, objectName string, reader io.Reader, contentType string) (string, string, error) {
