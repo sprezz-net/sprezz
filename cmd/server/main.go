@@ -164,7 +164,7 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 	}()
 }
 
-func setupRoutingTree(r chi.Router, deps *dependencies) {
+func setupRoutingTree(r *chi.Mux, deps *dependencies) {
 	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
 	inboxHandler := inhttp.NewInboxHandler(deps.postgresStorage)
 	actorHandler := inhttp.NewActorHandler(deps.postgresStorage)
