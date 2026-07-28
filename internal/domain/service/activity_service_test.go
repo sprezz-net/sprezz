@@ -428,3 +428,73 @@ func TestProcessInboundMediaTask_QuotaBreached(t *testing.T) {
 		t.Errorf("Unexpected error message bubble surfaced from core service: %v", err)
 	}
 }
+
+func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
+	ctx := context.Background()
+	mc := minimock.NewController(t)
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+
+	// Stub dual key lookup for local sender
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local.com/actor/alice" {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     "-----BEGIN RSA PRIVATE KEY-----",
+				PrivateKeyEd25519PEM: "-----BEGIN PRIVATE KEY-----",
+			}, nil
+		}
+		return nil, errors.New("remote actor")
+	})
+
+	// Stub remote actor profiles lookup
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		if subjectIRI == "https://remote.com/actor/bob" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
+				{Subject: subjectIRI, Predicate: "activitystreams#inbox", Object: "https://remote.com/actor/bob/inbox"},
+			}, nil
+		}
+		if subjectIRI == "https://remote.com/actor/charlie" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
+				{Subject: subjectIRI, Predicate: "activitystreams#inbox", Object: "https://remote.com/actor/charlie/inbox"},
+			}, nil
+		}
+		if subjectIRI == "https://other.com/actor/dan" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "activitystreams#inbox", Object: "https://other.com/actor/dan/inbox"},
+			}, nil
+		}
+		return nil, errors.New("not found")
+	})
+
+	// Expect exactly two signed POST requests: one to the consolidated shared inbox and one to the direct inbox of dan
+	dispatchedInboxes := make(map[string]int)
+	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
+	mockDispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		dispatchedInboxes[targetInbox]++
+		return nil
+	})
+
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), mockDispatcher)
+
+	payload := []byte(`{
+		"to": ["https://remote.com/actor/bob", "https://remote.com/actor/charlie"],
+		"cc": "https://other.com/actor/dan"
+	}`)
+
+	err := svc.DispatchOutboundActivity(ctx, "https://local.com/activity/1", "https://local.com/actor/alice", payload)
+	if err != nil {
+		t.Fatalf("expected success, got err: %v", err)
+	}
+
+	if len(dispatchedInboxes) != 2 {
+		t.Errorf("expected exactly 2 outbound target endpoints dispatched, got: %v", dispatchedInboxes)
+	}
+	if dispatchedInboxes["https://remote.com/inbox"] != 1 {
+		t.Errorf("expected exactly 1 dispatch to shared inbox, got: %d", dispatchedInboxes["https://remote.com/inbox"])
+	}
+	if dispatchedInboxes["https://other.com/actor/dan/inbox"] != 1 {
+		t.Errorf("expected exactly 1 dispatch to direct inbox, got: %d", dispatchedInboxes["https://other.com/actor/dan/inbox"])
+	}
+}

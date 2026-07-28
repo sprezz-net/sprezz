@@ -234,15 +234,75 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 		return fmt.Errorf("outbound dispatcher is not configured")
 	}
 	var envelope struct {
-		Inbox string `json:"inbox"`
+		To       interface{} `json:"to"`
+		Cc       interface{} `json:"cc"`
+		Bto      interface{} `json:"bto"`
+		Bcc      interface{} `json:"bcc"`
+		Audience interface{} `json:"audience"`
+		Inbox    string      `json:"inbox"`
 	}
 	if err := json.Unmarshal(payload, &envelope); err != nil {
 		return fmt.Errorf("decode outbound activity: %w", err)
 	}
-	if envelope.Inbox == "" {
-		return fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
+
+	// 1. Gather all unique targets from addressing fields
+	targetsMap := make(map[string]struct{})
+	collectAddresses := func(val interface{}) {
+		if val == nil {
+			return
+		}
+		switch v := val.(type) {
+		case string:
+			targetsMap[v] = struct{}{}
+		case []interface{}:
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					targetsMap[str] = struct{}{}
+				}
+			}
+		}
+	}
+	collectAddresses(envelope.To)
+	collectAddresses(envelope.Cc)
+	collectAddresses(envelope.Bto)
+	collectAddresses(envelope.Bcc)
+	collectAddresses(envelope.Audience)
+
+	// Build resolved targets list to avoid modifying map during iteration
+	var targets []string
+	for target := range targetsMap {
+		targets = append(targets, target)
 	}
 
+	// Resolve target followers first
+	for i := 0; i < len(targets); i++ {
+		target := strings.TrimSpace(targets[i])
+		if target == "" {
+			continue
+		}
+		if strings.HasSuffix(target, "/followers") {
+			localActorIRI := strings.TrimSuffix(target, "/followers")
+			_, err := s.storage.GetActorDualKeys(ctx, localActorIRI)
+			if err == nil {
+				// Resolve remote followers
+				followers, err := s.GetFollowersTimeline(ctx, localActorIRI, 1000, 0)
+				if err == nil {
+					for _, follower := range followers {
+						_, err := s.storage.GetActorDualKeys(ctx, follower)
+						if err != nil {
+							// Remote follower
+							if _, exists := targetsMap[follower]; !exists {
+								targetsMap[follower] = struct{}{}
+								targets = append(targets, follower)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. Load the sender's dual-key credentials
 	dualKeys, err := s.storage.GetActorDualKeys(ctx, actorIRI)
 	if err != nil {
 		return fmt.Errorf("load actor dual-key credentials: %w", err)
@@ -250,14 +310,76 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 
 	targetKeyID := actorIRI + "#main-key"
 
-	return s.forwarder.ForwardFederatedActivity(
-		ctx,
-		envelope.Inbox,
-		targetKeyID,
-		dualKeys.PrivateKeyRSAPEM,
-		dualKeys.PrivateKeyEd25519PEM,
-		payload,
-	)
+	// 3. Resolve the target inboxes (preferring sharedInbox, falling back to direct inbox)
+	inboxesMap := make(map[string]struct{})
+
+	for target := range targetsMap {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+
+		// Skip if the target is a local actor
+		_, err := s.storage.GetActorDualKeys(ctx, target)
+		if err == nil {
+			continue
+		}
+
+		// Try to look up the remote actor's cached profile in our graph store
+		quads, err := s.storage.StreamQuadsBySubject(ctx, target)
+		if err == nil && len(quads) > 0 {
+			var resolvedInbox string
+			var sharedInbox string
+
+			for _, q := range quads {
+				pred := strings.ToLower(q.Predicate)
+				// Look for sharedInbox
+				if strings.Contains(pred, "sharedinbox") {
+					sharedInbox = strings.Trim(q.Object, `"'`)
+				}
+				// Look for direct inbox
+				if strings.Contains(pred, "inbox") && !strings.Contains(pred, "sharedinbox") {
+					resolvedInbox = strings.Trim(q.Object, `"'`)
+				}
+			}
+
+			if sharedInbox != "" {
+				inboxesMap[sharedInbox] = struct{}{}
+			} else if resolvedInbox != "" {
+				inboxesMap[resolvedInbox] = struct{}{}
+			}
+		}
+	}
+
+	// 4. Fallback if no target inboxes were resolved but envelope.Inbox is specified
+	if len(inboxesMap) == 0 {
+		if envelope.Inbox == "" {
+			return fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
+		}
+		inboxesMap[envelope.Inbox] = struct{}{}
+	}
+
+	// 5. Dispatch the activity to each unique inbox endpoint
+	var lastErr error
+	for inbox := range inboxesMap {
+		err = s.forwarder.ForwardFederatedActivity(
+			ctx,
+			inbox,
+			targetKeyID,
+			dualKeys.PrivateKeyRSAPEM,
+			dualKeys.PrivateKeyEd25519PEM,
+			payload,
+		)
+		if err != nil {
+			lastErr = err
+		}
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("dispatch failure: %w", lastErr)
+	}
+
+	return nil
 }
 
 func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error) {
