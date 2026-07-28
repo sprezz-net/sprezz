@@ -140,9 +140,10 @@ func (h *ActorHandler) servePayloadCollection(w http.ResponseWriter, r *http.Req
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": r.URL.String(), "orderedItems": items})
 }
 
-func writeCollection(w http.ResponseWriter, id string, items []string) {
-	w.Header().Set(headerContentType, "application/ld+json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": id, "totalItems": len(items), "orderedItems": items})
+func writeActivityJSON(w http.ResponseWriter, payload []byte) {
+	w.Header().Set(headerContentType, "application/activity+json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
 }
 
 func collectionPage(r *http.Request) (int, int) {
@@ -157,8 +158,7 @@ func collectionPage(r *http.Request) (int, int) {
 	return limit, offset
 }
 
-func writeActivityJSON(w http.ResponseWriter, payload []byte) {
-	w.Header().Set(headerContentType, "application/activity+json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(payload)
+func writeCollection(w http.ResponseWriter, id string, items []string) {
+	w.Header().Set(headerContentType, "application/ld+json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": id, "totalItems": len(items), "orderedItems": items})
 }
