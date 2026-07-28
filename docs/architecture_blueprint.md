@@ -22,19 +22,28 @@ The system must support the following functional outcomes:
 
 ```mermaid
 flowchart TD
-    Remote[Remote Fediverse Client / Actor] --> HTTP[HTTP Driving Adapter]
+    Remote[Remote Fediverse Client / Actor] --> HTTP[HTTP Driving Adapter / GenericHandler]
     HTTP --> Verify[Signature & Context Validation]
 
-    %% Semantic Routing Decision Loop
-    Verify --> IRIQuery[Reverse Graph IRI Type Lookup]
-    IRIQuery --> Branch{Evaluate rdf:type & Content-Type}
+    %% Suffix Routing & Payload Lookup
+    Verify --> MatchSuffix{Does path end in /inbox, /outbox, /followers, /following?}
 
-    %% Execution Paths
-    Branch -->|rdf:type == Person & application/activity+json| ServeProfile[Render Actor Profile JSON-LD]
-    Branch -->|rdf:type == Person & text/html| RedirectWeb[Redirect to Vanity Web UI Profile]
-    Branch -->|rdf:type == Collection Prefix| ServeTimeline[Dynamically Generate Collection Timeline]
-    Branch -->|rdf:type == Note / Object| ServeObject[Render Immutable Object Graph]
-    Branch -->|IRI Unmapped / Missing| Fail404[HTTP 404 Not Found]
+    %% Suffix Paths
+    MatchSuffix -->|Yes: /followers, /following| ServeRelCollection[Stream Relationship Quads]
+    MatchSuffix -->|Yes: /inbox, /outbox| ServePayloadCollection[Fetch Collection Payloads from Storage]
+
+    %% Non-Collection/Resource Path
+    MatchSuffix -->|No: Resource IRI| QueryPayload[GetLatestPayload by IRI]
+    QueryPayload --> PayloadExists{Payload Found?}
+
+    PayloadExists -->|No| QueryAlias[GetActorIRIByAlias]
+    QueryAlias --> AliasExists{Alias Found?}
+    AliasExists -->|Yes| RedirectCanonical[Redirect 303 to Canonical IRI]
+    AliasExists -->|No| Fail404[HTTP 404 Not Found]
+
+    PayloadExists -->|Yes| CheckAccept{Accept Header text/html?}
+    CheckAccept -->|Yes & Actor Profile| RedirectVanity[Redirect 302 to Web UI /@username]
+    CheckAccept -->|No / Machine| ServePayload[Render ActivityPub JSON-LD]
 
     %% Multipart Upload Loop Path
     Verify -->|Multipart Attachment Form Array| QuotaGuard{Pre-Flight Quota Guard}
@@ -48,7 +57,9 @@ flowchart TD
     Rollback -->|PurgeOrphanedMedia| DeleteMedia[MinIO Object Deletion]
 ```
 
-The request path performs validation and durable queueing only for standard non-media payloads. When a standard inbound HTTP traffic frame hits a catch-all wildcard endpoint, the driving HTTP adapter extracts the absolute requested URL string as an un-typed IRI. It queries the core RDF graph store to evaluate the resource's `rdf:type` statement matrix on the fly, dynamically branching execution between profile rendering, object views, and dynamic collection generation based on content negotiation parameters.
+The request path performs validation and durable queueing only for standard non-media payloads on incoming `POST` requests. When a standard inbound HTTP `GET` traffic frame hits the catch-all wildcard endpoint, the driving HTTP adapter (`GenericHandler`) extracts the absolute requested URL path as a target IRI.
+
+To ensure high-performance execution, instead of querying the graph for types on-the-fly, the handler detects standard collection suffixes (`/inbox`, `/outbox`, `/followers`, `/following`) and matches them directly. For resource lookups, it performs a fast direct database query (`GetLatestPayload`) to retrieve the latest cached JSON-LD payload for the target IRI, handling actor profiles, activities, and objects identically. If a resource is not found, the handler attempts to resolve custom aliases via a dedicated index check (`GetActorIRIByAlias`) before falling back to an HTTP 404 response.
 
 When a multipart media payload is intercepted, the driving HTTP adapter intercepts the pipeline to run synchronous **Pre-Flight Ingestion Verification** loops. It maps byte footprints against dynamic ledger thresholds before executing resource-isolated `io.TeeReader` operations, streaming files directly to the object storage node ahead of transactional relational database commits. If any single tracking transaction fails or encounters unexpected errors mid-loop, a tight backward-walking **Compensating Rollback** walker fires instantly to clean up and delete any raw blobs generated during that specific multi-part lifecycle request.
 
@@ -85,9 +96,9 @@ The catch-all endpoint treats every incoming request path as an un-typed IRI and
 1. **WebFinger Discovery Resolution**: When an external machine queries `acct:username@domain`, the WebFinger discovery adapter scans the active `actor_credentials` and quad store indexes to match the current `preferredUsername`. If a user is registered under multiple aliases, WebFinger queries targeting an identity on either the primary or secondary domain return standard JRD JSON targets pointing to the *exact same canonical profile ID*.
 2. **Dynamic Reverse Alias Traversal**: If an HTTP request targets a custom alias URL defined within an actor's `alsoKnownAs` array matrix:
    - The handler captures the raw request path string.
-   - It executes a graph query lookup:
-     `SELECT subject FROM quads WHERE predicate = 'as#alsoKnownAs' AND object = $1;`
-   - If a valid match is found, the system discovers the verified canonical actor ID link.
+   - It queries the storage layer via the driven port:
+     `GetActorIRIByAlias(ctx, requestedIRI)`
+   - If a valid match is found, the system discovers the verified canonical actor ID link and redirects to the canonical profile or collection IRI with an HTTP 303 Status.
 3. **MIME Type Branching**:
    - If a request targets an actor or an alias path accompanied by a machine federation header (`Accept: application/activity+json`), the handler executes an **HTTP 303 See Other** redirect or internally re-wires the context to serialize and render the primary canonical Actor Profile JSON-LD payload.
    - If hit by a standard web browser requesting `text/html`, the handler bypasses protocol redirects and performs an **HTTP 302 Redirect** routing the browser to the client frontend Web UI vanity profile presentation layer (e.g., `https://<domain>/@<username>`).
@@ -278,6 +289,7 @@ Outbound delivery tasks are requested through the activity service and performed
 - **Stable RSA Outbound Core**: To maintain maximum delivery compatibility with 100% of the active fediverse network, outbound transmissions are locked to generating legacy **RSA-SHA256 signatures** via `rsa.SignPKCS1v15`.
 - **Dual-Key Interface Alignment**: To future-proof the outbound transmission adapters without requiring downstream schema or architectural modifications later, all dispatcher port signatures (`OutboundDispatcher.ForwardFederatedActivity`) natively accept **both the RSA and Ed25519 private key strings collectively** inside their parameter trees. Modern cryptographic components are loaded from disk concurrently and sit idle in memory, completely prepared to handle future signature protocol upgrades.
 - **Privacy Filtration Placement**: Privacy scoping and audience target pruning occur inside the domain logic *before* payloads reach the database serialization and pagination window stages, ensuring that unauthorized graph versions never leak across outbound transport streams.
+- **Outbound Shared Inbox Consolidation**: To guarantee optimal delivery performance, prevent duplicate HTTP connections, and align strictly with ActivityPub specifications, the outbound dispatch pipeline dynamically consolidates target inboxes. It parses the activity payload to extract target addresses (`to`, `cc`, etc.), queries the local graph database to fetch public profile details for remote actors, extracts their configured `sharedInbox` URLs where available (falling back to direct inboxes), and executes a single consolidated delivery request per remote instance.
 - **Error and Log Masking**: The signing adapter handles low-level cryptographic execution and must never expose private key materials or raw untrusted payloads in errors or system logs.
 
 ## 9. Media Storage
@@ -403,12 +415,11 @@ flowchart TD
 
 ## 13. Implementation Status
 
-The repository currently provides the hexagonal ports, HTTP adapters, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, and full privacy-aware timeline traversal filters across indexed collection resources.
+The repository currently provides the hexagonal ports, a simplified unified wildcard HTTP routing adapter (`GenericHandler`) for GET/POST resources and collections, the complete `MediaUploadHandler` for multi-part media uploads featuring sequential streaming, memory isolation, and pre-flight storage quota checks, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher with high-performance shared-inbox consolidation and delivery, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, and full privacy-aware timeline traversal filters across indexed collection resources.
 
 Additionally, the **Database Migration Subsystem** is fully operational. It leverages embedded filesystem compilation (`go:embed`), standard runtime interoperability adapters (`pgx/v5/stdlib`), and a fail-fast boot sequence execution block to cleanly isolate structural DDL schema synchronization tasks ahead of downstream worker pools.
 
 The remaining architectural work is to:
 
-- Connect the completed multi-part attachment media workflow to a concrete driving application use case.
+- Register the completed `MediaUploadHandler` in the HTTP routing tree in `cmd/server/main.go` under an active endpoint to connect it to a concrete application use case.
 - Add PostgreSQL integration coverage for transaction and concurrency guarantees.
-- Add **Quota Verification Guard Middleware** or service verification hooks to intercept driving multipart form file extraction channels inside `internal/adapters/in/http`.
