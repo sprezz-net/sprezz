@@ -22,18 +22,19 @@ The system must support the following functional outcomes:
 
 ```mermaid
 flowchart TD
-    Remote[Remote ActivityPub or Nomad server] --> HTTP[HTTP driving adapter]
-    HTTP --> Verify[Signature and request validation]
+    Remote[Remote Fediverse Client / Actor] --> HTTP[HTTP Driving Adapter]
+    HTTP --> Verify[Signature & Context Validation]
 
-    %% Standard Path
-    Verify -->|Standard Payload| Queue[Inbound queue]
-    Queue --> Worker[Generic BatchWorkerEngine pool]
-    Worker --> Service[Activity service]
-    Service --> Parser[Offline JSON-LD parser]
-    Service --> Store[PostgreSQL and sqlc adapter]
-    Store --> Graph[RDF graph and quad history]
-    Service --> Outbound[Signed outbound dispatcher]
-    Outbound --> Remote
+    %% Semantic Routing Decision Loop
+    Verify --> IRIQuery[Reverse Graph IRI Type Lookup]
+    IRIQuery --> Branch{Evaluate rdf:type & Content-Type}
+
+    %% Execution Paths
+    Branch -->|rdf:type == Person & application/activity+json| ServeProfile[Render Actor Profile JSON-LD]
+    Branch -->|rdf:type == Person & text/html| RedirectWeb[Redirect to Vanity Web UI Profile]
+    Branch -->|rdf:type == Collection Prefix| ServeTimeline[Dynamically Generate Collection Timeline]
+    Branch -->|rdf:type == Note / Object| ServeObject[Render Immutable Object Graph]
+    Branch -->|IRI Unmapped / Missing| Fail404[HTTP 404 Not Found]
 
     %% Multipart Upload Loop Path
     Verify -->|Multipart Attachment Form Array| QuotaGuard{Pre-Flight Quota Guard}
@@ -45,11 +46,9 @@ flowchart TD
     %% Rollback Branch
     AtomicDB -->|Transaction Error / Mid-Loop Abort| Rollback[Compensating Loop Cleanup]
     Rollback -->|PurgeOrphanedMedia| DeleteMedia[MinIO Object Deletion]
-
-    HTTP --> Collections[Actor and collection resources]
 ```
 
-The request path performs validation and durable queueing only for standard non-media payloads. Parsing, graph persistence, identity enrichment, and downstream delivery happen asynchronously unless a specific operation explicitly requires an immediate read.
+The request path performs validation and durable queueing only for standard non-media payloads. When a standard inbound HTTP traffic frame hits a catch-all wildcard endpoint, the driving HTTP adapter extracts the absolute requested URL string as an un-typed IRI. It queries the core RDF graph store to evaluate the resource's `rdf:type` statement matrix on the fly, dynamically branching execution between profile rendering, object views, and dynamic collection generation based on content negotiation parameters.
 
 When a multipart media payload is intercepted, the driving HTTP adapter intercepts the pipeline to run synchronous **Pre-Flight Ingestion Verification** loops. It maps byte footprints against dynamic ledger thresholds before executing resource-isolated `io.TeeReader` operations, streaming files directly to the object storage node ahead of transactional relational database commits. If any single tracking transaction fails or encounters unexpected errors mid-loop, a tight backward-walking **Compensating Rollback** walker fires instantly to clean up and delete any raw blobs generated during that specific multi-part lifecycle request.
 
@@ -59,30 +58,39 @@ When a multipart media payload is intercepted, the driving HTTP adapter intercep
 
 Driving adapters translate external requests into application operations.
 
-The HTTP adapter partitions incoming network traffic into two distinct, isolated routing planes to protect system namespaces and maintain protocol immutability:
+The HTTP driving adapter implements a greedy, wildcard catch-all route handler that intercepts unmapped path strings. Instead of checking incoming paths against hardcoded string parameter layouts or regex routes, the adapter relies entirely on **Content-Negotiated Graph Discovery**.
 
-#### 3.1.1 The Canonical Protocol Plane (Machine-to-Machine)
+#### 3.1.1 Preferred Local Identifier Schema
 
-All machine-to-machine federation protocol resources and endpoints utilize stable, immutable machine identifiers as their absolute anchors to guarantee graph structural integrity across handle mutations. To optimize database index performance, actor identifiers use random tokens while transactional event streams utilize chronologically ordered vectors.
+When minting local resources natively, the core system defaults to a stable, predictable URL schema to maintain optimal sorting performance and semantic clarity. However, these patterns represent preferred conventions rather than structural system enforcement:
 
-- **Canonical Actor ID (`@id`)**: `https://<domain>/actor/<uuidv4>` (Utilizes UUIDv4 for static, long-lived entity stability)
-- **Actor Inbox**: `https://<domain>/actor/<uuid>/inbox`
-- **Actor Outbox**: `https://<domain>/actor/<uuid>/outbox`
-- **Followers Collection**: `https://<domain>/actor/<uuid>/followers`
-- **Following Collection**: `https://<domain>/actor/<uuid>/following`
-- **Activity Reference Permalink**: `https://<domain>/activity/<uuidv7>` (Utilizes time-ordered sequential UUIDv7 tokens to maximize B-Tree insertion performance under heavy streaming throughput)
+- **Preferred Actor Profile (Canonical ID)**: `https://<domain>/actor/<uuidv4>` (Utilizes UUIDv4 for static, long-lived entity stability)
+- **Preferred Activity Reference Permalink**: `https://<domain>/activity/<uuidv7>` (Utilizes time-ordered sequential UUIDv7 tokens to maximize B-Tree insertion performance under heavy streaming throughput)
+- **Preferred Collection Endpoints**: Map directly onto the parent actor's root canonical namespace path:
+  - **Inbox**: `Actor IRI + "/inbox"`
+  - **Outbox**: `Actor IRI + "/outbox"`
+  - **Followers**: `Actor IRI + "/followers"`
 
-#### 3.1.2 The Vanity Interaction Plane (Human-to-Machine & Discovery)
+### 3.1.2 The Vanity Interaction Plane (Human-to-Machine & Discovery)
 
-Human-readable vanity handles act as discoverable aliases and routing shortcuts. To prevent hazardous root-level namespace collisions (e.g., a user registering a handle like `"actor"`, `"activity"`, `"api"`, `"static"`, or `"health"` and hijacking system routing primitives), all vanity profiles must reside behind designated structural prefix patterns.
+Human-readable vanity handles act as discoverable aliases and routing shortcuts. To support cross-domain alias aliasing without data duplication, the core domain explicitly supports semantic graph lookup vectors for text-based usernames and multi-domain linkages.
 
-- **Web UI Profile Paths**: `https://<domain>/@<username>` and `https://<domain>/~<username>`
+- **`preferredUsername`**: A volatile, mutable text-based metadata handle (e.g., `"alice"`) stored as a standard RDF edge. Changing this handle triggers an outbound `Update(Actor)` notification, allowing remote servers to synchronize their visual presentation mappings against the stable canonical ID without breaking existing follow graphs or verification keys.
+- **`alsoKnownAs`**: A semantic array property mapping valid alternate profile URLs or secondary alias paths across different tenant domains back to the exact same canonical actor entity.
 
-#### 3.1.3 Content Negotiation and Redirection
+#### 3.1.3 Content Negotiation, WebFinger, and Alias Redirection
 
-The vanity paths are strictly presentation layers. If a request targets a vanity route (e.g., `https://<domain>/@username`) accompanied by a machine federation header (`Accept: application/activity+json`), the HTTP driving adapter MUST perform an atomic lookup to map the handle to its active UUID on disk and execute a non-breaking `HTTP 303 See Other` redirect straight to the stable Canonical Actor ID (`https://<domain>/actor/<uuid>`). If requested via a standard web browser, it bypasses the redirect and renders the HTML interface view.
+The catch-all endpoint treats every incoming request path as an un-typed IRI and processes it through a unified, content-negotiated routing pipeline:
 
-The adapter does not parse RDF graph quads, execute raw PostgreSQL statements directly, or decide how history states are versioned. It validates incoming transport layers, extracts routing context signatures, and invokes the relevant core domain port.
+1. **WebFinger Discovery Resolution**: When an external machine queries `acct:username@domain`, the WebFinger discovery adapter scans the active `actor_credentials` and quad store indexes to match the current `preferredUsername`. If a user is registered under multiple aliases, WebFinger queries targeting an identity on either the primary or secondary domain return standard JRD JSON targets pointing to the *exact same canonical profile ID*.
+2. **Dynamic Reverse Alias Traversal**: If an HTTP request targets a custom alias URL defined within an actor's `alsoKnownAs` array matrix:
+   - The handler captures the raw request path string.
+   - It executes a graph query lookup:
+     `SELECT subject FROM quads WHERE predicate = 'as#alsoKnownAs' AND object = $1;`
+   - If a valid match is found, the system discovers the verified canonical actor ID link.
+3. **MIME Type Branching**:
+   - If a request targets an actor or an alias path accompanied by a machine federation header (`Accept: application/activity+json`), the handler executes an **HTTP 303 See Other** redirect or internally re-wires the context to serialize and render the primary canonical Actor Profile JSON-LD payload.
+   - If hit by a standard web browser requesting `text/html`, the handler bypasses protocol redirects and performs an **HTTP 302 Redirect** routing the browser to the client frontend Web UI vanity profile presentation layer (e.g., `https://<domain>/@<username>`).
 
 ### 3.2 Core Domain Services
 
@@ -156,37 +164,35 @@ The system decouples asynchronous background scheduling mechanics from domain us
 
 ## 5. Identity, Key Rotation, and Tenant Functions
 
-### 5.1 Tenant Routing and File Naming Symmetries
+## 5. Multi-Tenancy and Resource Schema Boundaries
 
-To guarantee high scannability and separate technical utility components from active HTTP controllers, the driving infrastructure layer enforces strict file name suffix structures:
+### 5.1 Implicit Multi-Tenant Graph Partitioning
 
-- **Driving Entry Controllers (`*_handler.go`)**: All files directly exposing an `http.HandlerFunc` or returning network payloads use this identifier (`inbox_handler.go`, `actor_handler.go`, `webfinger_handler.go`).
-- **Technical Adapters (`*_verifier.go` / `http.go`)**: Standalone helper modules or cryptographic parsing layers retain pure operational descriptors without handler suffixes (`signature_verifier.go`, `http.go`).
+Multi-tenancy in Sprezz operates via a strict separation of concerns between the unstructured semantic graph layer and the structured tenant ownership metadata database layer.
 
-### 5.2 Static ActivityPub Identity and Handle-to-UUID Decoupling
+1. **The Tenantless Graph Plane**: The core quad storage table (`quads`) stores raw, arbitrary IRI strings uniformly. It contains no `tenant_id` column and no direct foreign key relation pointing back to a specific tenant record. The data in the graph is stored as pure, universal RDF statements.
+2. **Implicit Domain Association**: The data in the storage graph links to a tenant **implicitly by sharing the domain name of the respective tenant within its IRI string** (e.g., `https://tenant-a.com/<uuid>`).
+3. **The Administrative Plane**: Relational tracking metadata tables (such as `actor_credentials`, `server_tenants`, and `actor_media_ownership`) maintain the explicit mapping linking a unique global `actor_iri` string to an internal `tenant_id` integer.
 
-A local actor possesses an immutable Canonical Actor IRI anchored by a unique, randomly generated UUIDv4, a mutable text-based username handle, a multi-tenant server association, and an active private cryptographic signing key block.
+### 5.2 Multi-Tenant Runtime Resolution Flow
 
-1. **Immutability of the Actor IRI**: The `https://<domain>/actor/<uuidv4>` string serves as the absolute, unchanging object permalink identifier across the fediverse database ecosystem. It must never change.
-2. **Mutability of the Handle**: The `preferredUsername` string literal (e.g., `"alice"`) is volatile metadata stored as an RDF edge inside the quad store. If a user modifies their text handle to `"bob"`, the core system generates an outbound ActivityPub `Update(Actor)` activity block. Remote instances update their visual display text mappings against the stable UUIDv4 without destroying historical follow graphs, network edges, or signature validation keys.
-3. **WebFinger Routing Resolution**: When an external machine queries `acct:username@domain`, the WebFinger discovery adapter scans the active quad store graph to resolve the *current* pointer matching that text handle, returning the stable Canonical Actor IRI as the ultimate payload reference destination target.
+When an incoming HTTP request hits an arbitrary catch-all URL, the routing system executes an on-the-fly sequential evaluation to securely establish multi-tenant isolation before executing domain use cases:
 
-### 5.3 Cryptographic Key Rotation and Archiving Lifecycle
+1. **Domain Extraction**: The HTTP driving adapter intercepts the absolute requested URL string and extracts its hostname domain string.
+2. **Tenant ID Resolution**: It queries the administrative plane (`server_tenants`) to find the internal `tenant_id` integer matched to that specific domain string:
+   `SELECT id FROM server_tenants WHERE domain_name = $1;`
+3. **Scope Sealing**: Once the `tenant_id` is successfully resolved, it is injected into a type-safe context element (`model.TenantIDKey`), bounding all downstream database connection pools, cryptographic key lockboxes, and storage quota ledger evaluations (enforcing the preferred default 1GB ceiling) to that tenant's exact configuration parameters.
+4. **Federation Symmetries**: If a user interacts with a remote external actor (e.g., `https://mastodon.social`), those foreign quads are written into the exact same database table. Since the system resolves tenancy by checking if the domain string belongs to a local tenant row, it instantly knows that Bob's data is remote external data and safely excludes it from local tenant storage quota calculations.
 
-To maintain complete audit trails across long-term data ledgers, the core domain enforces strict separation between an actor's active private signing block and their historical verification footprint.
+### 5.3 Cryptographic Key Rotation, Storage, and Archiving Lifecycle
 
-```text
-[Key Rotation Event Triggered]
-             │
-             ├──> 1. Copy active local public keys from memory
-             ├──> 2. Insert into actor_public_key_history table with [valid_from, NOW()]
-             ├──> 3. Generate brand-new RSA-2048 and Ed25519 keys via model.MintNewKeyPair()
-             └──> 4. Overwrite local_actor_credentials row (Safely destroying old private keys)
-```
+To maintain complete audit trails across long-term data ledgers, the system enforces a strict architectural distinction between the storage of local cryptographic assets and remote federated public verification signatures.
 
-1. **Principle of Least Privilege Key Isolation**: Public-facing discovery boundaries (such as WebFinger) must never pull or touch private cryptographic arrays. WebFinger operates strictly as a locator, mapping string vectors to immutable UUIDv4 paths. Cryptographic payloads are delivered exclusively by the actor profile resource handler.
-2. **Atomic Private Overwriting**: When a local actor profile executes a rotation sequence, the application copies the current public keys and commits them to `actor_public_key_history`. It then mints a fresh pair using `model.MintNewKeyPair()`, completely overwriting the row in `local_actor_credentials`. The old private key material is erased permanently from system memory.
-3. **Remote Key Lifecycle Exclusions**: The historical ledger tracks *local server actors only*. When external foreign profiles rotate keys, they propagate standard ActivityPub `Update(Actor)` activities across the network. Sprezz catches these events, drops the stale remote cached profile rows from its local triple-store graph, and refreshes the target key over the wire dynamically.
+1. **Local Key Storage (The Administrative Plane)**: Cryptographic private and public dual-key materials (RSA-2048 and Ed25519 PEM strings) belonging to local server actors MUST be isolated entirely within the relational administrative metadata plane (`local_actor_credentials`). This table explicitly maps the canonical `actor_iri` string to an internal `tenant_id` integer, completely shielding private key arrays from the open, unstructured graph storage layer.
+2. **Remote Key Storage (The RDF Graph Plane)**: Public verification keys belonging to foreign external actors (e.g., users federating from `mastodon.social`) are treated strictly as standard public metadata properties. When a remote profile is fetched or ingested, its public key material is unpacked and written directly into the main unstructured RDF graph store (`quads` table) as standard property predicate edges linked to that remote actor subject IRI.
+3. **Principle of Least Privilege Key Isolation**: Public-facing discovery boundaries (such as WebFinger) must never pull or touch private cryptographic arrays. WebFinger operates strictly as a locator, mapping string vectors to immutable UUIDv4 paths. Cryptographic payloads are delivered exclusively by the actor profile resource handler pulling from the respective plane.
+4. **Atomic Private Overwriting**: When a local actor profile executes a rotation sequence, the application copies the current active public keys and commits them to the `actor_public_key_history` table alongside a chronological timestamp window (`valid_from`, `NOW()`). It then mints a fresh pair using `model.MintNewKeyPair()`, completely overwriting the row in `local_actor_credentials`. The old private key material is erased permanently from system memory.
+5. **Remote Key Lifecycle Exclusions**: The historical ledger tracks *local server actors only*. When external foreign profiles rotate keys, they propagate standard ActivityPub `Update(Actor)` activities across the network. Sprezz catches these events, drops the stale remote cached profile rows from its local triple-store graph, and refreshes the target key over the wire dynamically.
 
 ### 5.4 Nomad Identity and Cross-Protocol Mapping
 
@@ -355,6 +361,13 @@ The implementation is functionally aligned with this blueprint when the followin
 - **Pre-Flight Hard-Ceiling Rejection**: Incoming payloads featuring a `header.Size` configuration that exceeds an actor or tenant's active threshold ledger slice immediately drop the incoming socket and return an HTTP `413 Payload Too Large` status code without initiating a MinIO chunk allocation stream.
 - **Zero-Allocation Inline Hashing Verification**: Media attachments are validated against binary tampering using standard `io.TeeReader` piping layers, ensuring that SHA-256 string fingerprints are populated entirely on-the-fly during the data-streaming window to MinIO.
 - **Backward-Walking Rollback Guarantee**: When an upload request containing 3 valid files encounters a transactional database failure or infrastructure timeout on the 3rd item, the system executes an automated reverse loop (`PurgeOrphanedMedia`) to target, locate, and delete file 1 and file 2 from the central bucket bucket space, leaving zero stranded storage orphans behind.
+
+### 11.2 Dynamic IRI Routing, Discovery, and Alias Criteria
+
+- **Wildcard Catch-All Resolution**: The driving HTTP adapter intercepts requests via a greedy wildcard route, capturing any arbitrary path configuration without throwing a standard routing exception.
+- **Cross-Domain WebFinger Symmetries**: WebFinger lookups executing against either local tenant domain successfully resolve matching `preferredUsername` text handles back to one single canonical actor entity.
+- **On-the-Fly Alias Resolution**: The handler successfully intercepts custom alias requests, matches them against the database's `alsoKnownAs` quad edges, and seamlessly routes the context back to the canonical entity graph.
+- **Header Selection Symmetries**: A request targeting an active actor path or verified alias returns a valid JSON-LD ActivityPub context profile under semantic MIME headers, but switches smoothly to a web client frontend redirect when hit by standard browser text media types.
 
 ## 12. Database Migration Subsystem
 
