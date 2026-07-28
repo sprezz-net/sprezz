@@ -14,3 +14,26 @@ ON CONFLICT DO NOTHING;
 INSERT INTO rdf_graph_attachments (graph_id, media_attachment_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
+
+-- name: GetTenantStorageUsageAndCeiling :one
+SELECT
+    st.storage_ceiling_bytes,
+    COALESCE(SUM(am.file_size), 0)::BIGINT as current_usage_bytes
+FROM server_tenants st
+LEFT JOIN actor_media_ownership am ON am.tenant_id = st.id
+WHERE st.id = $1
+GROUP BY st.id, st.storage_ceiling_bytes;
+
+-- name: RecordMediaAttachment :exec
+INSERT INTO actor_media_ownership (
+    tenant_id,
+    actor_iri,
+    object_name,
+    file_size
+) VALUES (
+    $1, $2, $3, $4
+);
+
+-- name: RemoveMediaAttachment :exec
+DELETE FROM actor_media_ownership
+WHERE object_name = $1; -- Keep this as object_name

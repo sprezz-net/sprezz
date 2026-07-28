@@ -167,6 +167,13 @@ type StoragePortMock struct {
 	beforeRegisterIdentityCloneCounter uint64
 	RegisterIdentityCloneMock          mStoragePortMockRegisterIdentityClone
 
+	funcRemoveMediaRecord          func(ctx context.Context, objectName string) (err error)
+	funcRemoveMediaRecordOrigin    string
+	inspectFuncRemoveMediaRecord   func(ctx context.Context, objectName string)
+	afterRemoveMediaRecordCounter  uint64
+	beforeRemoveMediaRecordCounter uint64
+	RemoveMediaRecordMock          mStoragePortMockRemoveMediaRecord
+
 	funcRemoveQuadEdge          func(ctx context.Context, subject string, predicate string, object string) (err error)
 	funcRemoveQuadEdgeOrigin    string
 	inspectFuncRemoveQuadEdge   func(ctx context.Context, subject string, predicate string, object string)
@@ -201,6 +208,13 @@ type StoragePortMock struct {
 	afterUpsertNomadicIdentityCounter  uint64
 	beforeUpsertNomadicIdentityCounter uint64
 	UpsertNomadicIdentityMock          mStoragePortMockUpsertNomadicIdentity
+
+	funcVerifyIncomingQuota          func(ctx context.Context, tenantID int32, incomingSizeBytes int64) (b1 bool, err error)
+	funcVerifyIncomingQuotaOrigin    string
+	inspectFuncVerifyIncomingQuota   func(ctx context.Context, tenantID int32, incomingSizeBytes int64)
+	afterVerifyIncomingQuotaCounter  uint64
+	beforeVerifyIncomingQuotaCounter uint64
+	VerifyIncomingQuotaMock          mStoragePortMockVerifyIncomingQuota
 }
 
 // NewStoragePortMock returns a mock for mm_port.StoragePort
@@ -274,6 +288,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 	m.RegisterIdentityCloneMock = mStoragePortMockRegisterIdentityClone{mock: m}
 	m.RegisterIdentityCloneMock.callArgs = []*StoragePortMockRegisterIdentityCloneParams{}
 
+	m.RemoveMediaRecordMock = mStoragePortMockRemoveMediaRecord{mock: m}
+	m.RemoveMediaRecordMock.callArgs = []*StoragePortMockRemoveMediaRecordParams{}
+
 	m.RemoveQuadEdgeMock = mStoragePortMockRemoveQuadEdge{mock: m}
 	m.RemoveQuadEdgeMock.callArgs = []*StoragePortMockRemoveQuadEdgeParams{}
 
@@ -288,6 +305,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.UpsertNomadicIdentityMock = mStoragePortMockUpsertNomadicIdentity{mock: m}
 	m.UpsertNomadicIdentityMock.callArgs = []*StoragePortMockUpsertNomadicIdentityParams{}
+
+	m.VerifyIncomingQuotaMock = mStoragePortMockVerifyIncomingQuota{mock: m}
+	m.VerifyIncomingQuotaMock.callArgs = []*StoragePortMockVerifyIncomingQuotaParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -8359,6 +8379,348 @@ func (m *StoragePortMock) MinimockRegisterIdentityCloneInspect() {
 	}
 }
 
+type mStoragePortMockRemoveMediaRecord struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockRemoveMediaRecordExpectation
+	expectations       []*StoragePortMockRemoveMediaRecordExpectation
+
+	callArgs []*StoragePortMockRemoveMediaRecordParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockRemoveMediaRecordExpectation specifies expectation struct of the StoragePort.RemoveMediaRecord
+type StoragePortMockRemoveMediaRecordExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockRemoveMediaRecordParams
+	paramPtrs          *StoragePortMockRemoveMediaRecordParamPtrs
+	expectationOrigins StoragePortMockRemoveMediaRecordExpectationOrigins
+	results            *StoragePortMockRemoveMediaRecordResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockRemoveMediaRecordParams contains parameters of the StoragePort.RemoveMediaRecord
+type StoragePortMockRemoveMediaRecordParams struct {
+	ctx        context.Context
+	objectName string
+}
+
+// StoragePortMockRemoveMediaRecordParamPtrs contains pointers to parameters of the StoragePort.RemoveMediaRecord
+type StoragePortMockRemoveMediaRecordParamPtrs struct {
+	ctx        *context.Context
+	objectName *string
+}
+
+// StoragePortMockRemoveMediaRecordResults contains results of the StoragePort.RemoveMediaRecord
+type StoragePortMockRemoveMediaRecordResults struct {
+	err error
+}
+
+// StoragePortMockRemoveMediaRecordOrigins contains origins of expectations of the StoragePort.RemoveMediaRecord
+type StoragePortMockRemoveMediaRecordExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originObjectName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Optional() *mStoragePortMockRemoveMediaRecord {
+	mmRemoveMediaRecord.optional = true
+	return mmRemoveMediaRecord
+}
+
+// Expect sets up expected params for StoragePort.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Expect(ctx context.Context, objectName string) *mStoragePortMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StoragePortMockRemoveMediaRecordExpectation{}
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.paramPtrs != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by ExpectParams functions")
+	}
+
+	mmRemoveMediaRecord.defaultExpectation.params = &StoragePortMockRemoveMediaRecordParams{ctx, objectName}
+	mmRemoveMediaRecord.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRemoveMediaRecord.expectations {
+		if minimock.Equal(e.params, mmRemoveMediaRecord.defaultExpectation.params) {
+			mmRemoveMediaRecord.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRemoveMediaRecord.defaultExpectation.params)
+		}
+	}
+
+	return mmRemoveMediaRecord
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) ExpectCtxParam1(ctx context.Context) *mStoragePortMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StoragePortMockRemoveMediaRecordExpectation{}
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.params != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Expect")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.paramPtrs == nil {
+		mmRemoveMediaRecord.defaultExpectation.paramPtrs = &StoragePortMockRemoveMediaRecordParamPtrs{}
+	}
+	mmRemoveMediaRecord.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRemoveMediaRecord.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRemoveMediaRecord
+}
+
+// ExpectObjectNameParam2 sets up expected param objectName for StoragePort.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) ExpectObjectNameParam2(objectName string) *mStoragePortMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StoragePortMockRemoveMediaRecordExpectation{}
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.params != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Expect")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.paramPtrs == nil {
+		mmRemoveMediaRecord.defaultExpectation.paramPtrs = &StoragePortMockRemoveMediaRecordParamPtrs{}
+	}
+	mmRemoveMediaRecord.defaultExpectation.paramPtrs.objectName = &objectName
+	mmRemoveMediaRecord.defaultExpectation.expectationOrigins.originObjectName = minimock.CallerInfo(1)
+
+	return mmRemoveMediaRecord
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Inspect(f func(ctx context.Context, objectName string)) *mStoragePortMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.inspectFuncRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("Inspect function is already set for StoragePortMock.RemoveMediaRecord")
+	}
+
+	mmRemoveMediaRecord.mock.inspectFuncRemoveMediaRecord = f
+
+	return mmRemoveMediaRecord
+}
+
+// Return sets up results that will be returned by StoragePort.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Return(err error) *StoragePortMock {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StoragePortMockRemoveMediaRecordExpectation{mock: mmRemoveMediaRecord.mock}
+	}
+	mmRemoveMediaRecord.defaultExpectation.results = &StoragePortMockRemoveMediaRecordResults{err}
+	mmRemoveMediaRecord.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRemoveMediaRecord.mock
+}
+
+// Set uses given function f to mock the StoragePort.RemoveMediaRecord method
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Set(f func(ctx context.Context, objectName string) (err error)) *StoragePortMock {
+	if mmRemoveMediaRecord.defaultExpectation != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("Default expectation is already set for the StoragePort.RemoveMediaRecord method")
+	}
+
+	if len(mmRemoveMediaRecord.expectations) > 0 {
+		mmRemoveMediaRecord.mock.t.Fatalf("Some expectations are already set for the StoragePort.RemoveMediaRecord method")
+	}
+
+	mmRemoveMediaRecord.mock.funcRemoveMediaRecord = f
+	mmRemoveMediaRecord.mock.funcRemoveMediaRecordOrigin = minimock.CallerInfo(1)
+	return mmRemoveMediaRecord.mock
+}
+
+// When sets expectation for the StoragePort.RemoveMediaRecord which will trigger the result defined by the following
+// Then helper
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) When(ctx context.Context, objectName string) *StoragePortMockRemoveMediaRecordExpectation {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StoragePortMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockRemoveMediaRecordExpectation{
+		mock:               mmRemoveMediaRecord.mock,
+		params:             &StoragePortMockRemoveMediaRecordParams{ctx, objectName},
+		expectationOrigins: StoragePortMockRemoveMediaRecordExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRemoveMediaRecord.expectations = append(mmRemoveMediaRecord.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.RemoveMediaRecord return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockRemoveMediaRecordExpectation) Then(err error) *StoragePortMock {
+	e.results = &StoragePortMockRemoveMediaRecordResults{err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.RemoveMediaRecord should be invoked
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Times(n uint64) *mStoragePortMockRemoveMediaRecord {
+	if n == 0 {
+		mmRemoveMediaRecord.mock.t.Fatalf("Times of StoragePortMock.RemoveMediaRecord mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRemoveMediaRecord.expectedInvocations, n)
+	mmRemoveMediaRecord.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRemoveMediaRecord
+}
+
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) invocationsDone() bool {
+	if len(mmRemoveMediaRecord.expectations) == 0 && mmRemoveMediaRecord.defaultExpectation == nil && mmRemoveMediaRecord.mock.funcRemoveMediaRecord == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRemoveMediaRecord.mock.afterRemoveMediaRecordCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRemoveMediaRecord.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RemoveMediaRecord implements mm_port.StoragePort
+func (mmRemoveMediaRecord *StoragePortMock) RemoveMediaRecord(ctx context.Context, objectName string) (err error) {
+	mm_atomic.AddUint64(&mmRemoveMediaRecord.beforeRemoveMediaRecordCounter, 1)
+	defer mm_atomic.AddUint64(&mmRemoveMediaRecord.afterRemoveMediaRecordCounter, 1)
+
+	mmRemoveMediaRecord.t.Helper()
+
+	if mmRemoveMediaRecord.inspectFuncRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.inspectFuncRemoveMediaRecord(ctx, objectName)
+	}
+
+	mm_params := StoragePortMockRemoveMediaRecordParams{ctx, objectName}
+
+	// Record call args
+	mmRemoveMediaRecord.RemoveMediaRecordMock.mutex.Lock()
+	mmRemoveMediaRecord.RemoveMediaRecordMock.callArgs = append(mmRemoveMediaRecord.RemoveMediaRecordMock.callArgs, &mm_params)
+	mmRemoveMediaRecord.RemoveMediaRecordMock.mutex.Unlock()
+
+	for _, e := range mmRemoveMediaRecord.RemoveMediaRecordMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.Counter, 1)
+		mm_want := mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.params
+		mm_want_ptrs := mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockRemoveMediaRecordParams{ctx, objectName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRemoveMediaRecord.t.Errorf("StoragePortMock.RemoveMediaRecord got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectName != nil && !minimock.Equal(*mm_want_ptrs.objectName, mm_got.objectName) {
+				mmRemoveMediaRecord.t.Errorf("StoragePortMock.RemoveMediaRecord got unexpected parameter objectName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.originObjectName, *mm_want_ptrs.objectName, mm_got.objectName, minimock.Diff(*mm_want_ptrs.objectName, mm_got.objectName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRemoveMediaRecord.t.Errorf("StoragePortMock.RemoveMediaRecord got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRemoveMediaRecord.t.Fatal("No results are set for the StoragePortMock.RemoveMediaRecord")
+		}
+		return (*mm_results).err
+	}
+	if mmRemoveMediaRecord.funcRemoveMediaRecord != nil {
+		return mmRemoveMediaRecord.funcRemoveMediaRecord(ctx, objectName)
+	}
+	mmRemoveMediaRecord.t.Fatalf("Unexpected call to StoragePortMock.RemoveMediaRecord. %v %v", ctx, objectName)
+	return
+}
+
+// RemoveMediaRecordAfterCounter returns a count of finished StoragePortMock.RemoveMediaRecord invocations
+func (mmRemoveMediaRecord *StoragePortMock) RemoveMediaRecordAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRemoveMediaRecord.afterRemoveMediaRecordCounter)
+}
+
+// RemoveMediaRecordBeforeCounter returns a count of StoragePortMock.RemoveMediaRecord invocations
+func (mmRemoveMediaRecord *StoragePortMock) RemoveMediaRecordBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRemoveMediaRecord.beforeRemoveMediaRecordCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.RemoveMediaRecord.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRemoveMediaRecord *mStoragePortMockRemoveMediaRecord) Calls() []*StoragePortMockRemoveMediaRecordParams {
+	mmRemoveMediaRecord.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockRemoveMediaRecordParams, len(mmRemoveMediaRecord.callArgs))
+	copy(argCopy, mmRemoveMediaRecord.callArgs)
+
+	mmRemoveMediaRecord.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRemoveMediaRecordDone returns true if the count of the RemoveMediaRecord invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockRemoveMediaRecordDone() bool {
+	if m.RemoveMediaRecordMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RemoveMediaRecordMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RemoveMediaRecordMock.invocationsDone()
+}
+
+// MinimockRemoveMediaRecordInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockRemoveMediaRecordInspect() {
+	for _, e := range m.RemoveMediaRecordMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.RemoveMediaRecord at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRemoveMediaRecordCounter := mm_atomic.LoadUint64(&m.afterRemoveMediaRecordCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RemoveMediaRecordMock.defaultExpectation != nil && afterRemoveMediaRecordCounter < 1 {
+		if m.RemoveMediaRecordMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.RemoveMediaRecord at\n%s", m.RemoveMediaRecordMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.RemoveMediaRecord at\n%s with params: %#v", m.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.origin, *m.RemoveMediaRecordMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRemoveMediaRecord != nil && afterRemoveMediaRecordCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.RemoveMediaRecord at\n%s", m.funcRemoveMediaRecordOrigin)
+	}
+
+	if !m.RemoveMediaRecordMock.invocationsDone() && afterRemoveMediaRecordCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.RemoveMediaRecord at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RemoveMediaRecordMock.expectedInvocations), m.RemoveMediaRecordMock.expectedInvocationsOrigin, afterRemoveMediaRecordCounter)
+	}
+}
+
 type mStoragePortMockRemoveQuadEdge struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -10132,6 +10494,380 @@ func (m *StoragePortMock) MinimockUpsertNomadicIdentityInspect() {
 	}
 }
 
+type mStoragePortMockVerifyIncomingQuota struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockVerifyIncomingQuotaExpectation
+	expectations       []*StoragePortMockVerifyIncomingQuotaExpectation
+
+	callArgs []*StoragePortMockVerifyIncomingQuotaParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockVerifyIncomingQuotaExpectation specifies expectation struct of the StoragePort.VerifyIncomingQuota
+type StoragePortMockVerifyIncomingQuotaExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockVerifyIncomingQuotaParams
+	paramPtrs          *StoragePortMockVerifyIncomingQuotaParamPtrs
+	expectationOrigins StoragePortMockVerifyIncomingQuotaExpectationOrigins
+	results            *StoragePortMockVerifyIncomingQuotaResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockVerifyIncomingQuotaParams contains parameters of the StoragePort.VerifyIncomingQuota
+type StoragePortMockVerifyIncomingQuotaParams struct {
+	ctx               context.Context
+	tenantID          int32
+	incomingSizeBytes int64
+}
+
+// StoragePortMockVerifyIncomingQuotaParamPtrs contains pointers to parameters of the StoragePort.VerifyIncomingQuota
+type StoragePortMockVerifyIncomingQuotaParamPtrs struct {
+	ctx               *context.Context
+	tenantID          *int32
+	incomingSizeBytes *int64
+}
+
+// StoragePortMockVerifyIncomingQuotaResults contains results of the StoragePort.VerifyIncomingQuota
+type StoragePortMockVerifyIncomingQuotaResults struct {
+	b1  bool
+	err error
+}
+
+// StoragePortMockVerifyIncomingQuotaOrigins contains origins of expectations of the StoragePort.VerifyIncomingQuota
+type StoragePortMockVerifyIncomingQuotaExpectationOrigins struct {
+	origin                  string
+	originCtx               string
+	originTenantID          string
+	originIncomingSizeBytes string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Optional() *mStoragePortMockVerifyIncomingQuota {
+	mmVerifyIncomingQuota.optional = true
+	return mmVerifyIncomingQuota
+}
+
+// Expect sets up expected params for StoragePort.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Expect(ctx context.Context, tenantID int32, incomingSizeBytes int64) *mStoragePortMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StoragePortMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by ExpectParams functions")
+	}
+
+	mmVerifyIncomingQuota.defaultExpectation.params = &StoragePortMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes}
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmVerifyIncomingQuota.expectations {
+		if minimock.Equal(e.params, mmVerifyIncomingQuota.defaultExpectation.params) {
+			mmVerifyIncomingQuota.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmVerifyIncomingQuota.defaultExpectation.params)
+		}
+	}
+
+	return mmVerifyIncomingQuota
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) ExpectCtxParam1(ctx context.Context) *mStoragePortMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StoragePortMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.params != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Expect")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs == nil {
+		mmVerifyIncomingQuota.defaultExpectation.paramPtrs = &StoragePortMockVerifyIncomingQuotaParamPtrs{}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.paramPtrs.ctx = &ctx
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmVerifyIncomingQuota
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for StoragePort.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) ExpectTenantIDParam2(tenantID int32) *mStoragePortMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StoragePortMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.params != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Expect")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs == nil {
+		mmVerifyIncomingQuota.defaultExpectation.paramPtrs = &StoragePortMockVerifyIncomingQuotaParamPtrs{}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmVerifyIncomingQuota
+}
+
+// ExpectIncomingSizeBytesParam3 sets up expected param incomingSizeBytes for StoragePort.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) ExpectIncomingSizeBytesParam3(incomingSizeBytes int64) *mStoragePortMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StoragePortMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.params != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Expect")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs == nil {
+		mmVerifyIncomingQuota.defaultExpectation.paramPtrs = &StoragePortMockVerifyIncomingQuotaParamPtrs{}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.paramPtrs.incomingSizeBytes = &incomingSizeBytes
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.originIncomingSizeBytes = minimock.CallerInfo(1)
+
+	return mmVerifyIncomingQuota
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Inspect(f func(ctx context.Context, tenantID int32, incomingSizeBytes int64)) *mStoragePortMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.inspectFuncVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Inspect function is already set for StoragePortMock.VerifyIncomingQuota")
+	}
+
+	mmVerifyIncomingQuota.mock.inspectFuncVerifyIncomingQuota = f
+
+	return mmVerifyIncomingQuota
+}
+
+// Return sets up results that will be returned by StoragePort.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Return(b1 bool, err error) *StoragePortMock {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StoragePortMockVerifyIncomingQuotaExpectation{mock: mmVerifyIncomingQuota.mock}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.results = &StoragePortMockVerifyIncomingQuotaResults{b1, err}
+	mmVerifyIncomingQuota.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmVerifyIncomingQuota.mock
+}
+
+// Set uses given function f to mock the StoragePort.VerifyIncomingQuota method
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Set(f func(ctx context.Context, tenantID int32, incomingSizeBytes int64) (b1 bool, err error)) *StoragePortMock {
+	if mmVerifyIncomingQuota.defaultExpectation != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Default expectation is already set for the StoragePort.VerifyIncomingQuota method")
+	}
+
+	if len(mmVerifyIncomingQuota.expectations) > 0 {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Some expectations are already set for the StoragePort.VerifyIncomingQuota method")
+	}
+
+	mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota = f
+	mmVerifyIncomingQuota.mock.funcVerifyIncomingQuotaOrigin = minimock.CallerInfo(1)
+	return mmVerifyIncomingQuota.mock
+}
+
+// When sets expectation for the StoragePort.VerifyIncomingQuota which will trigger the result defined by the following
+// Then helper
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) When(ctx context.Context, tenantID int32, incomingSizeBytes int64) *StoragePortMockVerifyIncomingQuotaExpectation {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StoragePortMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockVerifyIncomingQuotaExpectation{
+		mock:               mmVerifyIncomingQuota.mock,
+		params:             &StoragePortMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes},
+		expectationOrigins: StoragePortMockVerifyIncomingQuotaExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmVerifyIncomingQuota.expectations = append(mmVerifyIncomingQuota.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.VerifyIncomingQuota return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockVerifyIncomingQuotaExpectation) Then(b1 bool, err error) *StoragePortMock {
+	e.results = &StoragePortMockVerifyIncomingQuotaResults{b1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.VerifyIncomingQuota should be invoked
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Times(n uint64) *mStoragePortMockVerifyIncomingQuota {
+	if n == 0 {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Times of StoragePortMock.VerifyIncomingQuota mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmVerifyIncomingQuota.expectedInvocations, n)
+	mmVerifyIncomingQuota.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmVerifyIncomingQuota
+}
+
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) invocationsDone() bool {
+	if len(mmVerifyIncomingQuota.expectations) == 0 && mmVerifyIncomingQuota.defaultExpectation == nil && mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmVerifyIncomingQuota.mock.afterVerifyIncomingQuotaCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmVerifyIncomingQuota.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// VerifyIncomingQuota implements mm_port.StoragePort
+func (mmVerifyIncomingQuota *StoragePortMock) VerifyIncomingQuota(ctx context.Context, tenantID int32, incomingSizeBytes int64) (b1 bool, err error) {
+	mm_atomic.AddUint64(&mmVerifyIncomingQuota.beforeVerifyIncomingQuotaCounter, 1)
+	defer mm_atomic.AddUint64(&mmVerifyIncomingQuota.afterVerifyIncomingQuotaCounter, 1)
+
+	mmVerifyIncomingQuota.t.Helper()
+
+	if mmVerifyIncomingQuota.inspectFuncVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.inspectFuncVerifyIncomingQuota(ctx, tenantID, incomingSizeBytes)
+	}
+
+	mm_params := StoragePortMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes}
+
+	// Record call args
+	mmVerifyIncomingQuota.VerifyIncomingQuotaMock.mutex.Lock()
+	mmVerifyIncomingQuota.VerifyIncomingQuotaMock.callArgs = append(mmVerifyIncomingQuota.VerifyIncomingQuotaMock.callArgs, &mm_params)
+	mmVerifyIncomingQuota.VerifyIncomingQuotaMock.mutex.Unlock()
+
+	for _, e := range mmVerifyIncomingQuota.VerifyIncomingQuotaMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.b1, e.results.err
+		}
+	}
+
+	if mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.Counter, 1)
+		mm_want := mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.params
+		mm_want_ptrs := mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmVerifyIncomingQuota.t.Errorf("StoragePortMock.VerifyIncomingQuota got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmVerifyIncomingQuota.t.Errorf("StoragePortMock.VerifyIncomingQuota got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.incomingSizeBytes != nil && !minimock.Equal(*mm_want_ptrs.incomingSizeBytes, mm_got.incomingSizeBytes) {
+				mmVerifyIncomingQuota.t.Errorf("StoragePortMock.VerifyIncomingQuota got unexpected parameter incomingSizeBytes, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.originIncomingSizeBytes, *mm_want_ptrs.incomingSizeBytes, mm_got.incomingSizeBytes, minimock.Diff(*mm_want_ptrs.incomingSizeBytes, mm_got.incomingSizeBytes))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmVerifyIncomingQuota.t.Errorf("StoragePortMock.VerifyIncomingQuota got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.results
+		if mm_results == nil {
+			mmVerifyIncomingQuota.t.Fatal("No results are set for the StoragePortMock.VerifyIncomingQuota")
+		}
+		return (*mm_results).b1, (*mm_results).err
+	}
+	if mmVerifyIncomingQuota.funcVerifyIncomingQuota != nil {
+		return mmVerifyIncomingQuota.funcVerifyIncomingQuota(ctx, tenantID, incomingSizeBytes)
+	}
+	mmVerifyIncomingQuota.t.Fatalf("Unexpected call to StoragePortMock.VerifyIncomingQuota. %v %v %v", ctx, tenantID, incomingSizeBytes)
+	return
+}
+
+// VerifyIncomingQuotaAfterCounter returns a count of finished StoragePortMock.VerifyIncomingQuota invocations
+func (mmVerifyIncomingQuota *StoragePortMock) VerifyIncomingQuotaAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyIncomingQuota.afterVerifyIncomingQuotaCounter)
+}
+
+// VerifyIncomingQuotaBeforeCounter returns a count of StoragePortMock.VerifyIncomingQuota invocations
+func (mmVerifyIncomingQuota *StoragePortMock) VerifyIncomingQuotaBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyIncomingQuota.beforeVerifyIncomingQuotaCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.VerifyIncomingQuota.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmVerifyIncomingQuota *mStoragePortMockVerifyIncomingQuota) Calls() []*StoragePortMockVerifyIncomingQuotaParams {
+	mmVerifyIncomingQuota.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockVerifyIncomingQuotaParams, len(mmVerifyIncomingQuota.callArgs))
+	copy(argCopy, mmVerifyIncomingQuota.callArgs)
+
+	mmVerifyIncomingQuota.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockVerifyIncomingQuotaDone returns true if the count of the VerifyIncomingQuota invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockVerifyIncomingQuotaDone() bool {
+	if m.VerifyIncomingQuotaMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.VerifyIncomingQuotaMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.VerifyIncomingQuotaMock.invocationsDone()
+}
+
+// MinimockVerifyIncomingQuotaInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockVerifyIncomingQuotaInspect() {
+	for _, e := range m.VerifyIncomingQuotaMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.VerifyIncomingQuota at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterVerifyIncomingQuotaCounter := mm_atomic.LoadUint64(&m.afterVerifyIncomingQuotaCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.VerifyIncomingQuotaMock.defaultExpectation != nil && afterVerifyIncomingQuotaCounter < 1 {
+		if m.VerifyIncomingQuotaMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.VerifyIncomingQuota at\n%s", m.VerifyIncomingQuotaMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.VerifyIncomingQuota at\n%s with params: %#v", m.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.origin, *m.VerifyIncomingQuotaMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcVerifyIncomingQuota != nil && afterVerifyIncomingQuotaCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.VerifyIncomingQuota at\n%s", m.funcVerifyIncomingQuotaOrigin)
+	}
+
+	if !m.VerifyIncomingQuotaMock.invocationsDone() && afterVerifyIncomingQuotaCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.VerifyIncomingQuota at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.VerifyIncomingQuotaMock.expectedInvocations), m.VerifyIncomingQuotaMock.expectedInvocationsOrigin, afterVerifyIncomingQuotaCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *StoragePortMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
@@ -10178,6 +10914,8 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockRegisterIdentityCloneInspect()
 
+			m.MinimockRemoveMediaRecordInspect()
+
 			m.MinimockRemoveQuadEdgeInspect()
 
 			m.MinimockSaveQuadIDsInspect()
@@ -10187,6 +10925,8 @@ func (m *StoragePortMock) MinimockFinish() {
 			m.MinimockStreamQuadsBySubjectInspect()
 
 			m.MinimockUpsertNomadicIdentityInspect()
+
+			m.MinimockVerifyIncomingQuotaInspect()
 		}
 	})
 }
@@ -10231,9 +10971,11 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockMarkInboundFailedDone() &&
 		m.MinimockRecordActorInboxDeliveryDone() &&
 		m.MinimockRegisterIdentityCloneDone() &&
+		m.MinimockRemoveMediaRecordDone() &&
 		m.MinimockRemoveQuadEdgeDone() &&
 		m.MinimockSaveQuadIDsDone() &&
 		m.MinimockSaveQuadsDone() &&
 		m.MinimockStreamQuadsBySubjectDone() &&
-		m.MinimockUpsertNomadicIdentityDone()
+		m.MinimockUpsertNomadicIdentityDone() &&
+		m.MinimockVerifyIncomingQuotaDone()
 }

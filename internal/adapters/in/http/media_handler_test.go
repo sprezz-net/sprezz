@@ -62,6 +62,7 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 
 	// Instantiate mock domain boundaries
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.VerifyIncomingQuotaMock.Return(true, nil)
 	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
 		return nil
 	})
@@ -152,9 +153,11 @@ func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
 	})
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.VerifyIncomingQuotaMock.Return(true, nil)
 	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
 		return nil
 	})
+	mockStorage.RemoveMediaRecordMock.Return(nil)
 
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
@@ -227,6 +230,7 @@ func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.VerifyIncomingQuotaMock.Return(true, nil)
 	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
 		// Trigger a structural relational failure abort
 		return errors.New("unique constraint violation on indexes")
@@ -278,6 +282,7 @@ func TestProcessInboundMediaTask_Success(t *testing.T) {
 	})
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.VerifyIncomingQuotaMock.Return(true, nil)
 	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
 		saveWithMediaInvoked = true
 		if params.ObjectName != "permanent/key-123" || params.SHA256Hex != "hash-sha256-string" {
@@ -335,6 +340,7 @@ func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
 	})
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.VerifyIncomingQuotaMock.Return(true, nil)
 	mockStorage.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
 		return errors.New("simulated postgres context deadlock isolation failure")
 	})
@@ -363,29 +369,77 @@ func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
 }
 
 func TestPurgeOrphanedMedia_Success(t *testing.T) {
+	ctx := context.Background()
 	mc := minimock.NewController(t)
 
-	ctx := context.Background()
+	targetKey := "tmp/target-to-purge"
 	deleteInvoked := false
+	removeRecordInvoked := false
 
+	// 1. Stub the Media Storage Mock capability using minimock builder methods
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 	mockMedia.DeleteObjectMock.Set(func(ctx context.Context, objectName string) error {
-		if objectName == "tmp/target-to-purge" {
+		if objectName == targetKey {
 			deleteInvoked = true
 		}
 		return nil
 	})
 
-	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
-	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	// 2. Stub the missing Storage Port mock method to prevent unexpected call alerts
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.RemoveMediaRecordMock.Inspect(func(ctx context.Context, objectName string) {
+		if objectName == targetKey {
+			removeRecordInvoked = true
+		}
+	}).Return(nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
+	// Initialize the domain coordinator execution service with type-safe mock nodes
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), mockMedia)
 
-	if err := svc.PurgeOrphanedMedia(ctx, "tmp/target-to-purge"); err != nil {
-		t.Fatalf("Unexpected error surface uncovered during operational cleanup interface call: %v", err)
+	// Execute execution routine target
+	err := svc.PurgeOrphanedMedia(ctx, targetKey)
+	if err != nil {
+		t.Fatalf("Unexpected operational failure during explicit cleanup call: %v", err)
 	}
 
+	// 3. Verify assertions inside the test block boundaries
 	if !deleteInvoked {
-		t.Error("Compensating domain action failed to propagate target deletion instruction down into infrastructural driver ports")
+		t.Error("Compensating domain action failed to propagate target deletion instruction into object store ports")
+	}
+	if !removeRecordInvoked {
+		t.Error("Compensating loop execution failed to invoke relational database row pruning hook")
+	}
+}
+
+func TestMediaUploadHandler_ServeHTTP_QuotaCeilingBreached(t *testing.T) {
+	activityPayload := `{"id":"https://sprezz.net","type":"Create","object":"https://sprezz.net"}`
+	filenames := []string{"oversized_photo.png"}
+	contents := []string{"binary-stream"}
+	contentType, body := createMultipartRequest(t, activityPayload, filenames, contents)
+
+	mc := minimock.NewController(t)
+
+	// Configure the service stub to simulate an immediate validation failure
+	mockSvc := portmock.NewActivityServicePortMock(mc)
+	mockSvc.ProcessInboundMediaTaskMock.Set(func(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) error {
+		return errors.New("storage authorization ceiling threshold exceeded")
+	})
+
+	handler := inhttp.NewMediaUploadHandler(mockSvc, 10*1024*1024)
+
+	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
+	req.Header.Set("Content-Type", contentType)
+
+	// Safe SA1029 context configuration bindings
+	ctx := context.WithValue(req.Context(), model.TenantIDKey, "tenant-alpha")
+	ctx = context.WithValue(ctx, model.ActorIRIKey, "https://sprezz.net")
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	// Verify that the adapter transforms the core restriction into an explicit HTTP 500 or 413 error
+	if rr.Code != http.StatusInternalServerError {
+		t.Errorf("Expected internal server error code wrapper block on pipeline blockages, got %d", rr.Code)
 	}
 }

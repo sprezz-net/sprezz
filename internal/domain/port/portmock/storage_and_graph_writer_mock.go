@@ -168,6 +168,13 @@ type StorageAndGraphWriterMock struct {
 	beforeRegisterIdentityCloneCounter uint64
 	RegisterIdentityCloneMock          mStorageAndGraphWriterMockRegisterIdentityClone
 
+	funcRemoveMediaRecord          func(ctx context.Context, objectName string) (err error)
+	funcRemoveMediaRecordOrigin    string
+	inspectFuncRemoveMediaRecord   func(ctx context.Context, objectName string)
+	afterRemoveMediaRecordCounter  uint64
+	beforeRemoveMediaRecordCounter uint64
+	RemoveMediaRecordMock          mStorageAndGraphWriterMockRemoveMediaRecord
+
 	funcRemoveQuadEdge          func(ctx context.Context, subject string, predicate string, object string) (err error)
 	funcRemoveQuadEdgeOrigin    string
 	inspectFuncRemoveQuadEdge   func(ctx context.Context, subject string, predicate string, object string)
@@ -216,6 +223,13 @@ type StorageAndGraphWriterMock struct {
 	afterUpsertNomadicIdentityCounter  uint64
 	beforeUpsertNomadicIdentityCounter uint64
 	UpsertNomadicIdentityMock          mStorageAndGraphWriterMockUpsertNomadicIdentity
+
+	funcVerifyIncomingQuota          func(ctx context.Context, tenantID int32, incomingSizeBytes int64) (b1 bool, err error)
+	funcVerifyIncomingQuotaOrigin    string
+	inspectFuncVerifyIncomingQuota   func(ctx context.Context, tenantID int32, incomingSizeBytes int64)
+	afterVerifyIncomingQuotaCounter  uint64
+	beforeVerifyIncomingQuotaCounter uint64
+	VerifyIncomingQuotaMock          mStorageAndGraphWriterMockVerifyIncomingQuota
 }
 
 // NewStorageAndGraphWriterMock returns a mock for mm_port.StorageAndGraphWriter
@@ -289,6 +303,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 	m.RegisterIdentityCloneMock = mStorageAndGraphWriterMockRegisterIdentityClone{mock: m}
 	m.RegisterIdentityCloneMock.callArgs = []*StorageAndGraphWriterMockRegisterIdentityCloneParams{}
 
+	m.RemoveMediaRecordMock = mStorageAndGraphWriterMockRemoveMediaRecord{mock: m}
+	m.RemoveMediaRecordMock.callArgs = []*StorageAndGraphWriterMockRemoveMediaRecordParams{}
+
 	m.RemoveQuadEdgeMock = mStorageAndGraphWriterMockRemoveQuadEdge{mock: m}
 	m.RemoveQuadEdgeMock.callArgs = []*StorageAndGraphWriterMockRemoveQuadEdgeParams{}
 
@@ -309,6 +326,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.UpsertNomadicIdentityMock = mStorageAndGraphWriterMockUpsertNomadicIdentity{mock: m}
 	m.UpsertNomadicIdentityMock.callArgs = []*StorageAndGraphWriterMockUpsertNomadicIdentityParams{}
+
+	m.VerifyIncomingQuotaMock = mStorageAndGraphWriterMockVerifyIncomingQuota{mock: m}
+	m.VerifyIncomingQuotaMock.callArgs = []*StorageAndGraphWriterMockVerifyIncomingQuotaParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -8380,6 +8400,348 @@ func (m *StorageAndGraphWriterMock) MinimockRegisterIdentityCloneInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockRemoveMediaRecord struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockRemoveMediaRecordExpectation
+	expectations       []*StorageAndGraphWriterMockRemoveMediaRecordExpectation
+
+	callArgs []*StorageAndGraphWriterMockRemoveMediaRecordParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockRemoveMediaRecordExpectation specifies expectation struct of the StorageAndGraphWriter.RemoveMediaRecord
+type StorageAndGraphWriterMockRemoveMediaRecordExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockRemoveMediaRecordParams
+	paramPtrs          *StorageAndGraphWriterMockRemoveMediaRecordParamPtrs
+	expectationOrigins StorageAndGraphWriterMockRemoveMediaRecordExpectationOrigins
+	results            *StorageAndGraphWriterMockRemoveMediaRecordResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockRemoveMediaRecordParams contains parameters of the StorageAndGraphWriter.RemoveMediaRecord
+type StorageAndGraphWriterMockRemoveMediaRecordParams struct {
+	ctx        context.Context
+	objectName string
+}
+
+// StorageAndGraphWriterMockRemoveMediaRecordParamPtrs contains pointers to parameters of the StorageAndGraphWriter.RemoveMediaRecord
+type StorageAndGraphWriterMockRemoveMediaRecordParamPtrs struct {
+	ctx        *context.Context
+	objectName *string
+}
+
+// StorageAndGraphWriterMockRemoveMediaRecordResults contains results of the StorageAndGraphWriter.RemoveMediaRecord
+type StorageAndGraphWriterMockRemoveMediaRecordResults struct {
+	err error
+}
+
+// StorageAndGraphWriterMockRemoveMediaRecordOrigins contains origins of expectations of the StorageAndGraphWriter.RemoveMediaRecord
+type StorageAndGraphWriterMockRemoveMediaRecordExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originObjectName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Optional() *mStorageAndGraphWriterMockRemoveMediaRecord {
+	mmRemoveMediaRecord.optional = true
+	return mmRemoveMediaRecord
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Expect(ctx context.Context, objectName string) *mStorageAndGraphWriterMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StorageAndGraphWriterMockRemoveMediaRecordExpectation{}
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.paramPtrs != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by ExpectParams functions")
+	}
+
+	mmRemoveMediaRecord.defaultExpectation.params = &StorageAndGraphWriterMockRemoveMediaRecordParams{ctx, objectName}
+	mmRemoveMediaRecord.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRemoveMediaRecord.expectations {
+		if minimock.Equal(e.params, mmRemoveMediaRecord.defaultExpectation.params) {
+			mmRemoveMediaRecord.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRemoveMediaRecord.defaultExpectation.params)
+		}
+	}
+
+	return mmRemoveMediaRecord
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StorageAndGraphWriterMockRemoveMediaRecordExpectation{}
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.params != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Expect")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.paramPtrs == nil {
+		mmRemoveMediaRecord.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockRemoveMediaRecordParamPtrs{}
+	}
+	mmRemoveMediaRecord.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRemoveMediaRecord.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRemoveMediaRecord
+}
+
+// ExpectObjectNameParam2 sets up expected param objectName for StorageAndGraphWriter.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) ExpectObjectNameParam2(objectName string) *mStorageAndGraphWriterMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StorageAndGraphWriterMockRemoveMediaRecordExpectation{}
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.params != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Expect")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation.paramPtrs == nil {
+		mmRemoveMediaRecord.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockRemoveMediaRecordParamPtrs{}
+	}
+	mmRemoveMediaRecord.defaultExpectation.paramPtrs.objectName = &objectName
+	mmRemoveMediaRecord.defaultExpectation.expectationOrigins.originObjectName = minimock.CallerInfo(1)
+
+	return mmRemoveMediaRecord
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Inspect(f func(ctx context.Context, objectName string)) *mStorageAndGraphWriterMockRemoveMediaRecord {
+	if mmRemoveMediaRecord.mock.inspectFuncRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.RemoveMediaRecord")
+	}
+
+	mmRemoveMediaRecord.mock.inspectFuncRemoveMediaRecord = f
+
+	return mmRemoveMediaRecord
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.RemoveMediaRecord
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Return(err error) *StorageAndGraphWriterMock {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	if mmRemoveMediaRecord.defaultExpectation == nil {
+		mmRemoveMediaRecord.defaultExpectation = &StorageAndGraphWriterMockRemoveMediaRecordExpectation{mock: mmRemoveMediaRecord.mock}
+	}
+	mmRemoveMediaRecord.defaultExpectation.results = &StorageAndGraphWriterMockRemoveMediaRecordResults{err}
+	mmRemoveMediaRecord.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRemoveMediaRecord.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.RemoveMediaRecord method
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Set(f func(ctx context.Context, objectName string) (err error)) *StorageAndGraphWriterMock {
+	if mmRemoveMediaRecord.defaultExpectation != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.RemoveMediaRecord method")
+	}
+
+	if len(mmRemoveMediaRecord.expectations) > 0 {
+		mmRemoveMediaRecord.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.RemoveMediaRecord method")
+	}
+
+	mmRemoveMediaRecord.mock.funcRemoveMediaRecord = f
+	mmRemoveMediaRecord.mock.funcRemoveMediaRecordOrigin = minimock.CallerInfo(1)
+	return mmRemoveMediaRecord.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.RemoveMediaRecord which will trigger the result defined by the following
+// Then helper
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) When(ctx context.Context, objectName string) *StorageAndGraphWriterMockRemoveMediaRecordExpectation {
+	if mmRemoveMediaRecord.mock.funcRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.mock.t.Fatalf("StorageAndGraphWriterMock.RemoveMediaRecord mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockRemoveMediaRecordExpectation{
+		mock:               mmRemoveMediaRecord.mock,
+		params:             &StorageAndGraphWriterMockRemoveMediaRecordParams{ctx, objectName},
+		expectationOrigins: StorageAndGraphWriterMockRemoveMediaRecordExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRemoveMediaRecord.expectations = append(mmRemoveMediaRecord.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.RemoveMediaRecord return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockRemoveMediaRecordExpectation) Then(err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockRemoveMediaRecordResults{err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.RemoveMediaRecord should be invoked
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Times(n uint64) *mStorageAndGraphWriterMockRemoveMediaRecord {
+	if n == 0 {
+		mmRemoveMediaRecord.mock.t.Fatalf("Times of StorageAndGraphWriterMock.RemoveMediaRecord mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRemoveMediaRecord.expectedInvocations, n)
+	mmRemoveMediaRecord.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRemoveMediaRecord
+}
+
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) invocationsDone() bool {
+	if len(mmRemoveMediaRecord.expectations) == 0 && mmRemoveMediaRecord.defaultExpectation == nil && mmRemoveMediaRecord.mock.funcRemoveMediaRecord == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRemoveMediaRecord.mock.afterRemoveMediaRecordCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRemoveMediaRecord.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RemoveMediaRecord implements mm_port.StorageAndGraphWriter
+func (mmRemoveMediaRecord *StorageAndGraphWriterMock) RemoveMediaRecord(ctx context.Context, objectName string) (err error) {
+	mm_atomic.AddUint64(&mmRemoveMediaRecord.beforeRemoveMediaRecordCounter, 1)
+	defer mm_atomic.AddUint64(&mmRemoveMediaRecord.afterRemoveMediaRecordCounter, 1)
+
+	mmRemoveMediaRecord.t.Helper()
+
+	if mmRemoveMediaRecord.inspectFuncRemoveMediaRecord != nil {
+		mmRemoveMediaRecord.inspectFuncRemoveMediaRecord(ctx, objectName)
+	}
+
+	mm_params := StorageAndGraphWriterMockRemoveMediaRecordParams{ctx, objectName}
+
+	// Record call args
+	mmRemoveMediaRecord.RemoveMediaRecordMock.mutex.Lock()
+	mmRemoveMediaRecord.RemoveMediaRecordMock.callArgs = append(mmRemoveMediaRecord.RemoveMediaRecordMock.callArgs, &mm_params)
+	mmRemoveMediaRecord.RemoveMediaRecordMock.mutex.Unlock()
+
+	for _, e := range mmRemoveMediaRecord.RemoveMediaRecordMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.Counter, 1)
+		mm_want := mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.params
+		mm_want_ptrs := mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockRemoveMediaRecordParams{ctx, objectName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRemoveMediaRecord.t.Errorf("StorageAndGraphWriterMock.RemoveMediaRecord got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectName != nil && !minimock.Equal(*mm_want_ptrs.objectName, mm_got.objectName) {
+				mmRemoveMediaRecord.t.Errorf("StorageAndGraphWriterMock.RemoveMediaRecord got unexpected parameter objectName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.originObjectName, *mm_want_ptrs.objectName, mm_got.objectName, minimock.Diff(*mm_want_ptrs.objectName, mm_got.objectName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRemoveMediaRecord.t.Errorf("StorageAndGraphWriterMock.RemoveMediaRecord got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRemoveMediaRecord.RemoveMediaRecordMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRemoveMediaRecord.t.Fatal("No results are set for the StorageAndGraphWriterMock.RemoveMediaRecord")
+		}
+		return (*mm_results).err
+	}
+	if mmRemoveMediaRecord.funcRemoveMediaRecord != nil {
+		return mmRemoveMediaRecord.funcRemoveMediaRecord(ctx, objectName)
+	}
+	mmRemoveMediaRecord.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.RemoveMediaRecord. %v %v", ctx, objectName)
+	return
+}
+
+// RemoveMediaRecordAfterCounter returns a count of finished StorageAndGraphWriterMock.RemoveMediaRecord invocations
+func (mmRemoveMediaRecord *StorageAndGraphWriterMock) RemoveMediaRecordAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRemoveMediaRecord.afterRemoveMediaRecordCounter)
+}
+
+// RemoveMediaRecordBeforeCounter returns a count of StorageAndGraphWriterMock.RemoveMediaRecord invocations
+func (mmRemoveMediaRecord *StorageAndGraphWriterMock) RemoveMediaRecordBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRemoveMediaRecord.beforeRemoveMediaRecordCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.RemoveMediaRecord.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRemoveMediaRecord *mStorageAndGraphWriterMockRemoveMediaRecord) Calls() []*StorageAndGraphWriterMockRemoveMediaRecordParams {
+	mmRemoveMediaRecord.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockRemoveMediaRecordParams, len(mmRemoveMediaRecord.callArgs))
+	copy(argCopy, mmRemoveMediaRecord.callArgs)
+
+	mmRemoveMediaRecord.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRemoveMediaRecordDone returns true if the count of the RemoveMediaRecord invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockRemoveMediaRecordDone() bool {
+	if m.RemoveMediaRecordMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RemoveMediaRecordMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RemoveMediaRecordMock.invocationsDone()
+}
+
+// MinimockRemoveMediaRecordInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockRemoveMediaRecordInspect() {
+	for _, e := range m.RemoveMediaRecordMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.RemoveMediaRecord at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRemoveMediaRecordCounter := mm_atomic.LoadUint64(&m.afterRemoveMediaRecordCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RemoveMediaRecordMock.defaultExpectation != nil && afterRemoveMediaRecordCounter < 1 {
+		if m.RemoveMediaRecordMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.RemoveMediaRecord at\n%s", m.RemoveMediaRecordMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.RemoveMediaRecord at\n%s with params: %#v", m.RemoveMediaRecordMock.defaultExpectation.expectationOrigins.origin, *m.RemoveMediaRecordMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRemoveMediaRecord != nil && afterRemoveMediaRecordCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.RemoveMediaRecord at\n%s", m.funcRemoveMediaRecordOrigin)
+	}
+
+	if !m.RemoveMediaRecordMock.invocationsDone() && afterRemoveMediaRecordCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.RemoveMediaRecord at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RemoveMediaRecordMock.expectedInvocations), m.RemoveMediaRecordMock.expectedInvocationsOrigin, afterRemoveMediaRecordCounter)
+	}
+}
+
 type mStorageAndGraphWriterMockRemoveQuadEdge struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -10930,6 +11292,380 @@ func (m *StorageAndGraphWriterMock) MinimockUpsertNomadicIdentityInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockVerifyIncomingQuota struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockVerifyIncomingQuotaExpectation
+	expectations       []*StorageAndGraphWriterMockVerifyIncomingQuotaExpectation
+
+	callArgs []*StorageAndGraphWriterMockVerifyIncomingQuotaParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockVerifyIncomingQuotaExpectation specifies expectation struct of the StorageAndGraphWriter.VerifyIncomingQuota
+type StorageAndGraphWriterMockVerifyIncomingQuotaExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockVerifyIncomingQuotaParams
+	paramPtrs          *StorageAndGraphWriterMockVerifyIncomingQuotaParamPtrs
+	expectationOrigins StorageAndGraphWriterMockVerifyIncomingQuotaExpectationOrigins
+	results            *StorageAndGraphWriterMockVerifyIncomingQuotaResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockVerifyIncomingQuotaParams contains parameters of the StorageAndGraphWriter.VerifyIncomingQuota
+type StorageAndGraphWriterMockVerifyIncomingQuotaParams struct {
+	ctx               context.Context
+	tenantID          int32
+	incomingSizeBytes int64
+}
+
+// StorageAndGraphWriterMockVerifyIncomingQuotaParamPtrs contains pointers to parameters of the StorageAndGraphWriter.VerifyIncomingQuota
+type StorageAndGraphWriterMockVerifyIncomingQuotaParamPtrs struct {
+	ctx               *context.Context
+	tenantID          *int32
+	incomingSizeBytes *int64
+}
+
+// StorageAndGraphWriterMockVerifyIncomingQuotaResults contains results of the StorageAndGraphWriter.VerifyIncomingQuota
+type StorageAndGraphWriterMockVerifyIncomingQuotaResults struct {
+	b1  bool
+	err error
+}
+
+// StorageAndGraphWriterMockVerifyIncomingQuotaOrigins contains origins of expectations of the StorageAndGraphWriter.VerifyIncomingQuota
+type StorageAndGraphWriterMockVerifyIncomingQuotaExpectationOrigins struct {
+	origin                  string
+	originCtx               string
+	originTenantID          string
+	originIncomingSizeBytes string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Optional() *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	mmVerifyIncomingQuota.optional = true
+	return mmVerifyIncomingQuota
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Expect(ctx context.Context, tenantID int32, incomingSizeBytes int64) *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StorageAndGraphWriterMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by ExpectParams functions")
+	}
+
+	mmVerifyIncomingQuota.defaultExpectation.params = &StorageAndGraphWriterMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes}
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmVerifyIncomingQuota.expectations {
+		if minimock.Equal(e.params, mmVerifyIncomingQuota.defaultExpectation.params) {
+			mmVerifyIncomingQuota.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmVerifyIncomingQuota.defaultExpectation.params)
+		}
+	}
+
+	return mmVerifyIncomingQuota
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StorageAndGraphWriterMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.params != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Expect")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs == nil {
+		mmVerifyIncomingQuota.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockVerifyIncomingQuotaParamPtrs{}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.paramPtrs.ctx = &ctx
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmVerifyIncomingQuota
+}
+
+// ExpectTenantIDParam2 sets up expected param tenantID for StorageAndGraphWriter.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) ExpectTenantIDParam2(tenantID int32) *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StorageAndGraphWriterMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.params != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Expect")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs == nil {
+		mmVerifyIncomingQuota.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockVerifyIncomingQuotaParamPtrs{}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmVerifyIncomingQuota
+}
+
+// ExpectIncomingSizeBytesParam3 sets up expected param incomingSizeBytes for StorageAndGraphWriter.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) ExpectIncomingSizeBytesParam3(incomingSizeBytes int64) *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StorageAndGraphWriterMockVerifyIncomingQuotaExpectation{}
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.params != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Expect")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation.paramPtrs == nil {
+		mmVerifyIncomingQuota.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockVerifyIncomingQuotaParamPtrs{}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.paramPtrs.incomingSizeBytes = &incomingSizeBytes
+	mmVerifyIncomingQuota.defaultExpectation.expectationOrigins.originIncomingSizeBytes = minimock.CallerInfo(1)
+
+	return mmVerifyIncomingQuota
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Inspect(f func(ctx context.Context, tenantID int32, incomingSizeBytes int64)) *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	if mmVerifyIncomingQuota.mock.inspectFuncVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.VerifyIncomingQuota")
+	}
+
+	mmVerifyIncomingQuota.mock.inspectFuncVerifyIncomingQuota = f
+
+	return mmVerifyIncomingQuota
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.VerifyIncomingQuota
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Return(b1 bool, err error) *StorageAndGraphWriterMock {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	if mmVerifyIncomingQuota.defaultExpectation == nil {
+		mmVerifyIncomingQuota.defaultExpectation = &StorageAndGraphWriterMockVerifyIncomingQuotaExpectation{mock: mmVerifyIncomingQuota.mock}
+	}
+	mmVerifyIncomingQuota.defaultExpectation.results = &StorageAndGraphWriterMockVerifyIncomingQuotaResults{b1, err}
+	mmVerifyIncomingQuota.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmVerifyIncomingQuota.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.VerifyIncomingQuota method
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Set(f func(ctx context.Context, tenantID int32, incomingSizeBytes int64) (b1 bool, err error)) *StorageAndGraphWriterMock {
+	if mmVerifyIncomingQuota.defaultExpectation != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.VerifyIncomingQuota method")
+	}
+
+	if len(mmVerifyIncomingQuota.expectations) > 0 {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.VerifyIncomingQuota method")
+	}
+
+	mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota = f
+	mmVerifyIncomingQuota.mock.funcVerifyIncomingQuotaOrigin = minimock.CallerInfo(1)
+	return mmVerifyIncomingQuota.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.VerifyIncomingQuota which will trigger the result defined by the following
+// Then helper
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) When(ctx context.Context, tenantID int32, incomingSizeBytes int64) *StorageAndGraphWriterMockVerifyIncomingQuotaExpectation {
+	if mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.mock.t.Fatalf("StorageAndGraphWriterMock.VerifyIncomingQuota mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockVerifyIncomingQuotaExpectation{
+		mock:               mmVerifyIncomingQuota.mock,
+		params:             &StorageAndGraphWriterMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes},
+		expectationOrigins: StorageAndGraphWriterMockVerifyIncomingQuotaExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmVerifyIncomingQuota.expectations = append(mmVerifyIncomingQuota.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.VerifyIncomingQuota return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockVerifyIncomingQuotaExpectation) Then(b1 bool, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockVerifyIncomingQuotaResults{b1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.VerifyIncomingQuota should be invoked
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Times(n uint64) *mStorageAndGraphWriterMockVerifyIncomingQuota {
+	if n == 0 {
+		mmVerifyIncomingQuota.mock.t.Fatalf("Times of StorageAndGraphWriterMock.VerifyIncomingQuota mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmVerifyIncomingQuota.expectedInvocations, n)
+	mmVerifyIncomingQuota.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmVerifyIncomingQuota
+}
+
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) invocationsDone() bool {
+	if len(mmVerifyIncomingQuota.expectations) == 0 && mmVerifyIncomingQuota.defaultExpectation == nil && mmVerifyIncomingQuota.mock.funcVerifyIncomingQuota == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmVerifyIncomingQuota.mock.afterVerifyIncomingQuotaCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmVerifyIncomingQuota.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// VerifyIncomingQuota implements mm_port.StorageAndGraphWriter
+func (mmVerifyIncomingQuota *StorageAndGraphWriterMock) VerifyIncomingQuota(ctx context.Context, tenantID int32, incomingSizeBytes int64) (b1 bool, err error) {
+	mm_atomic.AddUint64(&mmVerifyIncomingQuota.beforeVerifyIncomingQuotaCounter, 1)
+	defer mm_atomic.AddUint64(&mmVerifyIncomingQuota.afterVerifyIncomingQuotaCounter, 1)
+
+	mmVerifyIncomingQuota.t.Helper()
+
+	if mmVerifyIncomingQuota.inspectFuncVerifyIncomingQuota != nil {
+		mmVerifyIncomingQuota.inspectFuncVerifyIncomingQuota(ctx, tenantID, incomingSizeBytes)
+	}
+
+	mm_params := StorageAndGraphWriterMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes}
+
+	// Record call args
+	mmVerifyIncomingQuota.VerifyIncomingQuotaMock.mutex.Lock()
+	mmVerifyIncomingQuota.VerifyIncomingQuotaMock.callArgs = append(mmVerifyIncomingQuota.VerifyIncomingQuotaMock.callArgs, &mm_params)
+	mmVerifyIncomingQuota.VerifyIncomingQuotaMock.mutex.Unlock()
+
+	for _, e := range mmVerifyIncomingQuota.VerifyIncomingQuotaMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.b1, e.results.err
+		}
+	}
+
+	if mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.Counter, 1)
+		mm_want := mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.params
+		mm_want_ptrs := mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockVerifyIncomingQuotaParams{ctx, tenantID, incomingSizeBytes}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmVerifyIncomingQuota.t.Errorf("StorageAndGraphWriterMock.VerifyIncomingQuota got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmVerifyIncomingQuota.t.Errorf("StorageAndGraphWriterMock.VerifyIncomingQuota got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+			if mm_want_ptrs.incomingSizeBytes != nil && !minimock.Equal(*mm_want_ptrs.incomingSizeBytes, mm_got.incomingSizeBytes) {
+				mmVerifyIncomingQuota.t.Errorf("StorageAndGraphWriterMock.VerifyIncomingQuota got unexpected parameter incomingSizeBytes, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.originIncomingSizeBytes, *mm_want_ptrs.incomingSizeBytes, mm_got.incomingSizeBytes, minimock.Diff(*mm_want_ptrs.incomingSizeBytes, mm_got.incomingSizeBytes))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmVerifyIncomingQuota.t.Errorf("StorageAndGraphWriterMock.VerifyIncomingQuota got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmVerifyIncomingQuota.VerifyIncomingQuotaMock.defaultExpectation.results
+		if mm_results == nil {
+			mmVerifyIncomingQuota.t.Fatal("No results are set for the StorageAndGraphWriterMock.VerifyIncomingQuota")
+		}
+		return (*mm_results).b1, (*mm_results).err
+	}
+	if mmVerifyIncomingQuota.funcVerifyIncomingQuota != nil {
+		return mmVerifyIncomingQuota.funcVerifyIncomingQuota(ctx, tenantID, incomingSizeBytes)
+	}
+	mmVerifyIncomingQuota.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.VerifyIncomingQuota. %v %v %v", ctx, tenantID, incomingSizeBytes)
+	return
+}
+
+// VerifyIncomingQuotaAfterCounter returns a count of finished StorageAndGraphWriterMock.VerifyIncomingQuota invocations
+func (mmVerifyIncomingQuota *StorageAndGraphWriterMock) VerifyIncomingQuotaAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyIncomingQuota.afterVerifyIncomingQuotaCounter)
+}
+
+// VerifyIncomingQuotaBeforeCounter returns a count of StorageAndGraphWriterMock.VerifyIncomingQuota invocations
+func (mmVerifyIncomingQuota *StorageAndGraphWriterMock) VerifyIncomingQuotaBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmVerifyIncomingQuota.beforeVerifyIncomingQuotaCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.VerifyIncomingQuota.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmVerifyIncomingQuota *mStorageAndGraphWriterMockVerifyIncomingQuota) Calls() []*StorageAndGraphWriterMockVerifyIncomingQuotaParams {
+	mmVerifyIncomingQuota.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockVerifyIncomingQuotaParams, len(mmVerifyIncomingQuota.callArgs))
+	copy(argCopy, mmVerifyIncomingQuota.callArgs)
+
+	mmVerifyIncomingQuota.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockVerifyIncomingQuotaDone returns true if the count of the VerifyIncomingQuota invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockVerifyIncomingQuotaDone() bool {
+	if m.VerifyIncomingQuotaMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.VerifyIncomingQuotaMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.VerifyIncomingQuotaMock.invocationsDone()
+}
+
+// MinimockVerifyIncomingQuotaInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockVerifyIncomingQuotaInspect() {
+	for _, e := range m.VerifyIncomingQuotaMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.VerifyIncomingQuota at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterVerifyIncomingQuotaCounter := mm_atomic.LoadUint64(&m.afterVerifyIncomingQuotaCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.VerifyIncomingQuotaMock.defaultExpectation != nil && afterVerifyIncomingQuotaCounter < 1 {
+		if m.VerifyIncomingQuotaMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.VerifyIncomingQuota at\n%s", m.VerifyIncomingQuotaMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.VerifyIncomingQuota at\n%s with params: %#v", m.VerifyIncomingQuotaMock.defaultExpectation.expectationOrigins.origin, *m.VerifyIncomingQuotaMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcVerifyIncomingQuota != nil && afterVerifyIncomingQuotaCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.VerifyIncomingQuota at\n%s", m.funcVerifyIncomingQuotaOrigin)
+	}
+
+	if !m.VerifyIncomingQuotaMock.invocationsDone() && afterVerifyIncomingQuotaCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.VerifyIncomingQuota at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.VerifyIncomingQuotaMock.expectedInvocations), m.VerifyIncomingQuotaMock.expectedInvocationsOrigin, afterVerifyIncomingQuotaCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *StorageAndGraphWriterMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
@@ -10976,6 +11712,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockRegisterIdentityCloneInspect()
 
+			m.MinimockRemoveMediaRecordInspect()
+
 			m.MinimockRemoveQuadEdgeInspect()
 
 			m.MinimockSaveGraphVersionInspect()
@@ -10989,6 +11727,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 			m.MinimockStreamQuadsBySubjectInspect()
 
 			m.MinimockUpsertNomadicIdentityInspect()
+
+			m.MinimockVerifyIncomingQuotaInspect()
 		}
 	})
 }
@@ -11033,11 +11773,13 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockMarkInboundFailedDone() &&
 		m.MinimockRecordActorInboxDeliveryDone() &&
 		m.MinimockRegisterIdentityCloneDone() &&
+		m.MinimockRemoveMediaRecordDone() &&
 		m.MinimockRemoveQuadEdgeDone() &&
 		m.MinimockSaveGraphVersionDone() &&
 		m.MinimockSaveGraphVersionWithMediaDone() &&
 		m.MinimockSaveQuadIDsDone() &&
 		m.MinimockSaveQuadsDone() &&
 		m.MinimockStreamQuadsBySubjectDone() &&
-		m.MinimockUpsertNomadicIdentityDone()
+		m.MinimockUpsertNomadicIdentityDone() &&
+		m.MinimockVerifyIncomingQuotaDone()
 }

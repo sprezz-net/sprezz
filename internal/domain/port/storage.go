@@ -55,6 +55,12 @@ type StoragePort interface {
 
 	ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error
 	GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
+
+	// VerifyIncomingQuota runs an aggregate space metric scan against hard multi-tenant boundaries.
+	// Returns true if the incoming payload allocation size fits cleanly within safety guidelines.
+	VerifyIncomingQuota(ctx context.Context, tenantID int32, incomingSizeBytes int64) (bool, error)
+	// RemoveMediaRecord explicitly prunes aborted metadata weights to free up multi-tenant space.
+	RemoveMediaRecord(ctx context.Context, objectName string) error
 }
 
 // StorageAndGraphWriter combines StoragePort and GraphVersionWriter interfaces for testing/mocking convenience.

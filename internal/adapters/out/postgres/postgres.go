@@ -280,7 +280,19 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to resolve tenant %q for media ownership: %w", params.TenantID, err)
 	}
 
-	// 2. Register the physical media file details globally inside the centralized registry bucket
+	// 2. Quata Check
+	// Aggregate active space footprint allocations within the current transaction scope.
+	quota, err := queries.GetTenantStorageUsageAndCeiling(ctx, tenantRow.ID)
+	if err != nil {
+		return fmt.Errorf("pre-flight quota check failure: %w", err)
+	}
+
+	// Enforce hard ceiling threshold parameters before allocating database IDs or ledger metrics.
+	if quota.CurrentUsageBytes+params.FileSize > quota.StorageCeilingBytes {
+		return fmt.Errorf("payload rejected: storage ceiling threshold exceeded for tenant ID %d", tenantRow.ID)
+	}
+
+	// 3. Register the physical media file details globally inside the centralized registry bucket
 	mediaID, err := queries.InsertMediaAttachment(ctx, db.InsertMediaAttachmentParams{
 		ObjectName:   params.ObjectName,
 		OriginalName: params.OriginalName,
@@ -292,7 +304,7 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to register central media registry entry: %w", err)
 	}
 
-	// 3. Track local multi-tenant storage resource ownership metrics per actor/tenant boundary.
+	// 4. Track local multi-tenant storage resource ownership metrics per actor/tenant boundary.
 	err = queries.RegisterActorMediaOwnership(ctx, db.RegisterActorMediaOwnershipParams{
 		ActorIri:          params.ActorIRI,
 		TenantID:          tenantRow.ID,
@@ -302,7 +314,7 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to commit tenant storage ownership mappings: %w", err)
 	}
 
-	// 4. Create the underlying core immutable activity graph version layer
+	// 5. Create the underlying core immutable activity graph version layer
 	graphID, err := queries.CreateGraphVersion(ctx, db.CreateGraphVersionParams{
 		ActivityID: params.ActivityIRI,
 		ObjectIri:  params.ObjectIRI,
@@ -312,7 +324,7 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to save graph version metadata: %w", err)
 	}
 
-	// 5. Connect media entries to graph tracking
+	// 6. Connect media entries to graph tracking
 	err = queries.LinkAttachmentToGraphVersion(ctx, db.LinkAttachmentToGraphVersionParams{
 		GraphID:           graphID,
 		MediaAttachmentID: mediaID,
@@ -321,18 +333,47 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to connect media entry to graph version: %w", err)
 	}
 
-	// 6. Expand string elements out to dictionary indices
+	// 7. Expand string elements out to dictionary indices
 	quadIDs, err := s.toQuadIDs(ctx, queries, graphID, params.Quads)
 	if err != nil {
 		return fmt.Errorf("failed to parse index strings to dictionary: %w", err)
 	}
 
-	// 7. Commit the indexing quad arrays
+	// 8. Commit the indexing quad arrays
 	if err := s.saveQuadIDs(ctx, queries, quadIDs); err != nil {
 		return fmt.Errorf("failed to write indexing quad arrays: %w", err)
 	}
 
 	return tx.Commit(ctx)
+}
+
+// VerifyIncomingQuota runs an aggregate space metric scan against hard multi-tenant boundaries (Blueprint 9.3).
+func (s *PostgresStorage) VerifyIncomingQuota(ctx context.Context, tenantID int32, incomingSizeBytes int64) (bool, error) {
+	// Initialize the type-safe sqlc engine instance on the fly using the thread-safe connection pool
+	queriesEngine := db.New(s.db)
+
+	metrics, err := queriesEngine.GetTenantStorageUsageAndCeiling(ctx, tenantID)
+	if err != nil {
+		return false, fmt.Errorf("failed to fetch storage threshold allocation data: %w", err)
+	}
+
+	// Calculate and intercept ceiling limits safely
+	projectedUsage := metrics.CurrentUsageBytes + incomingSizeBytes
+	if projectedUsage > metrics.StorageCeilingBytes {
+		return false, nil // Target threshold breached
+	}
+
+	return true, nil // Footprint allocation approved
+}
+
+// RemoveMediaRecord purges failed media loop tracking records to maintain exact quota symmetry (Blueprint 9.2).
+func (s *PostgresStorage) RemoveMediaRecord(ctx context.Context, objectName string) error {
+	queriesEngine := db.New(s.db)
+
+	if err := queriesEngine.RemoveMediaAttachment(ctx, objectName); err != nil {
+		return fmt.Errorf("failed to execute compensating database row prune: %w", err)
+	}
+	return nil
 }
 
 func (s *PostgresStorage) SaveQuads(ctx context.Context, quads []model.Quad) error {

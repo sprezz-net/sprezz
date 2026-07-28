@@ -11,6 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getTenantStorageUsageAndCeiling = `-- name: GetTenantStorageUsageAndCeiling :one
+SELECT
+    st.storage_ceiling_bytes,
+    COALESCE(SUM(am.file_size), 0)::BIGINT as current_usage_bytes
+FROM server_tenants st
+LEFT JOIN actor_media_ownership am ON am.tenant_id = st.id
+WHERE st.id = $1
+GROUP BY st.id, st.storage_ceiling_bytes
+`
+
+type GetTenantStorageUsageAndCeilingRow struct {
+	StorageCeilingBytes int64 `json:"storage_ceiling_bytes"`
+	CurrentUsageBytes   int64 `json:"current_usage_bytes"`
+}
+
+func (q *Queries) GetTenantStorageUsageAndCeiling(ctx context.Context, id int32) (GetTenantStorageUsageAndCeilingRow, error) {
+	row := q.db.QueryRow(ctx, getTenantStorageUsageAndCeiling, id)
+	var i GetTenantStorageUsageAndCeilingRow
+	err := row.Scan(&i.StorageCeilingBytes, &i.CurrentUsageBytes)
+	return i, err
+}
+
 const insertMediaAttachment = `-- name: InsertMediaAttachment :one
 INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size)
 VALUES ($1, $2, $3, $4, $5)
@@ -56,6 +78,34 @@ func (q *Queries) LinkAttachmentToGraphVersion(ctx context.Context, arg LinkAtta
 	return err
 }
 
+const recordMediaAttachment = `-- name: RecordMediaAttachment :exec
+INSERT INTO actor_media_ownership (
+    tenant_id,
+    actor_iri,
+    object_name,
+    file_size
+) VALUES (
+    $1, $2, $3, $4
+)
+`
+
+type RecordMediaAttachmentParams struct {
+	TenantID   int32  `json:"tenant_id"`
+	ActorIri   string `json:"actor_iri"`
+	ObjectName string `json:"object_name"`
+	FileSize   int64  `json:"file_size"`
+}
+
+func (q *Queries) RecordMediaAttachment(ctx context.Context, arg RecordMediaAttachmentParams) error {
+	_, err := q.db.Exec(ctx, recordMediaAttachment,
+		arg.TenantID,
+		arg.ActorIri,
+		arg.ObjectName,
+		arg.FileSize,
+	)
+	return err
+}
+
 const registerActorMediaOwnership = `-- name: RegisterActorMediaOwnership :exec
 INSERT INTO actor_media_ownership (actor_iri, tenant_id, media_attachment_id)
 VALUES ($1, $2, $3)
@@ -70,5 +120,15 @@ type RegisterActorMediaOwnershipParams struct {
 
 func (q *Queries) RegisterActorMediaOwnership(ctx context.Context, arg RegisterActorMediaOwnershipParams) error {
 	_, err := q.db.Exec(ctx, registerActorMediaOwnership, arg.ActorIri, arg.TenantID, arg.MediaAttachmentID)
+	return err
+}
+
+const removeMediaAttachment = `-- name: RemoveMediaAttachment :exec
+DELETE FROM actor_media_ownership
+WHERE object_name = $1
+`
+
+func (q *Queries) RemoveMediaAttachment(ctx context.Context, objectName string) error {
+	_, err := q.db.Exec(ctx, removeMediaAttachment, objectName)
 	return err
 }

@@ -47,9 +47,14 @@ const getTenantByDomain = `-- name: GetTenantByDomain :one
 SELECT id, domain_name FROM server_tenants WHERE domain_name = $1
 `
 
-func (q *Queries) GetTenantByDomain(ctx context.Context, domainName string) (ServerTenant, error) {
+type GetTenantByDomainRow struct {
+	ID         int32  `json:"id"`
+	DomainName string `json:"domain_name"`
+}
+
+func (q *Queries) GetTenantByDomain(ctx context.Context, domainName string) (GetTenantByDomainRow, error) {
 	row := q.db.QueryRow(ctx, getTenantByDomain, domainName)
-	var i ServerTenant
+	var i GetTenantByDomainRow
 	err := row.Scan(&i.ID, &i.DomainName)
 	return i, err
 }
@@ -86,9 +91,14 @@ ON CONFLICT (domain_name) DO UPDATE SET domain_name = EXCLUDED.domain_name
 RETURNING id, domain_name
 `
 
-func (q *Queries) InsertTenant(ctx context.Context, domainName string) (ServerTenant, error) {
+type InsertTenantRow struct {
+	ID         int32  `json:"id"`
+	DomainName string `json:"domain_name"`
+}
+
+func (q *Queries) InsertTenant(ctx context.Context, domainName string) (InsertTenantRow, error) {
 	row := q.db.QueryRow(ctx, insertTenant, domainName)
-	var i ServerTenant
+	var i InsertTenantRow
 	err := row.Scan(&i.ID, &i.DomainName)
 	return i, err
 }

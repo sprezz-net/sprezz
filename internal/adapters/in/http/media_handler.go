@@ -8,19 +8,18 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
-	"sprezz/internal/domain/service"
 
 	"github.com/google/uuid"
 )
 
 // MediaUploadHandler orchestrates high-performance multi-part incoming attachment streaming.
 type MediaUploadHandler struct {
-	activitySvc *service.ActivityService
+	activitySvc port.ActivityServicePort
 	maxFileSize int64 // Global request size threshold limit
 }
 
 // NewMediaUploadHandler instantiates the multi-part streaming request driver.
-func NewMediaUploadHandler(svc *service.ActivityService, maxMemoryLimit int64) *MediaUploadHandler {
+func NewMediaUploadHandler(svc port.ActivityServicePort, maxMemoryLimit int64) *MediaUploadHandler {
 	return &MediaUploadHandler{
 		activitySvc: svc,
 		maxFileSize: maxMemoryLimit,

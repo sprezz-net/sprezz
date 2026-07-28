@@ -73,6 +73,8 @@ type ActorMediaOwnership struct {
 	ActorIri          string      `json:"actor_iri"`
 	TenantID          int32       `json:"tenant_id"`
 	MediaAttachmentID pgtype.UUID `json:"media_attachment_id"`
+	ObjectName        string      `json:"object_name"`
+	FileSize          int64       `json:"file_size"`
 }
 
 type ActorPublicKeyHistory struct {
@@ -174,6 +176,7 @@ type RdfQuad struct {
 }
 
 type ServerTenant struct {
-	ID         int32  `json:"id"`
-	DomainName string `json:"domain_name"`
+	ID                  int32  `json:"id"`
+	DomainName          string `json:"domain_name"`
+	StorageCeilingBytes int64  `json:"storage_ceiling_bytes"`
 }

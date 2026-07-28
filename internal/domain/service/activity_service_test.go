@@ -3,11 +3,13 @@ package service_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
+	"sprezz/internal/domain/port"
 	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
 )
@@ -244,5 +246,78 @@ func TestRotateLocalActorKeys_Success(t *testing.T) {
 	}
 	if !overwriteInvoked {
 		t.Error("rotation pipeline skipped storage row write sequence")
+	}
+}
+
+func TestProcessInboundMediaTask_QuotaSuccess(t *testing.T) {
+	ctx := context.Background()
+	mc := minimock.NewController(t)
+
+	var tenantID int32 = 1
+	var fileSize int64 = 500
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	// Expect the quota pre-flight validation check to pass cleanly
+	mockStorage.VerifyIncomingQuotaMock.Expect(ctx, tenantID, fileSize).Return(true, nil)
+
+	// Stub the transactional graph writer mechanism
+	mockWriter := portmock.NewGraphVersionWriterMock(mc)
+	mockWriter.SaveGraphVersionWithMediaMock.Set(func(ctx context.Context, params port.MediaAttachmentParams) error {
+		return nil
+	})
+
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+	mockMedia.PutObjectMock.Return("stable-key", "sha256-hex", nil)
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+
+	structMock := struct {
+		*portmock.StoragePortMock
+		*portmock.GraphVersionWriterMock
+	}{mockStorage, mockWriter}
+
+	svc := service.NewActivityService(structMock, mockParser, mockMedia)
+
+	mediaCtx := port.InboundMediaContext{
+		ObjectName:  "tmp/task-abc",
+		Size:        fileSize,
+		MediaStream: strings.NewReader("fake-data"),
+	}
+	task := model.InboundTask{Payload: []byte(`{}`)}
+
+	err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+	if err != nil {
+		t.Fatalf("Expected quota allocation confirmation to pass successfully, got error: %v", err)
+	}
+}
+
+func TestProcessInboundMediaTask_QuotaBreached(t *testing.T) {
+	ctx := context.Background()
+	mc := minimock.NewController(t)
+
+	var tenantID int32 = 1
+	var fileSize int64 = 99999999
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	// Simulate a strict hard ceiling threshold limit breach event
+	mockStorage.VerifyIncomingQuotaMock.Expect(ctx, tenantID, fileSize).Return(false, nil)
+
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+
+	mediaCtx := port.InboundMediaContext{
+		ObjectName:  "tmp/oversized-task",
+		Size:        fileSize,
+		MediaStream: strings.NewReader("massive-data"),
+	}
+	task := model.InboundTask{Payload: []byte(`{}`)}
+
+	err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+	if err == nil {
+		t.Fatal("Expected pre-flight processing loop to intercept the oversized allocation, but got nil")
+	}
+
+	if !strings.Contains(err.Error(), "storage authorization ceiling threshold exceeded") {
+		t.Errorf("Unexpected error message bubble surfaced from core service: %v", err)
 	}
 }

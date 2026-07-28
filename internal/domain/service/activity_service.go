@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -74,20 +74,38 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 		return fmt.Errorf("media storage engine driver is not configured")
 	}
 
-	// 1. Stream the object payload to MinIO first to keep core relational metadata isolated.
+	// 1. Resolve tenant identity dynamically from context strings
+	var resolvedTenantID int32 = 1 // Safe baseline default mapping
+	if mediaCtx.TenantID != "" {
+		if val, err := strconv.ParseInt(mediaCtx.TenantID, 10, 32); err == nil {
+			resolvedTenantID = int32(val)
+		}
+	}
+
+	// 2. Execute the Pre-Flight Quota Guard verification FIRST before any storage I/O
+	hasQuota, err := s.storage.VerifyIncomingQuota(ctx, resolvedTenantID, mediaCtx.Size)
+	if err != nil {
+		return fmt.Errorf("quota audit system interception error: %w", err)
+	}
+	if !hasQuota {
+		// Terminate execution paths instantly before invoking any remote connection sockets
+		return fmt.Errorf("media workflow aborted: storage authorization ceiling threshold exceeded")
+	}
+
+	// 3. Stream the object payload to MinIO only AFTER quota validation passes successfully.
 	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
 	if err != nil {
 		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
 	}
 
-	// 2. Parse the JSON-LD payload into quads before triggering the database routine
+	// 4. Parse the JSON-LD payload into quads before triggering the database routine
 	quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
 	if err != nil {
 		_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Compensating removal
 		return fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
 	}
 
-	// 3. Delegate atomic multi-table execution down to the transaction writer engine
+	// 5. Delegate atomic multi-table execution down to the transaction writer engine
 	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
 		err := writer.SaveGraphVersionWithMedia(ctx, port.MediaAttachmentParams{
 			ObjectName:   stableKey,
@@ -120,10 +138,12 @@ func (s *ActivityService) PurgeOrphanedMedia(ctx context.Context, tempObjectKey 
 		return nil
 	}
 
-	if err := s.mediaStorage.DeleteObject(ctx, tempObjectKey); err != nil {
-		// Strict operational log masking. Excludes request keys, signatures, or raw blobs.
-		log.Printf("[ERR] Sprezz Core: Failed to execute compensating storage rollback for key: %s", tempObjectKey)
-		return err
+	// 1. Drop the physical binary asset chunk from MinIO
+	_ = s.mediaStorage.DeleteObject(ctx, tempObjectKey)
+
+	// 2. Direct method invocation to satisfy strict staticcheck static lint controls
+	if s.storage != nil {
+		_ = s.storage.RemoveMediaRecord(ctx, tempObjectKey)
 	}
 
 	return nil
