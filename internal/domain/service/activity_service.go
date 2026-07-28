@@ -33,6 +33,72 @@ func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, 
 
 var _ port.ActivityServicePort = (*ActivityService)(nil)
 
+// extractAddressingTargets pulls addressing target IRIs from the activity JSON payload
+func extractAddressingTargets(payload []byte) (map[string]struct{}, error) {
+	var envelope struct {
+		To       interface{} `json:"to"`
+		Cc       interface{} `json:"cc"`
+		Bto      interface{} `json:"bto"`
+		Bcc      interface{} `json:"bcc"`
+		Audience interface{} `json:"audience"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
+		return nil, fmt.Errorf("decode addressing targets: %w", err)
+	}
+
+	targetsMap := make(map[string]struct{})
+	collectAddresses := func(val interface{}) {
+		if val == nil {
+			return
+		}
+		switch v := val.(type) {
+		case string:
+			targetsMap[v] = struct{}{}
+		case []interface{}:
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					targetsMap[str] = struct{}{}
+				}
+			}
+		}
+	}
+	collectAddresses(envelope.To)
+	collectAddresses(envelope.Cc)
+	collectAddresses(envelope.Bto)
+	collectAddresses(envelope.Bcc)
+	collectAddresses(envelope.Audience)
+
+	return targetsMap, nil
+}
+
+// resolveActorInbox finds the sharedInbox or fallback direct inbox for a remote actor
+func (s *ActivityService) resolveActorInbox(ctx context.Context, actorIRI string) (string, error) {
+	quads, err := s.storage.StreamQuadsBySubject(ctx, actorIRI)
+	if err != nil {
+		return "", err
+	}
+	var resolvedInbox string
+	var sharedInbox string
+
+	for _, q := range quads {
+		pred := strings.ToLower(q.Predicate)
+		if strings.Contains(pred, "sharedinbox") {
+			sharedInbox = strings.Trim(q.Object, `"'`)
+		}
+		if strings.Contains(pred, "inbox") && !strings.Contains(pred, "sharedinbox") {
+			resolvedInbox = strings.Trim(q.Object, `"'`)
+		}
+	}
+
+	if sharedInbox != "" {
+		return sharedInbox, nil
+	}
+	if resolvedInbox != "" {
+		return resolvedInbox, nil
+	}
+	return "", fmt.Errorf("no inbox found for actor %s", actorIRI)
+}
+
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
 	var quads []model.Quad
@@ -65,46 +131,13 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	}
 
 	// 2. Perform spec-compliant shared and direct inbox delivery mapping.
-	// We extract the addressing targets (to, cc, bto, bcc, audience) of the activity JSON payload.
-	// Since direct inbox URLs can be *any* path and are completely decoupled from Chi parameters,
-	// checking the target recipient actors' registered IRIs against target addressing properties
-	// is the universally correct implementation for both direct and shared inbox.
-	var envelope struct {
-		To       interface{} `json:"to"`
-		Cc       interface{} `json:"cc"`
-		Bto      interface{} `json:"bto"`
-		Bcc      interface{} `json:"bcc"`
-		Audience interface{} `json:"audience"`
-		Actor    string      `json:"actor"`
+	targetsMap, err := extractAddressingTargets(task.Payload)
+	if err != nil {
+		return err
 	}
-	_ = json.Unmarshal(task.Payload, &envelope)
-
-	// Collect all targets mentioned in addressing fields
-	targetsMap := make(map[string]struct{})
-	collectAddresses := func(val interface{}) {
-		if val == nil {
-			return
-		}
-		switch v := val.(type) {
-		case string:
-			targetsMap[v] = struct{}{}
-		case []interface{}:
-			for _, item := range v {
-				if str, ok := item.(string); ok {
-					targetsMap[str] = struct{}{}
-				}
-			}
-		}
-	}
-	collectAddresses(envelope.To)
-	collectAddresses(envelope.Cc)
-	collectAddresses(envelope.Bto)
-	collectAddresses(envelope.Bcc)
-	collectAddresses(envelope.Audience)
 
 	// Also check if the task.ObjectIRI itself is a target. In standard direct inbox deliveries,
 	// the requested direct inbox URL matches a local actor's configured inbox collection.
-	// We can check if task.ObjectIRI is a local actor profile and append it to our targets map.
 	if task.ObjectIRI != "" {
 		targetsMap[task.ObjectIRI] = struct{}{}
 	}
@@ -229,44 +262,17 @@ func (s *ActivityService) PurgeOrphanedMedia(ctx context.Context, tempObjectKey 
 	return nil
 }
 
+// DispatchOutboundActivity routes activities outbound, consolidating deliveries using sharedInboxes
 func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error {
 	if s.forwarder == nil {
 		return fmt.Errorf("outbound dispatcher is not configured")
 	}
-	var envelope struct {
-		To       interface{} `json:"to"`
-		Cc       interface{} `json:"cc"`
-		Bto      interface{} `json:"bto"`
-		Bcc      interface{} `json:"bcc"`
-		Audience interface{} `json:"audience"`
-		Inbox    string      `json:"inbox"`
-	}
-	if err := json.Unmarshal(payload, &envelope); err != nil {
-		return fmt.Errorf("decode outbound activity: %w", err)
-	}
 
 	// 1. Gather all unique targets from addressing fields
-	targetsMap := make(map[string]struct{})
-	collectAddresses := func(val interface{}) {
-		if val == nil {
-			return
-		}
-		switch v := val.(type) {
-		case string:
-			targetsMap[v] = struct{}{}
-		case []interface{}:
-			for _, item := range v {
-				if str, ok := item.(string); ok {
-					targetsMap[str] = struct{}{}
-				}
-			}
-		}
+	targetsMap, err := extractAddressingTargets(payload)
+	if err != nil {
+		return err
 	}
-	collectAddresses(envelope.To)
-	collectAddresses(envelope.Cc)
-	collectAddresses(envelope.Bto)
-	collectAddresses(envelope.Bcc)
-	collectAddresses(envelope.Audience)
 
 	// Build resolved targets list to avoid modifying map during iteration
 	var targets []string
@@ -326,33 +332,18 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 		}
 
 		// Try to look up the remote actor's cached profile in our graph store
-		quads, err := s.storage.StreamQuadsBySubject(ctx, target)
-		if err == nil && len(quads) > 0 {
-			var resolvedInbox string
-			var sharedInbox string
-
-			for _, q := range quads {
-				pred := strings.ToLower(q.Predicate)
-				// Look for sharedInbox
-				if strings.Contains(pred, "sharedinbox") {
-					sharedInbox = strings.Trim(q.Object, `"'`)
-				}
-				// Look for direct inbox
-				if strings.Contains(pred, "inbox") && !strings.Contains(pred, "sharedinbox") {
-					resolvedInbox = strings.Trim(q.Object, `"'`)
-				}
-			}
-
-			if sharedInbox != "" {
-				inboxesMap[sharedInbox] = struct{}{}
-			} else if resolvedInbox != "" {
-				inboxesMap[resolvedInbox] = struct{}{}
-			}
+		inboxURL, err := s.resolveActorInbox(ctx, target)
+		if err == nil && inboxURL != "" {
+			inboxesMap[inboxURL] = struct{}{}
 		}
 	}
 
 	// 4. Fallback if no target inboxes were resolved but envelope.Inbox is specified
 	if len(inboxesMap) == 0 {
+		var envelope struct {
+			Inbox string `json:"inbox"`
+		}
+		_ = json.Unmarshal(payload, &envelope)
 		if envelope.Inbox == "" {
 			return fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
 		}
