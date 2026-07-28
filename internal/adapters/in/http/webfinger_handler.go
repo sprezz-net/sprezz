@@ -162,7 +162,7 @@ func buildWebfingerResponse(resource, tenantHost string, profile *model.ActorPro
 		resp.Links = append(resp.Links, WebfingerReferenceLink{
 			Rel:  "http://purl.org/zot/protocol/6.0#guid",
 			Type: "application/x-zot+json",
-			Href: fmt.Sprintf("https://%s/zot/channel/%s", tenantHost, profile.Username),
+			Href: profile.NomadGUID,
 		})
 	}
 

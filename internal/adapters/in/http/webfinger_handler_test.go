@@ -50,14 +50,19 @@ func TestHandleWebfinger_Success_ByHandle(t *testing.T) {
 		t.Fatalf("Expected status code 200, got %d. Body: %s", rr.Code, rr.Body.String())
 	}
 
+	contentType := rr.Header().Get("Content-Type")
+	if contentType != "application/jrd+json" {
+		t.Errorf("Expected Content-Type to be 'application/jrd+json', got %q", contentType)
+	}
+
 	body := rr.Body.String()
 	if !strings.Contains(body, actorIRI) {
 		t.Errorf("Expected response to feature canonical Actor IRI link target %q", actorIRI)
 	}
 
-	expectedChannelHref := "https://sprezz.net"
-	if !strings.Contains(body, expectedChannelHref) {
-		t.Errorf("Expected Nomad protocol link reference channel to target %q", expectedChannelHref)
+	expectedNomadGUID := "nomad-guid-abc-123"
+	if !strings.Contains(body, expectedNomadGUID) {
+		t.Errorf("Expected Nomad protocol link reference to target global immutable GUID %q", expectedNomadGUID)
 	}
 }
 
