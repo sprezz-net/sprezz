@@ -1,13 +1,16 @@
 package http
 
 import (
-	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 
-	"sprezz/internal/domain/model"
+	"sprezz/internal/adapters/in/http/middleware"
+	"sprezz/internal/domain/port"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -15,29 +18,52 @@ const (
 	headerContentType   = "Content-Type"
 )
 
-type CollectionReader interface {
-	GetLatestPayload(context.Context, string) ([]byte, error)
-	GetCollectionPayloads(context.Context, string, string, int, int) ([][]byte, error)
-	StreamQuadsBySubject(context.Context, string) ([]model.Quad, error)
-	GetActorIRIByAlias(context.Context, string) (string, error)
+type GenericHandler struct {
+	storage port.StoragePort
 }
 
-type ActorHandler struct {
-	storage CollectionReader
+func NewGenericHandler(storage port.StoragePort) *GenericHandler {
+	return &GenericHandler{storage: storage}
 }
 
-func NewActorHandler(storage CollectionReader) *ActorHandler {
-	return &ActorHandler{storage: storage}
+func writeActivityJSON(w http.ResponseWriter, payload []byte) {
+	w.Header().Set(headerContentType, "application/activity+json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
 }
 
-func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+func collectionPage(r *http.Request) (int, int) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit <= 0 || limit > 100 {
+		limit = 20
 	}
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
+}
 
-	ctx := r.Context()
+func writeCollection(w http.ResponseWriter, id string, items []string) {
+	w.Header().Set(headerContentType, "application/ld+json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": id, "totalItems": len(items), "orderedItems": items})
+}
+
+func (h *GenericHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	requestedIRI := "https://" + RequestHost(r) + r.URL.Path
+
+	switch r.Method {
+	case http.MethodGet:
+		h.handleGet(w, r, requestedIRI)
+	case http.MethodPost:
+		h.handlePost(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, requestedIRI string) {
+	ctx := r.Context()
 
 	// 1. Detect and strip standard collections from the requested path
 	collection := ""
@@ -68,7 +94,6 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if len(payload) == 0 {
 		canonicalIRI, err := h.storage.GetActorIRIByAlias(ctx, actorIRI)
 		if err == nil && canonicalIRI != "" {
-			// Found alias! Perform HTTP 303 See Other redirect to canonical profile (with collection if applicable)
 			targetRedirect := canonicalIRI
 			if collection != "" {
 				targetRedirect = canonicalIRI + "/" + collection
@@ -88,7 +113,6 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			PreferredUsername string `json:"preferredUsername"`
 		}
 		if err := json.Unmarshal(payload, &profile); err == nil && profile.PreferredUsername != "" {
-			// Browser client: HTTP 302 redirect to frontend Web UI vanity profile presentation layer
 			http.Redirect(w, r, "https://"+RequestHost(r)+"/@"+profile.PreferredUsername, http.StatusFound)
 			return
 		}
@@ -106,14 +130,13 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.servePayloadCollection(w, r, actorIRI, collection)
 }
 
-func (h *ActorHandler) serveRelationshipCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
+func (h *GenericHandler) serveRelationshipCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
 	quads, err := h.storage.StreamQuadsBySubject(r.Context(), actorIRI)
 	if err != nil {
 		http.Error(w, internalServerError, http.StatusInternalServerError)
 		return
 	}
 
-	// Keep plural forms to respect ActivityPub vocabulary specifications
 	predicate := "https://www.w3.org/ns/activitystreams#" + collection
 
 	items := make([]string, 0)
@@ -125,7 +148,7 @@ func (h *ActorHandler) serveRelationshipCollection(w http.ResponseWriter, r *htt
 	writeCollection(w, r.URL.String(), items)
 }
 
-func (h *ActorHandler) servePayloadCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
+func (h *GenericHandler) servePayloadCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
 	limit, offset := collectionPage(r)
 	payloads, err := h.storage.GetCollectionPayloads(r.Context(), actorIRI, collection, limit, offset)
 	if err != nil {
@@ -140,25 +163,50 @@ func (h *ActorHandler) servePayloadCollection(w http.ResponseWriter, r *http.Req
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": r.URL.String(), "orderedItems": items})
 }
 
-func writeActivityJSON(w http.ResponseWriter, payload []byte) {
-	w.Header().Set(headerContentType, "application/activity+json")
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(payload)
-}
+func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 
-func collectionPage(r *http.Request) (int, int) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 || limit > 100 {
-		limit = 20
+	// Extract the pre-authenticated actor IRI straight from the middleware context
+	authenticatedActor := middleware.GetAuthenticatedActor(ctx)
+	if authenticatedActor == "" {
+		http.Error(w, "Unauthorized: Request context lacks verified signature validation", http.StatusUnauthorized)
+		return
 	}
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if offset < 0 {
-		offset = 0
-	}
-	return limit, offset
-}
 
-func writeCollection(w http.ResponseWriter, id string, items []string) {
-	w.Header().Set(headerContentType, "application/ld+json")
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": id, "totalItems": len(items), "orderedItems": items})
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Bad Request: Unable to read payload", http.StatusBadRequest)
+		return
+	}
+
+	var activity struct {
+		ID     string `json:"id"`
+		Type   string `json:"type"`
+		Object struct {
+			ID string `json:"id"`
+		} `json:"object"`
+	}
+
+	if err := json.Unmarshal(body, &activity); err != nil {
+		http.Error(w, "Bad Request: Malformed JSON activity payload", http.StatusBadRequest)
+		return
+	}
+
+	taskID, err := uuid.NewV7()
+	if err != nil {
+		http.Error(w, "Internal Server Error: Unable to generate task ID", http.StatusInternalServerError)
+		return
+	}
+
+	targetDomain := RequestHost(r)
+
+	// Purely enqueue the inbound activity. Direct vs Shared delivery resolution is fully
+	// offloaded to the async background worker ProcessInboundTask.
+	err = h.storage.EnqueueInbound(ctx, taskID.String(), activity.ID, activity.Object.ID, targetDomain, body)
+	if err != nil {
+		http.Error(w, "Internal Server Error: Ingestion queue failure", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusAccepted)
 }

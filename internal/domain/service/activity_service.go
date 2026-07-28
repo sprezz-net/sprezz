@@ -35,34 +35,114 @@ var _ port.ActivityServicePort = (*ActivityService)(nil)
 
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
-	// If the storage instance implements the composite GraphVersionWriter interface,
-	// utilize the transaction-wrapped batch writing method.
+	var quads []model.Quad
+	var err error
+
+	// 1. Parse activity payload into RDF quads
 	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
-		quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
+		quads, err = s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
 		if err != nil {
 			return fmt.Errorf("failed to parse activity payload to quads: %w", err)
 		}
 		if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload, quads); err != nil {
 			return fmt.Errorf("failed to save graph version and quads: %w", err)
 		}
-		return nil
+	} else {
+		// Fallback path utilizing explicit graph versioning combined with the optimized ports layer
+		graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload)
+		if err != nil {
+			return fmt.Errorf("failed to create graph version: %w", err)
+		}
+
+		quads, err = s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
+		if err != nil {
+			return fmt.Errorf("failed to parse activity payload to quads: %w", err)
+		}
+
+		if err := s.storage.SaveQuads(ctx, quads); err != nil {
+			return fmt.Errorf("failed to save quads: %w", err)
+		}
 	}
 
-	// Fallback path utilizing explicit graph versioning combined with the optimized ports layer
-	graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload)
-	if err != nil {
-		return fmt.Errorf("failed to create graph version: %w", err)
+	// 2. Perform spec-compliant shared and direct inbox delivery mapping.
+	// We extract the addressing targets (to, cc, bto, bcc, audience) of the activity JSON payload.
+	// Since direct inbox URLs can be *any* path and are completely decoupled from Chi parameters,
+	// checking the target recipient actors' registered IRIs against target addressing properties
+	// is the universally correct implementation for both direct and shared inbox.
+	var envelope struct {
+		To       interface{} `json:"to"`
+		Cc       interface{} `json:"cc"`
+		Bto      interface{} `json:"bto"`
+		Bcc      interface{} `json:"bcc"`
+		Audience interface{} `json:"audience"`
+		Actor    string      `json:"actor"`
+	}
+	_ = json.Unmarshal(task.Payload, &envelope)
+
+	// Collect all targets mentioned in addressing fields
+	targetsMap := make(map[string]struct{})
+	collectAddresses := func(val interface{}) {
+		if val == nil {
+			return
+		}
+		switch v := val.(type) {
+		case string:
+			targetsMap[v] = struct{}{}
+		case []interface{}:
+			for _, item := range v {
+				if str, ok := item.(string); ok {
+					targetsMap[str] = struct{}{}
+				}
+			}
+		}
+	}
+	collectAddresses(envelope.To)
+	collectAddresses(envelope.Cc)
+	collectAddresses(envelope.Bto)
+	collectAddresses(envelope.Bcc)
+	collectAddresses(envelope.Audience)
+
+	// Also check if the task.ObjectIRI itself is a target. In standard direct inbox deliveries,
+	// the requested direct inbox URL matches a local actor's configured inbox collection.
+	// We can check if task.ObjectIRI is a local actor profile and append it to our targets map.
+	if task.ObjectIRI != "" {
+		targetsMap[task.ObjectIRI] = struct{}{}
 	}
 
-	quads, err := s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
-	if err != nil {
-		return fmt.Errorf("failed to parse activity payload to quads: %w", err)
-	}
+	// Deliver to matching local targets
+	for target := range targetsMap {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
 
-	// Updated the fallback loop branch to pipe string quad slices straight through
-	// the high-performance SaveQuads adapter method, keeping your storage pipeline fully aligned.
-	if err := s.storage.SaveQuads(ctx, quads); err != nil {
-		return fmt.Errorf("failed to save quads: %w", err)
+		// Check if target is a direct local actor IRI
+		_, err := s.storage.GetActorDualKeys(ctx, target)
+		if err == nil {
+			// Deliver to this local actor's inbox!
+			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
+			continue
+		}
+
+		// Check if target is a followers collection of a local actor (e.g. target ends with "/followers")
+		if strings.HasSuffix(target, "/followers") {
+			localActorIRI := strings.TrimSuffix(target, "/followers")
+			_, err := s.storage.GetActorDualKeys(ctx, localActorIRI)
+			if err == nil {
+				// This is a local actor's followers collection.
+				// We need to deliver to all local followers of this actor.
+				followers, err := s.GetFollowersTimeline(ctx, localActorIRI, 1000, 0)
+				if err == nil {
+					for _, follower := range followers {
+						// Double-check if the follower is a local actor on our system
+						_, err := s.storage.GetActorDualKeys(ctx, follower)
+						if err == nil {
+							_ = s.storage.RecordActorInboxDelivery(ctx, follower, task.ActivityIRI)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	return nil

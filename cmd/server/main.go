@@ -171,8 +171,7 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 
 func setupRoutingTree(r *chi.Mux, deps *dependencies) {
 	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
-	inboxHandler := inhttp.NewInboxHandler(deps.postgresStorage)
-	actorHandler := inhttp.NewActorHandler(deps.postgresStorage)
+	genericHandler := inhttp.NewGenericHandler(deps.postgresStorage)
 
 	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{
 		TenantDomains: deps.cfg.TenantDomains,
@@ -185,13 +184,11 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies) {
 
 		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(deps.cfg.TenantDomains, deps.postgresStorage))
 
-		protected.Route("/inbox", func(router chi.Router) {
-			router.Use(signatureValidator.Handler)
-			router.Handle("/", inboxHandler)
-			router.Handle("/{actor}", inboxHandler)
+		// Unified Greedy Catch-All Endpoint (Handles GET & POST dynamically)
+		protected.Route("/*", func(router chi.Router) {
+			router.Get("/", genericHandler.ServeHTTP)
+			router.With(signatureValidator.Handler).Post("/", genericHandler.ServeHTTP)
 		})
-
-		protected.Get("/*", actorHandler.ServeHTTP)
 	})
 }
 

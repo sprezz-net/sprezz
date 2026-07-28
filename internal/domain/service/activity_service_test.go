@@ -23,6 +23,7 @@ func TestProcessInboundTask_Success(t *testing.T) {
 	mockStorage.SaveGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
 		return nil
 	})
+	mockStorage.GetActorDualKeysMock.Return(nil, errors.New("not local"))
 
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
@@ -44,6 +45,112 @@ func TestProcessInboundTask_Success(t *testing.T) {
 	err := svc.ProcessInboundTask(ctx, task)
 	if err != nil {
 		t.Fatalf("Expected success, got error: %v", err)
+	}
+}
+
+func TestProcessInboundTask_SharedInboxFanOut(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
+		return nil
+	})
+
+	// Setup GetActorDualKeys expectations for resolving local actors
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local-domain.com/actor/alice" {
+			return &model.ActorDualKeys{}, nil
+		}
+		return nil, errors.New("not local actor")
+	})
+
+	// Setup RecordActorInboxDelivery expectations
+	deliveryRecorded := false
+	mockStorage.RecordActorInboxDeliveryMock.Set(func(ctx context.Context, actorIRI, activityIRI string) error {
+		if actorIRI == "https://local-domain.com/actor/alice" && activityIRI == "https://remote.com/act/1" {
+			deliveryRecorded = true
+		}
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
+		return []model.Quad{}, nil
+	})
+
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/1",
+		ObjectIRI:   "https://remote.com/note/1",
+		Payload:     []byte(`{"to":["https://local-domain.com/actor/alice", "https://remote-domain.com/actor/bob"]}`),
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if !deliveryRecorded {
+		t.Errorf("Expected delivery recorded for alice via shared inbox fan-out")
+	}
+}
+
+func TestProcessInboundTask_DirectInboxResolution(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
+		return nil
+	})
+
+	// Setup GetActorDualKeys expectations for resolving local actors
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local-domain.com/actor/alice" {
+			return &model.ActorDualKeys{}, nil
+		}
+		return nil, errors.New("not local actor")
+	})
+
+	// Setup RecordActorInboxDelivery expectations
+	deliveryRecorded := false
+	mockStorage.RecordActorInboxDeliveryMock.Set(func(ctx context.Context, actorIRI, activityIRI string) error {
+		if actorIRI == "https://local-domain.com/actor/alice" && activityIRI == "https://remote.com/act/1" {
+			deliveryRecorded = true
+		}
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
+		return []model.Quad{}, nil
+	})
+
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia)
+
+	// Direct Delivery task has objectIRI matching local actor profile.
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/1",
+		ObjectIRI:   "https://local-domain.com/actor/alice",
+		Payload:     []byte(`{}`), // Empty payload addressing but direct inbox targets objectIRI
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err != nil {
+		t.Fatalf("Expected success, got error: %v", err)
+	}
+
+	if !deliveryRecorded {
+		t.Errorf("Expected delivery recorded for alice via direct inbox task.ObjectIRI mapping")
 	}
 }
 
