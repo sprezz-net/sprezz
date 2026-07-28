@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 
@@ -55,13 +56,68 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 		return fmt.Errorf("failed to mint dual-key pair: %w", err)
 	}
 
-	actorIRI := fmt.Sprintf("https://%s/actors/%s", domain, actorUUID.String())
+	actorIRI := model.ActorIRI(domain, actorUUID.String())
 
 	err = s.storagePort.CreateActorCredential(ctx, actorIRI, tenantID, "server", newKeys.RSAPrivatePEM, newKeys.Ed25519PrivatePEM)
 	if err != nil {
 		return fmt.Errorf("failed to persist system actor credentials for %s: %w", domain, err)
 	}
 
-	log.Printf("[Bootstrap] System actor established successfully: %s", actorIRI)
+	// Derive public key block for the RDF record
+	pubKey, err := model.ExtractRSAPublicKey(newKeys.RSAPrivatePEM)
+	if err != nil {
+		return fmt.Errorf("failed to extract public key: %w", err)
+	}
+
+	// Create a graph version payload block for the actor profile
+	payloadMap := map[string]interface{}{
+		"id":                actorIRI,
+		"type":              "Application",
+		"preferredUsername": "server",
+		"publicKey": map[string]interface{}{
+			"id":           actorIRI + "#main-key",
+			"owner":        actorIRI,
+			"publicKeyPem": pubKey,
+		},
+	}
+	payloadBytes, err := json.Marshal(payloadMap)
+	if err != nil {
+		return fmt.Errorf("failed to marshal server actor profile: %w", err)
+	}
+
+	graphID, err := s.storagePort.CreateGraphVersion(ctx, actorIRI, actorIRI, payloadBytes)
+	if err != nil {
+		return fmt.Errorf("failed to register server actor graph version: %w", err)
+	}
+
+	// Write semantic RDF triples directly into the quad store
+	quads := []model.Quad{
+		{
+			GraphID:   graphID,
+			Subject:   actorIRI,
+			Predicate: model.RDFType,
+			Object:    model.ActorApplication,
+			ObjType:   model.NamedNode,
+		},
+		{
+			GraphID:   graphID,
+			Subject:   actorIRI,
+			Predicate: model.PredicatePreferredUsername,
+			Object:    "server",
+			ObjType:   model.Literal,
+		},
+		{
+			GraphID:   graphID,
+			Subject:   actorIRI,
+			Predicate: model.PredicatePublicKeyPem,
+			Object:    pubKey,
+			ObjType:   model.Literal,
+		},
+	}
+	if err := s.storagePort.SaveQuads(ctx, quads); err != nil {
+		return fmt.Errorf("failed to save server actor semantic triples: %w", err)
+	}
+
+	log.Printf("[Bootstrap] System actor established and semantic triples persisted successfully: %s", actorIRI)
 	return nil
 }

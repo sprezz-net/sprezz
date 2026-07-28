@@ -9,6 +9,24 @@ import (
 	"context"
 )
 
+const getActorIRIByAlias = `-- name: GetActorIRIByAlias :one
+SELECT s_term.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary s_term ON q.subject_id = s_term.id
+JOIN rdf_dictionary p_term ON q.predicate_id = p_term.id
+JOIN rdf_dictionary o_term ON q.object_id = o_term.id
+WHERE p_term.value = 'https://www.w3.org/ns/activitystreams#alsoKnownAs'
+  AND o_term.value = $1
+LIMIT 1
+`
+
+func (q *Queries) GetActorIRIByAlias(ctx context.Context, value string) (string, error) {
+	row := q.db.QueryRow(ctx, getActorIRIByAlias, value)
+	var subject string
+	err := row.Scan(&subject)
+	return subject, err
+}
+
 const getActorQuadsByIRI = `-- name: GetActorQuadsByIRI :many
 SELECT
     q.graph_id,
@@ -27,6 +45,23 @@ WHERE q.graph_id = (
       JOIN rdf_graphs inner_g ON inner_q.graph_id = inner_g.id
       JOIN rdf_dictionary inner_s ON inner_q.subject_id = inner_s.id
       WHERE inner_s.value = $1
+        -- DATABASE-LEVEL OPTIMIZATION: Ensure the subject is semantically an Actor Type
+        AND EXISTS (
+            SELECT 1
+            FROM rdf_quads type_q
+            JOIN rdf_dictionary type_p ON type_q.predicate_id = type_p.id
+            JOIN rdf_dictionary type_o ON type_q.object_id = type_o.id
+            WHERE type_q.graph_id = inner_q.graph_id
+              AND type_q.subject_id = inner_q.subject_id
+              AND type_p.value = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+              AND type_o.value IN (
+                  'https://www.w3.org/ns/activitystreams#Person',
+                  'https://www.w3.org/ns/activitystreams#Service',
+                  'https://www.w3.org/ns/activitystreams#Group',
+                  'https://www.w3.org/ns/activitystreams#Organization',
+                  'https://www.w3.org/ns/activitystreams#Application'
+              )
+        )
       ORDER BY inner_q.graph_id DESC
       LIMIT 1
   )
@@ -87,6 +122,23 @@ WHERE q.graph_id = (
         -- Explicit parameter type overrides for clean sqlc struct generation:
         AND inner_o.value = $1::text
         AND inner_s.value LIKE $2::text
+        -- DATABASE-LEVEL OPTIMIZATION: Ensure the subject is semantically an Actor Type
+        AND EXISTS (
+            SELECT 1
+            FROM rdf_quads type_q
+            JOIN rdf_dictionary type_p ON type_q.predicate_id = type_p.id
+            JOIN rdf_dictionary type_o ON type_q.object_id = type_o.id
+            WHERE type_q.graph_id = inner_q.graph_id
+              AND type_q.subject_id = inner_q.subject_id
+              AND type_p.value = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+              AND type_o.value IN (
+                  'https://www.w3.org/ns/activitystreams#Person',
+                  'https://www.w3.org/ns/activitystreams#Service',
+                  'https://www.w3.org/ns/activitystreams#Group',
+                  'https://www.w3.org/ns/activitystreams#Organization',
+                  'https://www.w3.org/ns/activitystreams#Application'
+              )
+        )
       ORDER BY inner_q.graph_id DESC
       LIMIT 1
   )

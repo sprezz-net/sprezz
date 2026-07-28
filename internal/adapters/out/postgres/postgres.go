@@ -573,13 +573,25 @@ func (s *PostgresStorage) GetActorIRIByUsername(ctx context.Context, tenantID in
 	return row.ActorIri, nil
 }
 
+func (s *PostgresStorage) GetActorIRIByAlias(ctx context.Context, alias string) (string, error) {
+	subject, err := s.queries().GetActorIRIByAlias(ctx, alias)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", fmt.Errorf("actor IRI not found for alias %q: %w", alias, err)
+		}
+		return "", fmt.Errorf("failed to lookup actor IRI by alias: %w", err)
+	}
+	return subject, nil
+}
+
 func (s *PostgresStorage) GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error) {
 	tenantDomain, err := s.queries().GetTenantDomainByID(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to map tenant context to domain name: %w", err)
 	}
 
-	tenantActorPrefix := fmt.Sprintf("https://%s/actor/%%", tenantDomain)
+	// Dynamic path-agnostic prefix matching using the domain boundary (isolating by tenant)
+	tenantActorPrefix := fmt.Sprintf("https://%s/%%", tenantDomain)
 
 	rows, err := s.queries().GetActorQuadsByUsername(ctx, db.GetActorQuadsByUsernameParams{
 		Username:     username,

@@ -19,6 +19,7 @@ type CollectionReader interface {
 	GetLatestPayload(context.Context, string) ([]byte, error)
 	GetCollectionPayloads(context.Context, string, string, int, int) ([][]byte, error)
 	StreamQuadsBySubject(context.Context, string) ([]model.Quad, error)
+	GetActorIRIByAlias(context.Context, string) (string, error)
 }
 
 type ActorHandler struct {
@@ -34,13 +35,73 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	actorIRI, collection, ok := actorRoute(r)
-	if !ok {
-		http.NotFound(w, r)
+
+	ctx := r.Context()
+	requestedIRI := "https://" + RequestHost(r) + r.URL.Path
+
+	// 1. Detect and strip standard collections from the requested path
+	collection := ""
+	actorIRI := requestedIRI
+
+	if strings.HasSuffix(requestedIRI, "/inbox") {
+		collection = "inbox"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/inbox")
+	} else if strings.HasSuffix(requestedIRI, "/outbox") {
+		collection = "outbox"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/outbox")
+	} else if strings.HasSuffix(requestedIRI, "/followers") {
+		collection = "followers"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/followers")
+	} else if strings.HasSuffix(requestedIRI, "/following") {
+		collection = "following"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/following")
+	}
+
+	// 2. Lookup the actor payload directly by IRI
+	payload, err := h.storage.GetLatestPayload(ctx, actorIRI)
+	if err != nil {
+		http.Error(w, internalServerError, http.StatusInternalServerError)
 		return
 	}
+
+	// 3. If not found directly, check if the requested IRI is a registered alsoKnownAs alias
+	if len(payload) == 0 {
+		canonicalIRI, err := h.storage.GetActorIRIByAlias(ctx, actorIRI)
+		if err == nil && canonicalIRI != "" {
+			// Found alias! Perform HTTP 303 See Other redirect to canonical profile (with collection if applicable)
+			targetRedirect := canonicalIRI
+			if collection != "" {
+				targetRedirect = canonicalIRI + "/" + collection
+			}
+			http.Redirect(w, r, targetRedirect, http.StatusSeeOther)
+			return
+		}
+
+		// Revert to legacy routing matches for compatibility with legacy test cases
+		actorIRI, collection, _ = actorRoute(r)
+		payload, err = h.storage.GetLatestPayload(ctx, actorIRI)
+		if err != nil || len(payload) == 0 {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
+	// 4. Content Negotiation / MIME Type Branching
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "text/html") {
+		var profile struct {
+			PreferredUsername string `json:"preferredUsername"`
+		}
+		if err := json.Unmarshal(payload, &profile); err == nil && profile.PreferredUsername != "" {
+			// Browser client: HTTP 302 redirect to frontend Web UI vanity profile presentation layer
+			http.Redirect(w, r, "https://"+RequestHost(r)+"/@"+profile.PreferredUsername, http.StatusFound)
+			return
+		}
+	}
+
+	// 5. Serve the actual ActivityPub payload collections or actor profile
 	if collection == "" {
-		h.serveActor(w, r, actorIRI)
+		writeActivityJSON(w, payload)
 		return
 	}
 	if collection == "followers" || collection == "following" {
@@ -52,13 +113,13 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func actorRoute(r *http.Request) (string, string, bool) {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 2 || len(parts) > 3 || parts[0] != "actors" || parts[1] == "" {
+	if len(parts) < 2 || len(parts) > 3 || !model.IsActorPath(parts[0]) || parts[1] == "" {
 		return "", "", false
 	}
 	if len(parts) == 3 && !validCollection(parts[2]) {
 		return "", "", false
 	}
-	return "https://" + RequestHost(r) + "/actors/" + parts[1], collectionPart(parts), true
+	return model.ActorIRI(RequestHost(r), parts[1]), collectionPart(parts), true
 }
 
 func validCollection(collection string) bool {
@@ -72,19 +133,6 @@ func collectionPart(parts []string) string {
 	return ""
 }
 
-func (h *ActorHandler) serveActor(w http.ResponseWriter, r *http.Request, actorIRI string) {
-	payload, err := h.storage.GetLatestPayload(r.Context(), actorIRI)
-	if err != nil {
-		http.Error(w, internalServerError, http.StatusInternalServerError)
-		return
-	}
-	if len(payload) == 0 {
-		http.NotFound(w, r)
-		return
-	}
-	writeActivityJSON(w, payload)
-}
-
 func (h *ActorHandler) serveRelationshipCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
 	quads, err := h.storage.StreamQuadsBySubject(r.Context(), actorIRI)
 	if err != nil {
@@ -92,7 +140,7 @@ func (h *ActorHandler) serveRelationshipCollection(w http.ResponseWriter, r *htt
 		return
 	}
 
-	// FIXED: Keep plural forms to respect ActivityPub vocabulary specifications
+	// Keep plural forms to respect ActivityPub vocabulary specifications
 	predicate := "https://www.w3.org/ns/activitystreams#" + collection
 
 	items := make([]string, 0)

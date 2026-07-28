@@ -70,6 +70,13 @@ type StorageAndGraphWriterMock struct {
 	beforeGetActorDualKeysCounter uint64
 	GetActorDualKeysMock          mStorageAndGraphWriterMockGetActorDualKeys
 
+	funcGetActorIRIByAlias          func(ctx context.Context, alias string) (s1 string, err error)
+	funcGetActorIRIByAliasOrigin    string
+	inspectFuncGetActorIRIByAlias   func(ctx context.Context, alias string)
+	afterGetActorIRIByAliasCounter  uint64
+	beforeGetActorIRIByAliasCounter uint64
+	GetActorIRIByAliasMock          mStorageAndGraphWriterMockGetActorIRIByAlias
+
 	funcGetActorIRIByUsername          func(ctx context.Context, tenantID int32, username string) (s1 string, err error)
 	funcGetActorIRIByUsernameOrigin    string
 	inspectFuncGetActorIRIByUsername   func(ctx context.Context, tenantID int32, username string)
@@ -260,6 +267,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.GetActorDualKeysMock = mStorageAndGraphWriterMockGetActorDualKeys{mock: m}
 	m.GetActorDualKeysMock.callArgs = []*StorageAndGraphWriterMockGetActorDualKeysParams{}
+
+	m.GetActorIRIByAliasMock = mStorageAndGraphWriterMockGetActorIRIByAlias{mock: m}
+	m.GetActorIRIByAliasMock.callArgs = []*StorageAndGraphWriterMockGetActorIRIByAliasParams{}
 
 	m.GetActorIRIByUsernameMock = mStorageAndGraphWriterMockGetActorIRIByUsername{mock: m}
 	m.GetActorIRIByUsernameMock.callArgs = []*StorageAndGraphWriterMockGetActorIRIByUsernameParams{}
@@ -3196,6 +3206,349 @@ func (m *StorageAndGraphWriterMock) MinimockGetActorDualKeysInspect() {
 	if !m.GetActorDualKeysMock.invocationsDone() && afterGetActorDualKeysCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetActorDualKeys at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetActorDualKeysMock.expectedInvocations), m.GetActorDualKeysMock.expectedInvocationsOrigin, afterGetActorDualKeysCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockGetActorIRIByAlias struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetActorIRIByAliasExpectation
+	expectations       []*StorageAndGraphWriterMockGetActorIRIByAliasExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetActorIRIByAliasParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetActorIRIByAliasExpectation specifies expectation struct of the StorageAndGraphWriter.GetActorIRIByAlias
+type StorageAndGraphWriterMockGetActorIRIByAliasExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetActorIRIByAliasParams
+	paramPtrs          *StorageAndGraphWriterMockGetActorIRIByAliasParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetActorIRIByAliasExpectationOrigins
+	results            *StorageAndGraphWriterMockGetActorIRIByAliasResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetActorIRIByAliasParams contains parameters of the StorageAndGraphWriter.GetActorIRIByAlias
+type StorageAndGraphWriterMockGetActorIRIByAliasParams struct {
+	ctx   context.Context
+	alias string
+}
+
+// StorageAndGraphWriterMockGetActorIRIByAliasParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetActorIRIByAlias
+type StorageAndGraphWriterMockGetActorIRIByAliasParamPtrs struct {
+	ctx   *context.Context
+	alias *string
+}
+
+// StorageAndGraphWriterMockGetActorIRIByAliasResults contains results of the StorageAndGraphWriter.GetActorIRIByAlias
+type StorageAndGraphWriterMockGetActorIRIByAliasResults struct {
+	s1  string
+	err error
+}
+
+// StorageAndGraphWriterMockGetActorIRIByAliasOrigins contains origins of expectations of the StorageAndGraphWriter.GetActorIRIByAlias
+type StorageAndGraphWriterMockGetActorIRIByAliasExpectationOrigins struct {
+	origin      string
+	originCtx   string
+	originAlias string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Optional() *mStorageAndGraphWriterMockGetActorIRIByAlias {
+	mmGetActorIRIByAlias.optional = true
+	return mmGetActorIRIByAlias
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Expect(ctx context.Context, alias string) *mStorageAndGraphWriterMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StorageAndGraphWriterMockGetActorIRIByAliasExpectation{}
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.paramPtrs != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by ExpectParams functions")
+	}
+
+	mmGetActorIRIByAlias.defaultExpectation.params = &StorageAndGraphWriterMockGetActorIRIByAliasParams{ctx, alias}
+	mmGetActorIRIByAlias.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetActorIRIByAlias.expectations {
+		if minimock.Equal(e.params, mmGetActorIRIByAlias.defaultExpectation.params) {
+			mmGetActorIRIByAlias.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetActorIRIByAlias.defaultExpectation.params)
+		}
+	}
+
+	return mmGetActorIRIByAlias
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StorageAndGraphWriterMockGetActorIRIByAliasExpectation{}
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.params != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Expect")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetActorIRIByAlias.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetActorIRIByAliasParamPtrs{}
+	}
+	mmGetActorIRIByAlias.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetActorIRIByAlias.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetActorIRIByAlias
+}
+
+// ExpectAliasParam2 sets up expected param alias for StorageAndGraphWriter.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) ExpectAliasParam2(alias string) *mStorageAndGraphWriterMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StorageAndGraphWriterMockGetActorIRIByAliasExpectation{}
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.params != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Expect")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetActorIRIByAlias.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetActorIRIByAliasParamPtrs{}
+	}
+	mmGetActorIRIByAlias.defaultExpectation.paramPtrs.alias = &alias
+	mmGetActorIRIByAlias.defaultExpectation.expectationOrigins.originAlias = minimock.CallerInfo(1)
+
+	return mmGetActorIRIByAlias
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Inspect(f func(ctx context.Context, alias string)) *mStorageAndGraphWriterMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.inspectFuncGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetActorIRIByAlias")
+	}
+
+	mmGetActorIRIByAlias.mock.inspectFuncGetActorIRIByAlias = f
+
+	return mmGetActorIRIByAlias
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Return(s1 string, err error) *StorageAndGraphWriterMock {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StorageAndGraphWriterMockGetActorIRIByAliasExpectation{mock: mmGetActorIRIByAlias.mock}
+	}
+	mmGetActorIRIByAlias.defaultExpectation.results = &StorageAndGraphWriterMockGetActorIRIByAliasResults{s1, err}
+	mmGetActorIRIByAlias.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetActorIRIByAlias.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetActorIRIByAlias method
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Set(f func(ctx context.Context, alias string) (s1 string, err error)) *StorageAndGraphWriterMock {
+	if mmGetActorIRIByAlias.defaultExpectation != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetActorIRIByAlias method")
+	}
+
+	if len(mmGetActorIRIByAlias.expectations) > 0 {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetActorIRIByAlias method")
+	}
+
+	mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias = f
+	mmGetActorIRIByAlias.mock.funcGetActorIRIByAliasOrigin = minimock.CallerInfo(1)
+	return mmGetActorIRIByAlias.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetActorIRIByAlias which will trigger the result defined by the following
+// Then helper
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) When(ctx context.Context, alias string) *StorageAndGraphWriterMockGetActorIRIByAliasExpectation {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StorageAndGraphWriterMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetActorIRIByAliasExpectation{
+		mock:               mmGetActorIRIByAlias.mock,
+		params:             &StorageAndGraphWriterMockGetActorIRIByAliasParams{ctx, alias},
+		expectationOrigins: StorageAndGraphWriterMockGetActorIRIByAliasExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetActorIRIByAlias.expectations = append(mmGetActorIRIByAlias.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetActorIRIByAlias return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetActorIRIByAliasExpectation) Then(s1 string, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetActorIRIByAliasResults{s1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetActorIRIByAlias should be invoked
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Times(n uint64) *mStorageAndGraphWriterMockGetActorIRIByAlias {
+	if n == 0 {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetActorIRIByAlias mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetActorIRIByAlias.expectedInvocations, n)
+	mmGetActorIRIByAlias.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetActorIRIByAlias
+}
+
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) invocationsDone() bool {
+	if len(mmGetActorIRIByAlias.expectations) == 0 && mmGetActorIRIByAlias.defaultExpectation == nil && mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetActorIRIByAlias.mock.afterGetActorIRIByAliasCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetActorIRIByAlias.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetActorIRIByAlias implements mm_port.StorageAndGraphWriter
+func (mmGetActorIRIByAlias *StorageAndGraphWriterMock) GetActorIRIByAlias(ctx context.Context, alias string) (s1 string, err error) {
+	mm_atomic.AddUint64(&mmGetActorIRIByAlias.beforeGetActorIRIByAliasCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetActorIRIByAlias.afterGetActorIRIByAliasCounter, 1)
+
+	mmGetActorIRIByAlias.t.Helper()
+
+	if mmGetActorIRIByAlias.inspectFuncGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.inspectFuncGetActorIRIByAlias(ctx, alias)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetActorIRIByAliasParams{ctx, alias}
+
+	// Record call args
+	mmGetActorIRIByAlias.GetActorIRIByAliasMock.mutex.Lock()
+	mmGetActorIRIByAlias.GetActorIRIByAliasMock.callArgs = append(mmGetActorIRIByAlias.GetActorIRIByAliasMock.callArgs, &mm_params)
+	mmGetActorIRIByAlias.GetActorIRIByAliasMock.mutex.Unlock()
+
+	for _, e := range mmGetActorIRIByAlias.GetActorIRIByAliasMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.s1, e.results.err
+		}
+	}
+
+	if mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.params
+		mm_want_ptrs := mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetActorIRIByAliasParams{ctx, alias}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetActorIRIByAlias.t.Errorf("StorageAndGraphWriterMock.GetActorIRIByAlias got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.alias != nil && !minimock.Equal(*mm_want_ptrs.alias, mm_got.alias) {
+				mmGetActorIRIByAlias.t.Errorf("StorageAndGraphWriterMock.GetActorIRIByAlias got unexpected parameter alias, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.originAlias, *mm_want_ptrs.alias, mm_got.alias, minimock.Diff(*mm_want_ptrs.alias, mm_got.alias))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetActorIRIByAlias.t.Errorf("StorageAndGraphWriterMock.GetActorIRIByAlias got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetActorIRIByAlias.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetActorIRIByAlias")
+		}
+		return (*mm_results).s1, (*mm_results).err
+	}
+	if mmGetActorIRIByAlias.funcGetActorIRIByAlias != nil {
+		return mmGetActorIRIByAlias.funcGetActorIRIByAlias(ctx, alias)
+	}
+	mmGetActorIRIByAlias.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetActorIRIByAlias. %v %v", ctx, alias)
+	return
+}
+
+// GetActorIRIByAliasAfterCounter returns a count of finished StorageAndGraphWriterMock.GetActorIRIByAlias invocations
+func (mmGetActorIRIByAlias *StorageAndGraphWriterMock) GetActorIRIByAliasAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetActorIRIByAlias.afterGetActorIRIByAliasCounter)
+}
+
+// GetActorIRIByAliasBeforeCounter returns a count of StorageAndGraphWriterMock.GetActorIRIByAlias invocations
+func (mmGetActorIRIByAlias *StorageAndGraphWriterMock) GetActorIRIByAliasBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetActorIRIByAlias.beforeGetActorIRIByAliasCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetActorIRIByAlias.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetActorIRIByAlias *mStorageAndGraphWriterMockGetActorIRIByAlias) Calls() []*StorageAndGraphWriterMockGetActorIRIByAliasParams {
+	mmGetActorIRIByAlias.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetActorIRIByAliasParams, len(mmGetActorIRIByAlias.callArgs))
+	copy(argCopy, mmGetActorIRIByAlias.callArgs)
+
+	mmGetActorIRIByAlias.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetActorIRIByAliasDone returns true if the count of the GetActorIRIByAlias invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetActorIRIByAliasDone() bool {
+	if m.GetActorIRIByAliasMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetActorIRIByAliasMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetActorIRIByAliasMock.invocationsDone()
+}
+
+// MinimockGetActorIRIByAliasInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetActorIRIByAliasInspect() {
+	for _, e := range m.GetActorIRIByAliasMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetActorIRIByAlias at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetActorIRIByAliasCounter := mm_atomic.LoadUint64(&m.afterGetActorIRIByAliasCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetActorIRIByAliasMock.defaultExpectation != nil && afterGetActorIRIByAliasCounter < 1 {
+		if m.GetActorIRIByAliasMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetActorIRIByAlias at\n%s", m.GetActorIRIByAliasMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetActorIRIByAlias at\n%s with params: %#v", m.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.origin, *m.GetActorIRIByAliasMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetActorIRIByAlias != nil && afterGetActorIRIByAliasCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetActorIRIByAlias at\n%s", m.funcGetActorIRIByAliasOrigin)
+	}
+
+	if !m.GetActorIRIByAliasMock.invocationsDone() && afterGetActorIRIByAliasCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetActorIRIByAlias at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetActorIRIByAliasMock.expectedInvocations), m.GetActorIRIByAliasMock.expectedInvocationsOrigin, afterGetActorIRIByAliasCounter)
 	}
 }
 
@@ -11684,6 +12037,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockGetActorDualKeysInspect()
 
+			m.MinimockGetActorIRIByAliasInspect()
+
 			m.MinimockGetActorIRIByUsernameInspect()
 
 			m.MinimockGetActorProfileByIRIInspect()
@@ -11759,6 +12114,7 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockEnqueueInboundDone() &&
 		m.MinimockGetActorCredentialsDone() &&
 		m.MinimockGetActorDualKeysDone() &&
+		m.MinimockGetActorIRIByAliasDone() &&
 		m.MinimockGetActorIRIByUsernameDone() &&
 		m.MinimockGetActorProfileByIRIDone() &&
 		m.MinimockGetActorProfileFromGraphDone() &&

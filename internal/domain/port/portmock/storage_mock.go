@@ -69,6 +69,13 @@ type StoragePortMock struct {
 	beforeGetActorDualKeysCounter uint64
 	GetActorDualKeysMock          mStoragePortMockGetActorDualKeys
 
+	funcGetActorIRIByAlias          func(ctx context.Context, alias string) (s1 string, err error)
+	funcGetActorIRIByAliasOrigin    string
+	inspectFuncGetActorIRIByAlias   func(ctx context.Context, alias string)
+	afterGetActorIRIByAliasCounter  uint64
+	beforeGetActorIRIByAliasCounter uint64
+	GetActorIRIByAliasMock          mStoragePortMockGetActorIRIByAlias
+
 	funcGetActorIRIByUsername          func(ctx context.Context, tenantID int32, username string) (s1 string, err error)
 	funcGetActorIRIByUsernameOrigin    string
 	inspectFuncGetActorIRIByUsername   func(ctx context.Context, tenantID int32, username string)
@@ -245,6 +252,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.GetActorDualKeysMock = mStoragePortMockGetActorDualKeys{mock: m}
 	m.GetActorDualKeysMock.callArgs = []*StoragePortMockGetActorDualKeysParams{}
+
+	m.GetActorIRIByAliasMock = mStoragePortMockGetActorIRIByAlias{mock: m}
+	m.GetActorIRIByAliasMock.callArgs = []*StoragePortMockGetActorIRIByAliasParams{}
 
 	m.GetActorIRIByUsernameMock = mStoragePortMockGetActorIRIByUsername{mock: m}
 	m.GetActorIRIByUsernameMock.callArgs = []*StoragePortMockGetActorIRIByUsernameParams{}
@@ -3175,6 +3185,349 @@ func (m *StoragePortMock) MinimockGetActorDualKeysInspect() {
 	if !m.GetActorDualKeysMock.invocationsDone() && afterGetActorDualKeysCounter > 0 {
 		m.t.Errorf("Expected %d calls to StoragePortMock.GetActorDualKeys at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetActorDualKeysMock.expectedInvocations), m.GetActorDualKeysMock.expectedInvocationsOrigin, afterGetActorDualKeysCounter)
+	}
+}
+
+type mStoragePortMockGetActorIRIByAlias struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetActorIRIByAliasExpectation
+	expectations       []*StoragePortMockGetActorIRIByAliasExpectation
+
+	callArgs []*StoragePortMockGetActorIRIByAliasParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetActorIRIByAliasExpectation specifies expectation struct of the StoragePort.GetActorIRIByAlias
+type StoragePortMockGetActorIRIByAliasExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetActorIRIByAliasParams
+	paramPtrs          *StoragePortMockGetActorIRIByAliasParamPtrs
+	expectationOrigins StoragePortMockGetActorIRIByAliasExpectationOrigins
+	results            *StoragePortMockGetActorIRIByAliasResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetActorIRIByAliasParams contains parameters of the StoragePort.GetActorIRIByAlias
+type StoragePortMockGetActorIRIByAliasParams struct {
+	ctx   context.Context
+	alias string
+}
+
+// StoragePortMockGetActorIRIByAliasParamPtrs contains pointers to parameters of the StoragePort.GetActorIRIByAlias
+type StoragePortMockGetActorIRIByAliasParamPtrs struct {
+	ctx   *context.Context
+	alias *string
+}
+
+// StoragePortMockGetActorIRIByAliasResults contains results of the StoragePort.GetActorIRIByAlias
+type StoragePortMockGetActorIRIByAliasResults struct {
+	s1  string
+	err error
+}
+
+// StoragePortMockGetActorIRIByAliasOrigins contains origins of expectations of the StoragePort.GetActorIRIByAlias
+type StoragePortMockGetActorIRIByAliasExpectationOrigins struct {
+	origin      string
+	originCtx   string
+	originAlias string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Optional() *mStoragePortMockGetActorIRIByAlias {
+	mmGetActorIRIByAlias.optional = true
+	return mmGetActorIRIByAlias
+}
+
+// Expect sets up expected params for StoragePort.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Expect(ctx context.Context, alias string) *mStoragePortMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StoragePortMockGetActorIRIByAliasExpectation{}
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.paramPtrs != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by ExpectParams functions")
+	}
+
+	mmGetActorIRIByAlias.defaultExpectation.params = &StoragePortMockGetActorIRIByAliasParams{ctx, alias}
+	mmGetActorIRIByAlias.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetActorIRIByAlias.expectations {
+		if minimock.Equal(e.params, mmGetActorIRIByAlias.defaultExpectation.params) {
+			mmGetActorIRIByAlias.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetActorIRIByAlias.defaultExpectation.params)
+		}
+	}
+
+	return mmGetActorIRIByAlias
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StoragePortMockGetActorIRIByAliasExpectation{}
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.params != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Expect")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetActorIRIByAlias.defaultExpectation.paramPtrs = &StoragePortMockGetActorIRIByAliasParamPtrs{}
+	}
+	mmGetActorIRIByAlias.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetActorIRIByAlias.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetActorIRIByAlias
+}
+
+// ExpectAliasParam2 sets up expected param alias for StoragePort.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) ExpectAliasParam2(alias string) *mStoragePortMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StoragePortMockGetActorIRIByAliasExpectation{}
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.params != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Expect")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation.paramPtrs == nil {
+		mmGetActorIRIByAlias.defaultExpectation.paramPtrs = &StoragePortMockGetActorIRIByAliasParamPtrs{}
+	}
+	mmGetActorIRIByAlias.defaultExpectation.paramPtrs.alias = &alias
+	mmGetActorIRIByAlias.defaultExpectation.expectationOrigins.originAlias = minimock.CallerInfo(1)
+
+	return mmGetActorIRIByAlias
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Inspect(f func(ctx context.Context, alias string)) *mStoragePortMockGetActorIRIByAlias {
+	if mmGetActorIRIByAlias.mock.inspectFuncGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetActorIRIByAlias")
+	}
+
+	mmGetActorIRIByAlias.mock.inspectFuncGetActorIRIByAlias = f
+
+	return mmGetActorIRIByAlias
+}
+
+// Return sets up results that will be returned by StoragePort.GetActorIRIByAlias
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Return(s1 string, err error) *StoragePortMock {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	if mmGetActorIRIByAlias.defaultExpectation == nil {
+		mmGetActorIRIByAlias.defaultExpectation = &StoragePortMockGetActorIRIByAliasExpectation{mock: mmGetActorIRIByAlias.mock}
+	}
+	mmGetActorIRIByAlias.defaultExpectation.results = &StoragePortMockGetActorIRIByAliasResults{s1, err}
+	mmGetActorIRIByAlias.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetActorIRIByAlias.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetActorIRIByAlias method
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Set(f func(ctx context.Context, alias string) (s1 string, err error)) *StoragePortMock {
+	if mmGetActorIRIByAlias.defaultExpectation != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetActorIRIByAlias method")
+	}
+
+	if len(mmGetActorIRIByAlias.expectations) > 0 {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetActorIRIByAlias method")
+	}
+
+	mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias = f
+	mmGetActorIRIByAlias.mock.funcGetActorIRIByAliasOrigin = minimock.CallerInfo(1)
+	return mmGetActorIRIByAlias.mock
+}
+
+// When sets expectation for the StoragePort.GetActorIRIByAlias which will trigger the result defined by the following
+// Then helper
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) When(ctx context.Context, alias string) *StoragePortMockGetActorIRIByAliasExpectation {
+	if mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.mock.t.Fatalf("StoragePortMock.GetActorIRIByAlias mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetActorIRIByAliasExpectation{
+		mock:               mmGetActorIRIByAlias.mock,
+		params:             &StoragePortMockGetActorIRIByAliasParams{ctx, alias},
+		expectationOrigins: StoragePortMockGetActorIRIByAliasExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetActorIRIByAlias.expectations = append(mmGetActorIRIByAlias.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetActorIRIByAlias return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetActorIRIByAliasExpectation) Then(s1 string, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetActorIRIByAliasResults{s1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetActorIRIByAlias should be invoked
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Times(n uint64) *mStoragePortMockGetActorIRIByAlias {
+	if n == 0 {
+		mmGetActorIRIByAlias.mock.t.Fatalf("Times of StoragePortMock.GetActorIRIByAlias mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetActorIRIByAlias.expectedInvocations, n)
+	mmGetActorIRIByAlias.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetActorIRIByAlias
+}
+
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) invocationsDone() bool {
+	if len(mmGetActorIRIByAlias.expectations) == 0 && mmGetActorIRIByAlias.defaultExpectation == nil && mmGetActorIRIByAlias.mock.funcGetActorIRIByAlias == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetActorIRIByAlias.mock.afterGetActorIRIByAliasCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetActorIRIByAlias.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetActorIRIByAlias implements mm_port.StoragePort
+func (mmGetActorIRIByAlias *StoragePortMock) GetActorIRIByAlias(ctx context.Context, alias string) (s1 string, err error) {
+	mm_atomic.AddUint64(&mmGetActorIRIByAlias.beforeGetActorIRIByAliasCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetActorIRIByAlias.afterGetActorIRIByAliasCounter, 1)
+
+	mmGetActorIRIByAlias.t.Helper()
+
+	if mmGetActorIRIByAlias.inspectFuncGetActorIRIByAlias != nil {
+		mmGetActorIRIByAlias.inspectFuncGetActorIRIByAlias(ctx, alias)
+	}
+
+	mm_params := StoragePortMockGetActorIRIByAliasParams{ctx, alias}
+
+	// Record call args
+	mmGetActorIRIByAlias.GetActorIRIByAliasMock.mutex.Lock()
+	mmGetActorIRIByAlias.GetActorIRIByAliasMock.callArgs = append(mmGetActorIRIByAlias.GetActorIRIByAliasMock.callArgs, &mm_params)
+	mmGetActorIRIByAlias.GetActorIRIByAliasMock.mutex.Unlock()
+
+	for _, e := range mmGetActorIRIByAlias.GetActorIRIByAliasMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.s1, e.results.err
+		}
+	}
+
+	if mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.params
+		mm_want_ptrs := mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetActorIRIByAliasParams{ctx, alias}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetActorIRIByAlias.t.Errorf("StoragePortMock.GetActorIRIByAlias got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.alias != nil && !minimock.Equal(*mm_want_ptrs.alias, mm_got.alias) {
+				mmGetActorIRIByAlias.t.Errorf("StoragePortMock.GetActorIRIByAlias got unexpected parameter alias, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.originAlias, *mm_want_ptrs.alias, mm_got.alias, minimock.Diff(*mm_want_ptrs.alias, mm_got.alias))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetActorIRIByAlias.t.Errorf("StoragePortMock.GetActorIRIByAlias got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetActorIRIByAlias.GetActorIRIByAliasMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetActorIRIByAlias.t.Fatal("No results are set for the StoragePortMock.GetActorIRIByAlias")
+		}
+		return (*mm_results).s1, (*mm_results).err
+	}
+	if mmGetActorIRIByAlias.funcGetActorIRIByAlias != nil {
+		return mmGetActorIRIByAlias.funcGetActorIRIByAlias(ctx, alias)
+	}
+	mmGetActorIRIByAlias.t.Fatalf("Unexpected call to StoragePortMock.GetActorIRIByAlias. %v %v", ctx, alias)
+	return
+}
+
+// GetActorIRIByAliasAfterCounter returns a count of finished StoragePortMock.GetActorIRIByAlias invocations
+func (mmGetActorIRIByAlias *StoragePortMock) GetActorIRIByAliasAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetActorIRIByAlias.afterGetActorIRIByAliasCounter)
+}
+
+// GetActorIRIByAliasBeforeCounter returns a count of StoragePortMock.GetActorIRIByAlias invocations
+func (mmGetActorIRIByAlias *StoragePortMock) GetActorIRIByAliasBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetActorIRIByAlias.beforeGetActorIRIByAliasCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetActorIRIByAlias.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetActorIRIByAlias *mStoragePortMockGetActorIRIByAlias) Calls() []*StoragePortMockGetActorIRIByAliasParams {
+	mmGetActorIRIByAlias.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetActorIRIByAliasParams, len(mmGetActorIRIByAlias.callArgs))
+	copy(argCopy, mmGetActorIRIByAlias.callArgs)
+
+	mmGetActorIRIByAlias.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetActorIRIByAliasDone returns true if the count of the GetActorIRIByAlias invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetActorIRIByAliasDone() bool {
+	if m.GetActorIRIByAliasMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetActorIRIByAliasMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetActorIRIByAliasMock.invocationsDone()
+}
+
+// MinimockGetActorIRIByAliasInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetActorIRIByAliasInspect() {
+	for _, e := range m.GetActorIRIByAliasMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetActorIRIByAlias at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetActorIRIByAliasCounter := mm_atomic.LoadUint64(&m.afterGetActorIRIByAliasCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetActorIRIByAliasMock.defaultExpectation != nil && afterGetActorIRIByAliasCounter < 1 {
+		if m.GetActorIRIByAliasMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetActorIRIByAlias at\n%s", m.GetActorIRIByAliasMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetActorIRIByAlias at\n%s with params: %#v", m.GetActorIRIByAliasMock.defaultExpectation.expectationOrigins.origin, *m.GetActorIRIByAliasMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetActorIRIByAlias != nil && afterGetActorIRIByAliasCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetActorIRIByAlias at\n%s", m.funcGetActorIRIByAliasOrigin)
+	}
+
+	if !m.GetActorIRIByAliasMock.invocationsDone() && afterGetActorIRIByAliasCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetActorIRIByAlias at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetActorIRIByAliasMock.expectedInvocations), m.GetActorIRIByAliasMock.expectedInvocationsOrigin, afterGetActorIRIByAliasCounter)
 	}
 }
 
@@ -10886,6 +11239,8 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockGetActorDualKeysInspect()
 
+			m.MinimockGetActorIRIByAliasInspect()
+
 			m.MinimockGetActorIRIByUsernameInspect()
 
 			m.MinimockGetActorProfileByIRIInspect()
@@ -10957,6 +11312,7 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockEnqueueInboundDone() &&
 		m.MinimockGetActorCredentialsDone() &&
 		m.MinimockGetActorDualKeysDone() &&
+		m.MinimockGetActorIRIByAliasDone() &&
 		m.MinimockGetActorIRIByUsernameDone() &&
 		m.MinimockGetActorProfileByIRIDone() &&
 		m.MinimockGetActorProfileFromGraphDone() &&

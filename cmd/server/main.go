@@ -185,16 +185,13 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies) {
 
 		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(deps.cfg.TenantDomains, deps.postgresStorage))
 
-		protected.Route("/actors", func(router chi.Router) {
-			router.Handle("/", actorHandler)
-			router.Handle("/{actor}", actorHandler)
-		})
-
 		protected.Route("/inbox", func(router chi.Router) {
 			router.Use(signatureValidator.Handler)
 			router.Handle("/", inboxHandler)
 			router.Handle("/{actor}", inboxHandler)
 		})
+
+		protected.Get("/*", actorHandler.ServeHTTP)
 	})
 }
 

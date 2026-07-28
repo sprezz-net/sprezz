@@ -52,6 +52,7 @@ type StoragePort interface {
 	// returning a unified profile structure parsed directly out of the RDF edges.
 	GetActorProfileFromGraph(ctx context.Context, tenantID int32, username string) (*model.ActorProfile, error)
 	GetActorProfileByIRI(ctx context.Context, tenantID int32, iri string) (*model.ActorProfile, error)
+	GetActorIRIByAlias(ctx context.Context, alias string) (string, error)
 
 	ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error
 	GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
