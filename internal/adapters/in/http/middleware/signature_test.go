@@ -58,6 +58,8 @@ func TestSignatureValidator_Handler(t *testing.T) {
 	tests := []struct {
 		name           string
 		method         string
+		path           string
+		contentType    string
 		signature      string
 		expectedStatus int
 		expectedActor  string
@@ -65,6 +67,8 @@ func TestSignatureValidator_Handler(t *testing.T) {
 		{
 			name:           "Valid Authenticated Request Verification Pass",
 			method:         http.MethodPost,
+			path:           "https://sprezz.net/inbox",
+			contentType:    "application/activity+json",
 			signature:      "valid-sig",
 			expectedStatus: http.StatusAccepted,
 			expectedActor:  "https://remote-actor.com",
@@ -72,6 +76,8 @@ func TestSignatureValidator_Handler(t *testing.T) {
 		{
 			name:           "Rejected Unauthorized Cryptographic Forgery",
 			method:         http.MethodPost,
+			path:           "https://sprezz.net/inbox",
+			contentType:    "application/activity+json",
 			signature:      "forged-sig",
 			expectedStatus: http.StatusUnauthorized,
 			expectedActor:  "",
@@ -79,14 +85,72 @@ func TestSignatureValidator_Handler(t *testing.T) {
 		{
 			name:           "Rejected Forbidden Blocked Actor Match",
 			method:         http.MethodPost,
+			path:           "https://sprezz.net/inbox",
+			contentType:    "application/activity+json",
 			signature:      "blocked-sig",
 			expectedStatus: http.StatusForbidden,
 			expectedActor:  "",
 		},
 		{
-			name:           "Bypass Evaluation For Non Mutation Requests",
-			method:         http.MethodGet,
+			name:           "Bypass POST on Non-ActivityPub Content-Type",
+			method:         http.MethodPost,
+			path:           "https://sprezz.net/upload",
+			contentType:    "multipart/form-data",
 			signature:      "",
+			expectedStatus: http.StatusAccepted,
+			expectedActor:  "",
+		},
+		{
+			name:           "Reject POST with Missing Content-Type Header",
+			method:         http.MethodPost,
+			path:           "https://sprezz.net/inbox",
+			contentType:    "",
+			signature:      "",
+			expectedStatus: http.StatusBadRequest,
+			expectedActor:  "",
+		},
+		{
+			name:           "Bypass GET on Non-ActivityPub Content-Type with Signature",
+			method:         http.MethodGet,
+			path:           "https://sprezz.net/actor",
+			contentType:    "text/html",
+			signature:      "forged-sig",
+			expectedStatus: http.StatusAccepted,
+			expectedActor:  "",
+		},
+		{
+			name:           "Bypass GET with ActivityPub Content-Type and No Signature",
+			method:         http.MethodGet,
+			path:           "https://sprezz.net/actor",
+			contentType:    "application/ld+json",
+			signature:      "",
+			expectedStatus: http.StatusAccepted,
+			expectedActor:  "",
+		},
+		{
+			name:           "Verify GET with ActivityPub Content-Type and Valid Signature",
+			method:         http.MethodGet,
+			path:           "https://sprezz.net/actor",
+			contentType:    "application/activity+json",
+			signature:      "valid-sig",
+			expectedStatus: http.StatusAccepted,
+			expectedActor:  "https://remote-actor.com",
+		},
+		{
+			name:           "Reject GET with ActivityPub Content-Type and Invalid Signature",
+			method:         http.MethodGet,
+			path:           "https://sprezz.net/actor",
+			contentType:    "application/activity+json",
+			signature:      "forged-sig",
+			expectedStatus: http.StatusUnauthorized,
+			expectedActor:  "",
+		},
+		{
+			name:           "Bypass Signature Validator on Well-Known Paths",
+			method:         http.MethodPost,
+			path:           "https://sprezz.net/.well-known/webfinger",
+			contentType:    "application/activity+json",
+			signature:      "forged-sig",
 			expectedStatus: http.StatusAccepted,
 			expectedActor:  "",
 		},
@@ -94,7 +158,10 @@ func TestSignatureValidator_Handler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(tt.method, "https://sprezz.net", nil)
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			if tt.contentType != "" {
+				req.Header.Set("Content-Type", tt.contentType)
+			}
 			if tt.signature != "" {
 				req.Header.Set("Signature", tt.signature)
 			}
@@ -103,18 +170,18 @@ func TestSignatureValidator_Handler(t *testing.T) {
 			wrappedHandler.ServeHTTP(rr, req)
 
 			// Handled response validation loops via a distinct single-responsibility helper block
-			assertResponse(t, tt.name, rr, tt.method, tt.expectedStatus, tt.expectedActor)
+			assertResponse(t, tt.name, rr, tt.expectedStatus, tt.expectedActor)
 		})
 	}
 }
 
 // assertResponse decouples validation loops from the test runner loop context to achieve absolute flat logic profiles.
-func assertResponse(t *testing.T, name string, rr *httptest.ResponseRecorder, method string, expectedStatus int, expectedActor string) {
+func assertResponse(t *testing.T, name string, rr *httptest.ResponseRecorder, expectedStatus int, expectedActor string) {
 	if rr.Code != expectedStatus {
 		t.Errorf("Signature validation handling failure for %q: got status %d, want %d", name, rr.Code, expectedStatus)
 	}
 
-	if expectedStatus == http.StatusAccepted && method == http.MethodPost {
+	if expectedStatus == http.StatusAccepted {
 		extractedActor := rr.Header().Get("X-Authenticated-Actor")
 		if extractedActor != expectedActor {
 			t.Errorf("Context propagation mismatch in %q: got %q, want %q", name, extractedActor, expectedActor)

@@ -186,8 +186,9 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies) {
 
 		// Unified Greedy Catch-All Endpoint (Handles GET & POST dynamically)
 		protected.Route("/*", func(router chi.Router) {
+			router.Use(signatureValidator.Handler)
 			router.Get("/", genericHandler.ServeHTTP)
-			router.With(signatureValidator.Handler).Post("/", genericHandler.ServeHTTP)
+			router.Post("/", genericHandler.ServeHTTP)
 		})
 	})
 }

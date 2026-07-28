@@ -136,7 +136,17 @@ Adapters implement these capabilities without changing domain terminology or lea
 
 ### 4.1 Request Acceptance and Native Asymmetric Verification
 
-For every inbox request, the server executes a native, standard-library driven signature verification pipeline entirely decoupled from external, third-party cryptographic frameworks.
+For incoming HTTP requests, signature validation is dynamically routed based on the request method, requested endpoint, and content type before executing the native, standard-library driven signature verification pipeline:
+
+1. **Endpoint Exclusions**: Any request targeting well-known paths (such as `/.well-known/*`) is completely excluded from signature validation.
+2. **POST Request Signature Rules**:
+   - A `POST` request must provide a `Content-Type` header; otherwise, it is rejected with a `400 Bad Request`.
+   - If the `Content-Type` is an ActivityPub type (`application/activity+json` or `application/ld+json`), signature verification is strictly mandatory. A missing or invalid signature header results in a `401 Unauthorized` rejection.
+   - For non-ActivityPub `Content-Type` payloads, signature verification is bypassed.
+3. **GET Request Signature Rules**:
+   - Signature validation is only performed on `GET` requests if the `Content-Type` is an ActivityPub type **and** a `Signature` header is explicitly provided.
+   - If the `Signature` header is absent, verification is bypassed (making signatures optional for ActivityPub `GET` requests).
+   - For non-ActivityPub `Content-Type` payloads, signature verification is bypassed.
 
 ```mermaid
 flowchart TD
