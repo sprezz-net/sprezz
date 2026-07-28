@@ -138,10 +138,10 @@ func (s *ActivityService) PurgeOrphanedMedia(ctx context.Context, tempObjectKey 
 		return nil
 	}
 
-	// 1. Drop the physical binary asset chunk from MinIO
+	// 1. Drop the physical binary asset chunk from infrastructure
 	_ = s.mediaStorage.DeleteObject(ctx, tempObjectKey)
 
-	// 2. Direct method invocation to satisfy strict staticcheck static lint controls
+	// 2. Clear out the database weights directly to instantly restore tenant limits
 	if s.storage != nil {
 		_ = s.storage.RemoveMediaRecord(ctx, tempObjectKey)
 	}

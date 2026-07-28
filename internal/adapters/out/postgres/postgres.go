@@ -280,7 +280,7 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("failed to resolve tenant %q for media ownership: %w", params.TenantID, err)
 	}
 
-	// 2. Quata Check
+	// 2. Pre-flight transactional quota guard
 	// Aggregate active space footprint allocations within the current transaction scope.
 	quota, err := queries.GetTenantStorageUsageAndCeiling(ctx, tenantRow.ID)
 	if err != nil {
@@ -347,26 +347,26 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 	return tx.Commit(ctx)
 }
 
-// VerifyIncomingQuota runs an aggregate space metric scan against hard multi-tenant boundaries (Blueprint 9.3).
+// VerifyIncomingQuota evaluates the current space utilization against the multi-tenant block ceiling.
 func (s *PostgresStorage) VerifyIncomingQuota(ctx context.Context, tenantID int32, incomingSizeBytes int64) (bool, error) {
-	// Initialize the type-safe sqlc engine instance on the fly using the thread-safe connection pool
+	// Wrap the db instance pool with the type-safe compiled sqlc engine block
 	queriesEngine := db.New(s.db)
 
 	metrics, err := queriesEngine.GetTenantStorageUsageAndCeiling(ctx, tenantID)
 	if err != nil {
-		return false, fmt.Errorf("failed to fetch storage threshold allocation data: %w", err)
+		return false, fmt.Errorf("failed to fetch multi-tenant storage metrics: %w", err)
 	}
 
-	// Calculate and intercept ceiling limits safely
+	// Intercept hard ceilings before writing frames or chunks to any storage node
 	projectedUsage := metrics.CurrentUsageBytes + incomingSizeBytes
 	if projectedUsage > metrics.StorageCeilingBytes {
-		return false, nil // Target threshold breached
+		return false, nil // Limit breached safely intercepted
 	}
 
-	return true, nil // Footprint allocation approved
+	return true, nil // Allocation approved
 }
 
-// RemoveMediaRecord purges failed media loop tracking records to maintain exact quota symmetry (Blueprint 9.2).
+// RemoveMediaRecord clears temporary space weight rows if an upscale loop fails mid-verifications.
 func (s *PostgresStorage) RemoveMediaRecord(ctx context.Context, objectName string) error {
 	queriesEngine := db.New(s.db)
 
