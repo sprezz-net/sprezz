@@ -76,9 +76,16 @@ func isTenantAllowed(tenantHost string, tenantDomains []string) bool {
 // resolveProfile routes lookups either through direct stable IRIs or human-readable handles.
 func resolveProfile(ctx context.Context, storage port.StoragePort, resource, tenantHost string, tenantID int32) (*model.ActorProfile, error) {
 	// If the resource is a direct URL pointer (e.g. https://yourdomain.com/actor/<uuidv4>)
-	if strings.HasPrefix(resource, "https://") {
+	if strings.HasPrefix(resource, "https://") || strings.HasPrefix(resource, "http://") {
 		if !strings.Contains(resource, tenantHost) {
 			return nil, fmt.Errorf("resource domain mismatch for active tenant")
+		}
+		cleanResource := strings.TrimRight(resource, "/")
+		if cleanResource == "https://"+tenantHost || cleanResource == "http://"+tenantHost {
+			actorIRI, err := storage.GetActorIRIByUsername(ctx, tenantID, "server")
+			if err == nil && actorIRI != "" {
+				resource = actorIRI
+			}
 		}
 		profile, err := storage.GetActorProfileByIRI(ctx, tenantID, resource)
 		if err != nil {

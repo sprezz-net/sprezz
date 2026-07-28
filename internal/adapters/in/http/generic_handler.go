@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"sprezz/internal/adapters/in/http/middleware"
+	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
 
 	"github.com/google/uuid"
@@ -81,6 +82,26 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 	} else if strings.HasSuffix(requestedIRI, "/following") {
 		collection = "following"
 		actorIRI = strings.TrimSuffix(requestedIRI, "/following")
+	}
+
+	// Intercept FEP-d556 root domain and decoupled shared inbox lookups
+	tenantHost := RequestHost(r)
+	cleanActorIRI := strings.TrimRight(actorIRI, "/")
+	if cleanActorIRI == "https://"+tenantHost || cleanActorIRI == "http://"+tenantHost {
+		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+		if tenantID == 0 {
+			tenantDomain := middleware.GetTenantDomain(ctx)
+			tenantID, _ = h.storage.GetOrCreateTenantByDomain(ctx, tenantDomain)
+		}
+		serverIRI, err := h.storage.GetActorIRIByUsername(ctx, tenantID, "server")
+		if err == nil && serverIRI != "" {
+			targetRedirect := serverIRI
+			if collection != "" {
+				targetRedirect = serverIRI + "/" + collection
+			}
+			http.Redirect(w, r, targetRedirect, http.StatusSeeOther)
+			return
+		}
 	}
 
 	// 2. Lookup the actor payload directly by IRI

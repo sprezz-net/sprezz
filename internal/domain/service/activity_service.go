@@ -2,8 +2,19 @@ package service
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -142,6 +153,9 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		targetsMap[task.ObjectIRI] = struct{}{}
 	}
 
+	// Expand target followers
+	s.expandFollowers(ctx, targetsMap)
+
 	// Deliver to matching local targets
 	for target := range targetsMap {
 		target = strings.TrimSpace(target)
@@ -154,27 +168,6 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		if err == nil {
 			// Deliver to this local actor's inbox!
 			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
-			continue
-		}
-
-		// Check if target is a followers collection of a local actor (e.g. target ends with "/followers")
-		if strings.HasSuffix(target, "/followers") {
-			localActorIRI := strings.TrimSuffix(target, "/followers")
-			_, err := s.storage.GetActorDualKeys(ctx, localActorIRI)
-			if err == nil {
-				// This is a local actor's followers collection.
-				// We need to deliver to all local followers of this actor.
-				followers, err := s.GetFollowersTimeline(ctx, localActorIRI, 1000, 0)
-				if err == nil {
-					for _, follower := range followers {
-						// Double-check if the follower is a local actor on our system
-						_, err := s.storage.GetActorDualKeys(ctx, follower)
-						if err == nil {
-							_ = s.storage.RecordActorInboxDelivery(ctx, follower, task.ActivityIRI)
-						}
-					}
-				}
-			}
 		}
 	}
 
@@ -274,39 +267,8 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 		return err
 	}
 
-	// Build resolved targets list to avoid modifying map during iteration
-	var targets []string
-	for target := range targetsMap {
-		targets = append(targets, target)
-	}
-
-	// Resolve target followers first
-	for i := 0; i < len(targets); i++ {
-		target := strings.TrimSpace(targets[i])
-		if target == "" {
-			continue
-		}
-		if strings.HasSuffix(target, "/followers") {
-			localActorIRI := strings.TrimSuffix(target, "/followers")
-			_, err := s.storage.GetActorDualKeys(ctx, localActorIRI)
-			if err == nil {
-				// Resolve remote followers
-				followers, err := s.GetFollowersTimeline(ctx, localActorIRI, 1000, 0)
-				if err == nil {
-					for _, follower := range followers {
-						_, err := s.storage.GetActorDualKeys(ctx, follower)
-						if err != nil {
-							// Remote follower
-							if _, exists := targetsMap[follower]; !exists {
-								targetsMap[follower] = struct{}{}
-								targets = append(targets, follower)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+	// Expand target followers first
+	s.expandFollowers(ctx, targetsMap)
 
 	// 2. Load the sender's dual-key credentials
 	dualKeys, err := s.storage.GetActorDualKeys(ctx, actorIRI)
@@ -316,25 +278,25 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 
 	targetKeyID := actorIRI + "#main-key"
 
-	// 3. Resolve the target inboxes (preferring sharedInbox, falling back to direct inbox)
+	// 3. Resolve the target inboxes (preferring domain-level sharedInbox via FEP-d556, falling back to direct inbox)
 	inboxesMap := make(map[string]struct{})
 
-	for target := range targetsMap {
-		target = strings.TrimSpace(target)
-		if target == "" {
-			continue
-		}
+	// Group remote targets by domain using our generic helper
+	domainToRecipients := s.groupRemoteTargetsByDomain(ctx, targetsMap)
 
-		// Skip if the target is a local actor
-		_, err := s.storage.GetActorDualKeys(ctx, target)
-		if err == nil {
-			continue
-		}
-
-		// Try to look up the remote actor's cached profile in our graph store
-		inboxURL, err := s.resolveActorInbox(ctx, target)
-		if err == nil && inboxURL != "" {
-			inboxesMap[inboxURL] = struct{}{}
+	for domain, recipients := range domainToRecipients {
+		// Attempt to discover the server-level shared inbox for this domain
+		sharedInboxURL, err := s.resolveServerActorInbox(ctx, domain, actorIRI)
+		if err == nil && sharedInboxURL != "" {
+			inboxesMap[sharedInboxURL] = struct{}{}
+		} else {
+			// Fallback: resolve individual recipient inboxes if server actor discovery fails
+			for _, target := range recipients {
+				inboxURL, err := s.resolveActorInbox(ctx, target)
+				if err == nil && inboxURL != "" {
+					inboxesMap[inboxURL] = struct{}{}
+				}
+			}
 		}
 	}
 
@@ -541,4 +503,282 @@ func (s *ActivityService) RotateLocalActorKeys(ctx context.Context, tenantID int
 	}
 
 	return actorIRI, nil
+}
+
+func extractDomain(iri string) string {
+	u, err := url.Parse(iri)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Host)
+}
+
+// expandFollowers resolves and expands all /followers collections in targetsMap to direct recipient IRIs
+func (s *ActivityService) expandFollowers(ctx context.Context, targetsMap map[string]struct{}) {
+	var targets []string
+	for target := range targetsMap {
+		targets = append(targets, target)
+	}
+
+	for i := 0; i < len(targets); i++ {
+		target := strings.TrimSpace(targets[i])
+		if target == "" {
+			continue
+		}
+		if strings.HasSuffix(target, "/followers") {
+			localActorIRI := strings.TrimSuffix(target, "/followers")
+			_, err := s.storage.GetActorDualKeys(ctx, localActorIRI)
+			if err == nil {
+				followers, err := s.GetFollowersTimeline(ctx, localActorIRI, 1000, 0)
+				if err == nil {
+					for _, follower := range followers {
+						if _, exists := targetsMap[follower]; !exists {
+							targetsMap[follower] = struct{}{}
+							targets = append(targets, follower)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// groupRemoteTargetsByDomain filters out local actors and groups remote targets by their server domains
+func (s *ActivityService) groupRemoteTargetsByDomain(ctx context.Context, targetsMap map[string]struct{}) map[string][]string {
+	domainToRecipients := make(map[string][]string)
+	for target := range targetsMap {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+
+		// Skip if local actor
+		_, err := s.storage.GetActorDualKeys(ctx, target)
+		if err == nil {
+			continue
+		}
+
+		domain := extractDomain(target)
+		if domain != "" {
+			domainToRecipients[domain] = append(domainToRecipients[domain], target)
+		}
+	}
+	return domainToRecipients
+}
+
+func (s *ActivityService) resolveServerActorInbox(ctx context.Context, targetDomain string, senderActorIRI string) (string, error) {
+	// 1. Try local cache first
+	if cachedInbox := s.resolveCachedServerInbox(ctx, targetDomain); cachedInbox != "" {
+		return cachedInbox, nil
+	}
+
+	// 2. Discover via signed FEP-d556 process (Signed with dual-keys)
+	serverActorIRI, serverKeys, err := s.getLocalServerCredentials(ctx, senderActorIRI)
+	if err != nil {
+		return "", err
+	}
+
+	targetKeyID := serverActorIRI + "#main-key"
+
+	// Step A: WebFinger query for resource=https://<domain>
+	actorProfileURL, err := s.discoverRemoteActorIRI(ctx, targetDomain, targetKeyID, serverKeys.PrivateKeyRSAPEM, serverKeys.PrivateKeyEd25519PEM)
+	if err != nil {
+		return "", err
+	}
+
+	// Step B: Fetch the actor profile
+	resolvedSharedInbox, profileBody, err := s.discoverRemoteSharedInbox(ctx, actorProfileURL, targetKeyID, serverKeys.PrivateKeyRSAPEM, serverKeys.PrivateKeyEd25519PEM)
+	if err != nil {
+		return "", err
+	}
+
+	// Cache the resolved inbox
+	s.cacheServerInbox(ctx, targetDomain, resolvedSharedInbox, profileBody)
+
+	return resolvedSharedInbox, nil
+}
+
+// resolveCachedServerInbox queries our database for a cached server actor's shared inbox URL
+func (s *ActivityService) resolveCachedServerInbox(ctx context.Context, targetDomain string) string {
+	inboxURL, err := s.resolveActorInbox(ctx, "https://"+targetDomain)
+	if err == nil && inboxURL != "" {
+		return inboxURL
+	}
+	inboxURL, err = s.resolveActorInbox(ctx, "http://"+targetDomain)
+	if err == nil && inboxURL != "" {
+		return inboxURL
+	}
+	return ""
+}
+
+// getLocalServerCredentials resolves the local tenant and system server credentials (RSA + Ed25519)
+func (s *ActivityService) getLocalServerCredentials(ctx context.Context, senderActorIRI string) (string, *model.ActorDualKeys, error) {
+	senderHost := extractDomain(senderActorIRI)
+	if senderHost == "" {
+		return "", nil, fmt.Errorf("invalid sender actor IRI format")
+	}
+
+	tenantID, err := s.storage.GetOrCreateTenantByDomain(ctx, senderHost)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get tenant ID: %w", err)
+	}
+
+	serverActorIRI, serverKeys, err := s.storage.GetActorCredentials(ctx, tenantID, "server")
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to load local server actor credentials: %w", err)
+	}
+
+	return serverActorIRI, serverKeys, nil
+}
+
+// discoverRemoteActorIRI queries the WebFinger JRD of a remote domain to resolve its server-controlled actor IRI
+func (s *ActivityService) discoverRemoteActorIRI(ctx context.Context, targetDomain, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) (string, error) {
+	webfingerURL := fmt.Sprintf("https://%s/.well-known/webfinger?resource=https://%s", targetDomain, targetDomain)
+	wfBody, err := s.signedGet(ctx, webfingerURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
+	if err != nil {
+		// Fallback to http if https fails
+		webfingerURL = fmt.Sprintf("http://%s/.well-known/webfinger?resource=http://%s", targetDomain, targetDomain)
+		wfBody, err = s.signedGet(ctx, webfingerURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
+		if err != nil {
+			return "", fmt.Errorf("webfinger discovery failed: %w", err)
+		}
+	}
+
+	var wfResp struct {
+		Links []struct {
+			Rel  string `json:"rel"`
+			Type string `json:"type"`
+			Href string `json:"href"`
+		} `json:"links"`
+	}
+	if err := json.Unmarshal(wfBody, &wfResp); err != nil {
+		return "", fmt.Errorf("failed to parse webfinger response: %w", err)
+	}
+
+	for _, link := range wfResp.Links {
+		if link.Rel == "self" && (strings.Contains(link.Type, "activity") || strings.Contains(link.Type, "json")) {
+			return link.Href, nil
+		}
+	}
+
+	return "", fmt.Errorf("no self link found in webfinger response")
+}
+
+// discoverRemoteSharedInbox fetches and parses a remote actor's JSON-LD profile to extract its shared inbox URL
+func (s *ActivityService) discoverRemoteSharedInbox(ctx context.Context, actorProfileURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) (string, []byte, error) {
+	profileBody, err := s.signedGet(ctx, actorProfileURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to fetch server actor profile: %w", err)
+	}
+
+	var profile struct {
+		Inbox       string `json:"inbox"`
+		SharedInbox string `json:"sharedInbox"`
+		Endpoints   struct {
+			SharedInbox string `json:"sharedInbox"`
+		} `json:"endpoints"`
+	}
+	if err := json.Unmarshal(profileBody, &profile); err != nil {
+		return "", nil, fmt.Errorf("failed to parse actor profile: %w", err)
+	}
+
+	resolvedSharedInbox := profile.Endpoints.SharedInbox
+	if resolvedSharedInbox == "" {
+		resolvedSharedInbox = profile.SharedInbox
+	}
+	if resolvedSharedInbox == "" {
+		resolvedSharedInbox = profile.Inbox
+	}
+
+	if resolvedSharedInbox == "" {
+		return "", nil, fmt.Errorf("no shared inbox or inbox found in server actor profile")
+	}
+
+	return resolvedSharedInbox, profileBody, nil
+}
+
+// cacheServerInbox persists the discovered shared inbox as quads so future queries are instant
+func (s *ActivityService) cacheServerInbox(ctx context.Context, targetDomain, sharedInbox string, profileBody []byte) {
+	graphID, _ := s.storage.CreateGraphVersion(ctx, "https://"+targetDomain, "https://"+targetDomain, profileBody)
+	if graphID > 0 {
+		quads := []model.Quad{
+			{
+				GraphID:   graphID,
+				Subject:   "https://" + targetDomain,
+				Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox",
+				Object:    sharedInbox,
+				ObjType:   model.NamedNode,
+			},
+		}
+		_ = s.storage.SaveQuads(ctx, quads)
+	}
+}
+
+func (s *ActivityService) signedGet(ctx context.Context, targetURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/activity+json, application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\", application/jrd+json")
+	req.Header.Set("User-Agent", "Sprezz-Hex-QuadStore/2.0")
+
+	if privateKeyRSAPEM != "" && keyID != "" {
+		cleanHost := req.URL.Host
+		if host, _, err := net.SplitHostPort(req.URL.Host); err == nil {
+			cleanHost = host
+		}
+		req.Header.Set("Host", cleanHost)
+		dateStr := time.Now().UTC().Format(http.TimeFormat)
+		req.Header.Set("Date", dateStr)
+
+		signingString := fmt.Sprintf("(request-target): get %s\nhost: %s\ndate: %s",
+			req.URL.RequestURI(), cleanHost, dateStr)
+
+		signature, err := signStringRSA(signingString, privateKeyRSAPEM)
+		if err == nil {
+			sigHeaderVal := fmt.Sprintf("keyId=\"%s\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date\",signature=\"%s\"",
+				keyID, signature)
+			req.Header.Set("Signature", sigHeaderVal)
+		}
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+func signStringRSA(message, privateKeyPEM string) (string, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return "", fmt.Errorf("failed to parse raw identity key block format")
+	}
+
+	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		if parsedKey, err8 := x509.ParsePKCS8PrivateKey(block.Bytes); err8 == nil {
+			if rsaKey, ok := parsedKey.(*rsa.PrivateKey); ok {
+				privKey = rsaKey
+			} else {
+				return "", fmt.Errorf("key is not RSA private key: %w", err)
+			}
+		} else {
+			return "", err
+		}
+	}
+
+	msgHash := sha256.Sum256([]byte(message))
+	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, msgHash[:])
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(sigBytes), nil
 }

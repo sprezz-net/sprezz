@@ -2,7 +2,14 @@ package service_test
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -435,6 +442,15 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 
 	mockStorage := portmock.NewStoragePortMock(mc)
 
+	mockStorage.GetOrCreateTenantByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+		return 1, nil
+	})
+	mockStorage.GetActorCredentialsMock.Set(func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+		return "https://local.com/actor/server", &model.ActorDualKeys{
+			PrivateKeyRSAPEM: "-----BEGIN RSA PRIVATE KEY-----",
+		}, nil
+	})
+
 	// Stub dual key lookup for local sender
 	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
 		if actorIRI == "https://local.com/actor/alice" {
@@ -448,6 +464,11 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 
 	// Stub remote actor profiles lookup
 	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		if subjectIRI == "https://remote.com" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
+			}, nil
+		}
 		if subjectIRI == "https://remote.com/actor/bob" {
 			return []model.Quad{
 				{Subject: subjectIRI, Predicate: "activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
@@ -496,5 +517,117 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 	}
 	if dispatchedInboxes["https://other.com/actor/dan/inbox"] != 1 {
 		t.Errorf("expected exactly 1 dispatch to direct inbox, got: %d", dispatchedInboxes["https://other.com/actor/dan/inbox"])
+	}
+}
+
+func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
+	ctx := context.Background()
+	mc := minimock.NewController(t)
+
+	var remoteHost string
+
+	// Spin up a mock remote server to reply to WebFinger and Actor profile GET requests
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "webfinger") {
+			w.Header().Set("Content-Type", "application/jrd+json")
+			_, _ = w.Write([]byte(`{
+				"links": [
+					{
+						"rel": "self",
+						"type": "application/activity+json",
+						"href": "http://` + remoteHost + `/actor"
+					}
+				]
+			}`))
+			return
+		}
+		if r.URL.Path == "/actor" {
+			w.Header().Set("Content-Type", "application/activity+json")
+			_, _ = w.Write([]byte(`{
+				"id": "http://` + remoteHost + `/actor",
+				"endpoints": {
+					"sharedInbox": "http://` + remoteHost + `/inbox"
+				}
+			}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	u, _ := url.Parse(server.URL)
+	remoteHost = u.Host // e.g. 127.0.0.1:xxxxx
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+
+	mockStorage.GetOrCreateTenantByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+		return 1, nil
+	})
+
+	// Generate real RSA key pair for cryptographic signing tests
+	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
+	privDER := x509.MarshalPKCS1PrivateKey(privKey)
+	privBlock := pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privDER,
+	}
+	realRSAPEM := string(pem.EncodeToMemory(&privBlock))
+
+	mockStorage.GetActorCredentialsMock.Set(func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+		return "https://local.com/actor/server", &model.ActorDualKeys{
+			PrivateKeyRSAPEM: realRSAPEM,
+		}, nil
+	})
+
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local.com/actor/alice" {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     realRSAPEM,
+				PrivateKeyEd25519PEM: "-----BEGIN PRIVATE KEY-----",
+			}, nil
+		}
+		return nil, errors.New("remote actor")
+	})
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		// Return not found so it triggers discovery!
+		return nil, errors.New("not found")
+	})
+
+	createdGraph := false
+	mockStorage.CreateGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error) {
+		createdGraph = true
+		return 123, nil
+	})
+
+	savedQuads := false
+	mockStorage.SaveQuadsMock.Set(func(ctx context.Context, quads []model.Quad) error {
+		if len(quads) > 0 && quads[0].Subject == "https://"+remoteHost && quads[0].Object == "http://"+remoteHost+"/inbox" {
+			savedQuads = true
+		}
+		return nil
+	})
+
+	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
+	mockDispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		return nil
+	})
+
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), mockDispatcher)
+
+	payload := []byte(`{
+		"to": ["https://` + remoteHost + `/actor/bob"]
+	}`)
+
+	err := svc.DispatchOutboundActivity(ctx, "https://local.com/activity/1", "https://local.com/actor/alice", payload)
+	if err != nil {
+		t.Fatalf("expected success, got err: %v", err)
+	}
+
+	if !createdGraph {
+		t.Errorf("expected graph version to be created for discovered server actor")
+	}
+	if !savedQuads {
+		t.Errorf("expected discovered sharedInbox quads to be saved to database")
 	}
 }

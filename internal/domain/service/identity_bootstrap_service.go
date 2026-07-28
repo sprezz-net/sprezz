@@ -74,6 +74,10 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 		"id":                actorIRI,
 		"type":              "Application",
 		"preferredUsername": "server",
+		"inbox":             actorIRI + "/inbox",
+		"endpoints": map[string]interface{}{
+			"sharedInbox": "https://" + domain + "/inbox",
+		},
 		"publicKey": map[string]interface{}{
 			"id":           actorIRI + "#main-key",
 			"owner":        actorIRI,
@@ -112,6 +116,20 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 			Predicate: model.PredicatePublicKeyPem,
 			Object:    pubKey,
 			ObjType:   model.Literal,
+		},
+		{
+			GraphID:   graphID,
+			Subject:   actorIRI,
+			Predicate: "https://www.w3.org/ns/activitystreams#inbox",
+			Object:    actorIRI + "/inbox",
+			ObjType:   model.NamedNode,
+		},
+		{
+			GraphID:   graphID,
+			Subject:   actorIRI,
+			Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox",
+			Object:    "https://" + domain + "/inbox",
+			ObjType:   model.NamedNode,
 		},
 	}
 	if err := s.storagePort.SaveQuads(ctx, quads); err != nil {
