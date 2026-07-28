@@ -26,27 +26,22 @@ func HasActorPrefix(iri, domain string) bool {
 	return strings.HasPrefix(iri, prefix)
 }
 
-// IsActorPath checks if a path's first segment is the actor path segment.
-func IsActorPath(firstSegment string) bool {
-	return firstSegment == ActorPathSegment || firstSegment == "actors" // Support legacy "actors" matches for compatibility during transition
-}
-
-// ActorProfile represents a local identity reconstructed from the RDF Quad Store graph history [source: 4].
+// ActorProfile represents a local identity reconstructed from the RDF Quad Store graph history.
 type ActorProfile struct {
-	UUID         string `json:"uuid"`           // Stable UUIDv4 identifier string [source: 4]
-	IRI          string `json:"iri"`            // Canonical global ActivityPub Actor URI [source: 4]
-	Username     string `json:"username"`       // Extracted local text-based username handle [source: 4]
-	PublicKeyPEM string `json:"public_key_pem"` // Reconstructed signing key string [source: 4]
-	NomadGUID    string `json:"nomad_guid"`     // Zot6 global identifier string; empty if vanilla AP [source: 4]
+	UUID         string `json:"uuid"`           // Stable UUIDv4 identifier string
+	IRI          string `json:"iri"`            // Canonical global ActivityPub Actor URI
+	Username     string `json:"username"`       // Extracted local text-based username handle
+	PublicKeyPEM string `json:"public_key_pem"` // Reconstructed signing key string
+	NomadGUID    string `json:"nomad_guid"`     // Zot6 global identifier string; empty if vanilla AP
 }
 
-// ActorDualKeys maintains the long-term private key parameters for outbound federation [source: 4].
+// ActorDualKeys maintains the long-term private key parameters for outbound federation.
 type ActorDualKeys struct {
 	PrivateKeyRSAPEM     string
 	PrivateKeyEd25519PEM string
 }
 
-// NomadicIdentity manages clone parameters for cross-server channel synchronization [source: 8].
+// NomadicIdentity manages clone parameters for cross-server channel synchronization.
 type NomadicIdentity struct {
 	GUID               string
 	PrimaryHubURL      string

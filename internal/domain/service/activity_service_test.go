@@ -100,7 +100,7 @@ func TestGetFollowersTimeline(t *testing.T) {
 	mc := minimock.NewController(t)
 
 	ctx := context.Background()
-	actorIRI := "https://sprezz.net/actors/alice"
+	actorIRI := "https://sprezz.net/actor/alice"
 	followerPredicate := "https://www.w3.org/ns/activitystreams#follower"
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)

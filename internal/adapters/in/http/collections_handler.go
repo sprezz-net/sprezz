@@ -77,13 +77,8 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Revert to legacy routing matches for compatibility with legacy test cases
-		actorIRI, collection, _ = actorRoute(r)
-		payload, err = h.storage.GetLatestPayload(ctx, actorIRI)
-		if err != nil || len(payload) == 0 {
-			http.NotFound(w, r)
-			return
-		}
+		http.NotFound(w, r)
+		return
 	}
 
 	// 4. Content Negotiation / MIME Type Branching
@@ -109,28 +104,6 @@ func (h *ActorHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.servePayloadCollection(w, r, actorIRI, collection)
-}
-
-func actorRoute(r *http.Request) (string, string, bool) {
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) < 2 || len(parts) > 3 || !model.IsActorPath(parts[0]) || parts[1] == "" {
-		return "", "", false
-	}
-	if len(parts) == 3 && !validCollection(parts[2]) {
-		return "", "", false
-	}
-	return model.ActorIRI(RequestHost(r), parts[1]), collectionPart(parts), true
-}
-
-func validCollection(collection string) bool {
-	return collection == "inbox" || collection == "outbox" || collection == "followers" || collection == "following"
-}
-
-func collectionPart(parts []string) string {
-	if len(parts) == 3 {
-		return parts[2]
-	}
-	return ""
 }
 
 func (h *ActorHandler) serveRelationshipCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
