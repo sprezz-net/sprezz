@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getActorDualKeys = `-- name: GetActorDualKeys :one
@@ -18,8 +16,8 @@ WHERE actor_iri = $1
 `
 
 type GetActorDualKeysRow struct {
-	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
-	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
+	PrivateKeyRsaPem     string  `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem *string `json:"private_key_ed25519_pem"`
 }
 
 func (q *Queries) GetActorDualKeys(ctx context.Context, actorIri string) (GetActorDualKeysRow, error) {
@@ -84,9 +82,9 @@ ON CONFLICT (identity_guid, hub_url) DO UPDATE SET
 `
 
 type RegisterIdentityCloneParams struct {
-	IdentityGuid string      `json:"identity_guid"`
-	HubUrl       string      `json:"hub_url"`
-	IsLocal      pgtype.Bool `json:"is_local"`
+	IdentityGuid string `json:"identity_guid"`
+	HubUrl       string `json:"hub_url"`
+	IsLocal      *bool  `json:"is_local"`
 }
 
 func (q *Queries) RegisterIdentityClone(ctx context.Context, arg RegisterIdentityCloneParams) error {

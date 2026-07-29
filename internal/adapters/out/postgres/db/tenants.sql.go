@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getActorCredentialsByUsername = `-- name: GetActorCredentialsByUsername :one
@@ -23,11 +21,11 @@ type GetActorCredentialsByUsernameParams struct {
 }
 
 type GetActorCredentialsByUsernameRow struct {
-	ActorIri             string      `json:"actor_iri"`
-	TenantID             int32       `json:"tenant_id"`
-	Username             string      `json:"username"`
-	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
-	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
+	ActorIri             string  `json:"actor_iri"`
+	TenantID             int32   `json:"tenant_id"`
+	Username             string  `json:"username"`
+	PrivateKeyRsaPem     string  `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem *string `json:"private_key_ed25519_pem"`
 }
 
 func (q *Queries) GetActorCredentialsByUsername(ctx context.Context, arg GetActorCredentialsByUsernameParams) (GetActorCredentialsByUsernameRow, error) {
@@ -66,11 +64,11 @@ ON CONFLICT (tenant_id, username) DO NOTHING
 `
 
 type InsertActorCredentialsParams struct {
-	ActorIri             string      `json:"actor_iri"`
-	TenantID             int32       `json:"tenant_id"`
-	Username             string      `json:"username"`
-	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
-	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
+	ActorIri             string  `json:"actor_iri"`
+	TenantID             int32   `json:"tenant_id"`
+	Username             string  `json:"username"`
+	PrivateKeyRsaPem     string  `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem *string `json:"private_key_ed25519_pem"`
 }
 
 func (q *Queries) InsertActorCredentials(ctx context.Context, arg InsertActorCredentialsParams) error {

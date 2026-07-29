@@ -7,8 +7,6 @@ package db
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createGraphVersion = `-- name: CreateGraphVersion :one
@@ -57,18 +55,18 @@ func (q *Queries) GetLatestPayload(ctx context.Context, objectIri string) ([]byt
 }
 
 const getSubjectQuads = `-- name: GetSubjectQuads :many
-SELECT q.graph_id, d_pred.value AS predicate, d_obj.value AS object, q.is_literal
+SELECT q.graph_id, d_pred.value AS predicate, COALESCE(d_obj.value, q.literal_value)::TEXT AS object, q.is_literal
 FROM rdf_quads q
 JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
-JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+LEFT JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
 WHERE q.subject_id = $1
 `
 
 type GetSubjectQuadsRow struct {
-	GraphID   int64       `json:"graph_id"`
-	Predicate string      `json:"predicate"`
-	Object    string      `json:"object"`
-	IsLiteral pgtype.Bool `json:"is_literal"`
+	GraphID   int64  `json:"graph_id"`
+	Predicate string `json:"predicate"`
+	Object    string `json:"object"`
+	IsLiteral *bool  `json:"is_literal"`
 }
 
 func (q *Queries) GetSubjectQuads(ctx context.Context, subjectID int64) ([]GetSubjectQuadsRow, error) {
@@ -117,17 +115,18 @@ func (q *Queries) InsertDictionaryValue(ctx context.Context, value string) (int6
 }
 
 const insertQuad = `-- name: InsertQuad :exec
-INSERT INTO rdf_quads (graph_id, subject_id, predicate_id, object_id, is_literal)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO rdf_quads (graph_id, subject_id, predicate_id, object_id, is_literal, literal_value)
+VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT DO NOTHING
 `
 
 type InsertQuadParams struct {
-	GraphID     int64       `json:"graph_id"`
-	SubjectID   int64       `json:"subject_id"`
-	PredicateID int64       `json:"predicate_id"`
-	ObjectID    int64       `json:"object_id"`
-	IsLiteral   pgtype.Bool `json:"is_literal"`
+	GraphID      int64   `json:"graph_id"`
+	SubjectID    int64   `json:"subject_id"`
+	PredicateID  int64   `json:"predicate_id"`
+	ObjectID     *int64  `json:"object_id"`
+	IsLiteral    *bool   `json:"is_literal"`
+	LiteralValue *string `json:"literal_value"`
 }
 
 func (q *Queries) InsertQuad(ctx context.Context, arg InsertQuadParams) error {
@@ -137,22 +136,29 @@ func (q *Queries) InsertQuad(ctx context.Context, arg InsertQuadParams) error {
 		arg.PredicateID,
 		arg.ObjectID,
 		arg.IsLiteral,
+		arg.LiteralValue,
 	)
 	return err
 }
 
 const removeQuadEdge = `-- name: RemoveQuadEdge :exec
 DELETE FROM rdf_quads
-WHERE subject_id = $1 AND predicate_id = $2 AND object_id = $3
+WHERE subject_id = $1 AND predicate_id = $2 AND (object_id = $3 OR literal_value = $4)
 `
 
 type RemoveQuadEdgeParams struct {
-	SubjectID   int64 `json:"subject_id"`
-	PredicateID int64 `json:"predicate_id"`
-	ObjectID    int64 `json:"object_id"`
+	SubjectID    int64   `json:"subject_id"`
+	PredicateID  int64   `json:"predicate_id"`
+	ObjectID     *int64  `json:"object_id"`
+	LiteralValue *string `json:"literal_value"`
 }
 
 func (q *Queries) RemoveQuadEdge(ctx context.Context, arg RemoveQuadEdgeParams) error {
-	_, err := q.db.Exec(ctx, removeQuadEdge, arg.SubjectID, arg.PredicateID, arg.ObjectID)
+	_, err := q.db.Exec(ctx, removeQuadEdge,
+		arg.SubjectID,
+		arg.PredicateID,
+		arg.ObjectID,
+		arg.LiteralValue,
+	)
 	return err
 }

@@ -96,7 +96,7 @@ type IdentityClone struct {
 	ID             int64              `json:"id"`
 	IdentityGuid   string             `json:"identity_guid"`
 	HubUrl         string             `json:"hub_url"`
-	IsLocal        pgtype.Bool        `json:"is_local"`
+	IsLocal        *bool              `json:"is_local"`
 	SynchronizedAt pgtype.Timestamptz `json:"synchronized_at"`
 }
 
@@ -105,20 +105,20 @@ type InboundActivityQueue struct {
 	ActivityIri  string             `json:"activity_iri"`
 	ObjectIri    string             `json:"object_iri"`
 	Payload      []byte             `json:"payload"`
-	Status       NullActivityStatus `json:"status"`
-	Attempts     pgtype.Int4        `json:"attempts"`
-	ErrorMessage pgtype.Text        `json:"error_message"`
+	Status       *ActivityStatus    `json:"status"`
+	Attempts     *int32             `json:"attempts"`
+	ErrorMessage *string            `json:"error_message"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
 
 type LocalActorCredential struct {
-	ActorIri             string      `json:"actor_iri"`
-	IdentityGuid         pgtype.Text `json:"identity_guid"`
-	TenantID             int32       `json:"tenant_id"`
-	Username             string      `json:"username"`
-	PrivateKeyRsaPem     string      `json:"private_key_rsa_pem"`
-	PrivateKeyEd25519Pem pgtype.Text `json:"private_key_ed25519_pem"`
+	ActorIri             string  `json:"actor_iri"`
+	IdentityGuid         *string `json:"identity_guid"`
+	TenantID             int32   `json:"tenant_id"`
+	Username             string  `json:"username"`
+	PrivateKeyRsaPem     string  `json:"private_key_rsa_pem"`
+	PrivateKeyEd25519Pem *string `json:"private_key_ed25519_pem"`
 }
 
 type MediaAttachment struct {
@@ -143,8 +143,8 @@ type OutboundActivityQueue struct {
 	ActivityIri string             `json:"activity_iri"`
 	ActorIri    string             `json:"actor_iri"`
 	Payload     []byte             `json:"payload"`
-	Status      NullActivityStatus `json:"status"`
-	Attempts    pgtype.Int4        `json:"attempts"`
+	Status      *ActivityStatus    `json:"status"`
+	Attempts    *int32             `json:"attempts"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
@@ -168,11 +168,12 @@ type RdfGraphAttachment struct {
 }
 
 type RdfQuad struct {
-	GraphID     int64       `json:"graph_id"`
-	SubjectID   int64       `json:"subject_id"`
-	PredicateID int64       `json:"predicate_id"`
-	ObjectID    int64       `json:"object_id"`
-	IsLiteral   pgtype.Bool `json:"is_literal"`
+	GraphID      int64   `json:"graph_id"`
+	SubjectID    int64   `json:"subject_id"`
+	PredicateID  int64   `json:"predicate_id"`
+	ObjectID     *int64  `json:"object_id"`
+	IsLiteral    *bool   `json:"is_literal"`
+	LiteralValue *string `json:"literal_value"`
 }
 
 type ServerTenant struct {

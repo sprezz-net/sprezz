@@ -94,7 +94,7 @@ WHERE id = $1
 
 type MarkInboundFailedParams struct {
 	ID           pgtype.UUID `json:"id"`
-	ErrorMessage pgtype.Text `json:"error_message"`
+	ErrorMessage *string     `json:"error_message"`
 }
 
 func (q *Queries) MarkInboundFailed(ctx context.Context, arg MarkInboundFailedParams) error {

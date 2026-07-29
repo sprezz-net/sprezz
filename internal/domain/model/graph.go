@@ -24,11 +24,12 @@ func (q Quad) IsLiteral() bool {
 
 // QuadID is the lightweight, optimized integer variant designed for high-performance index traversal and batch database persistence pipelines.
 type QuadID struct {
-	GraphID     int64
-	SubjectID   int64
-	PredicateID int64
-	ObjectID    int64
-	IsLiteral   bool
+	GraphID      int64
+	SubjectID    int64
+	PredicateID  int64
+	ObjectID     int64
+	IsLiteral    bool
+	LiteralValue string
 }
 
 type ObjectVersion struct {

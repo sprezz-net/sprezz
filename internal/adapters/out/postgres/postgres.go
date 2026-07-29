@@ -77,19 +77,27 @@ func (s *PostgresStorage) GetActorCredentials(ctx context.Context, tenantID int3
 	}
 
 	// 2. Return the stable actor_iri and map variables securely to the domain structure.
+	var privKeyEd25519 string
+	if row.PrivateKeyEd25519Pem != nil {
+		privKeyEd25519 = *row.PrivateKeyEd25519Pem
+	}
 	return row.ActorIri, &model.ActorDualKeys{
 		PrivateKeyRSAPEM:     row.PrivateKeyRsaPem,
-		PrivateKeyEd25519PEM: row.PrivateKeyEd25519Pem.String, // Safely handles the nullable string.
+		PrivateKeyEd25519PEM: privKeyEd25519,
 	}, nil
 }
 
 func (s *PostgresStorage) CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error {
+	var privKeyEd25519 *string
+	if privateKeyEd25519PEM != "" {
+		privKeyEd25519 = &privateKeyEd25519PEM
+	}
 	err := s.queries().InsertActorCredentials(ctx, db.InsertActorCredentialsParams{
 		ActorIri:             actorIRI,
 		TenantID:             tenantID,
 		Username:             username,
 		PrivateKeyRsaPem:     privateKeyRSAPEM,
-		PrivateKeyEd25519Pem: pgtype.Text{String: privateKeyEd25519PEM, Valid: true},
+		PrivateKeyEd25519Pem: privKeyEd25519,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to write dual-key actor credentials to storage: %w", err)
@@ -200,7 +208,11 @@ func (s *PostgresStorage) MarkInboundFailed(ctx context.Context, id string, reas
 	if err != nil {
 		return err
 	}
-	return s.queries().MarkInboundFailed(ctx, db.MarkInboundFailedParams{ID: queueID, ErrorMessage: pgtype.Text{String: reason, Valid: true}})
+	var errMsg *string
+	if reason != "" {
+		errMsg = &reason
+	}
+	return s.queries().MarkInboundFailed(ctx, db.MarkInboundFailedParams{ID: queueID, ErrorMessage: errMsg})
 }
 
 func (s *PostgresStorage) GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error) {
@@ -223,7 +235,7 @@ func (s *PostgresStorage) UpsertNomadicIdentity(ctx context.Context, identity *m
 }
 
 func (s *PostgresStorage) RegisterIdentityClone(ctx context.Context, guid, hubURL string, isLocal bool) error {
-	return s.queries().RegisterIdentityClone(ctx, db.RegisterIdentityCloneParams{IdentityGuid: guid, HubUrl: hubURL, IsLocal: pgtype.Bool{Bool: isLocal, Valid: true}})
+	return s.queries().RegisterIdentityClone(ctx, db.RegisterIdentityCloneParams{IdentityGuid: guid, HubUrl: hubURL, IsLocal: &isLocal})
 }
 
 func (s *PostgresStorage) GetActorDualKeys(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
@@ -232,9 +244,13 @@ func (s *PostgresStorage) GetActorDualKeys(ctx context.Context, actorIRI string)
 		return nil, fmt.Errorf("failed fetching dual-key credential rows: %w", err)
 	}
 
+	var privKeyEd25519 string
+	if row.PrivateKeyEd25519Pem != nil {
+		privKeyEd25519 = *row.PrivateKeyEd25519Pem
+	}
 	return &model.ActorDualKeys{
 		PrivateKeyRSAPEM:     row.PrivateKeyRsaPem,
-		PrivateKeyEd25519PEM: row.PrivateKeyEd25519Pem.String, // Converts pgtype.Text safely
+		PrivateKeyEd25519PEM: privKeyEd25519,
 	}, nil
 }
 
@@ -412,17 +428,25 @@ func (s *PostgresStorage) toQuadIDs(ctx context.Context, queries *db.Queries, de
 		if err != nil {
 			return nil, err
 		}
-		objID, err := s.dictionaryID(ctx, queries, quad.Object)
-		if err != nil {
-			return nil, err
+
+		var objID int64
+		var literalValue string
+		if quad.IsLiteral() {
+			literalValue = quad.Object
+		} else {
+			objID, err = s.dictionaryID(ctx, queries, quad.Object)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		quadIDs[i] = model.QuadID{
-			GraphID:     graphID,
-			SubjectID:   subID,
-			PredicateID: predID,
-			ObjectID:    objID,
-			IsLiteral:   quad.IsLiteral(),
+			GraphID:      graphID,
+			SubjectID:    subID,
+			PredicateID:  predID,
+			ObjectID:     objID,
+			IsLiteral:    quad.IsLiteral(),
+			LiteralValue: literalValue,
 		}
 	}
 	return quadIDs, nil
@@ -431,12 +455,26 @@ func (s *PostgresStorage) toQuadIDs(ctx context.Context, queries *db.Queries, de
 // saveQuadIDs natively processes and writes clean slices of model.QuadID to the database.
 func (s *PostgresStorage) saveQuadIDs(ctx context.Context, queries *db.Queries, quadIDs []model.QuadID) error {
 	for _, qID := range quadIDs {
+		var objectID *int64
+		if qID.ObjectID != 0 {
+			val := qID.ObjectID
+			objectID = &val
+		}
+		var isLiteral *bool
+		valLit := qID.IsLiteral
+		isLiteral = &valLit
+		var literalValue *string
+		if qID.IsLiteral {
+			valText := qID.LiteralValue
+			literalValue = &valText
+		}
 		params := db.InsertQuadParams{
-			GraphID:     qID.GraphID,
-			SubjectID:   qID.SubjectID,
-			PredicateID: qID.PredicateID,
-			ObjectID:    qID.ObjectID,
-			IsLiteral:   pgtype.Bool{Bool: qID.IsLiteral, Valid: true},
+			GraphID:      qID.GraphID,
+			SubjectID:    qID.SubjectID,
+			PredicateID:  qID.PredicateID,
+			ObjectID:     objectID,
+			IsLiteral:    isLiteral,
+			LiteralValue: literalValue,
 		}
 		if err := queries.InsertQuad(ctx, params); err != nil {
 			return err
@@ -458,29 +496,65 @@ func (s *PostgresStorage) SaveQuadIDs(ctx context.Context, quadIDs []model.QuadI
 }
 
 func (s *PostgresStorage) RemoveQuadEdge(ctx context.Context, subject, predicate, object string) error {
-	ids := make([]int64, 0, 3)
-	for _, value := range []string{subject, predicate, object} {
-		id, found := s.cache.GetID(value)
-		if !found {
-			var err error
-			id, err = s.queries().GetDictionaryID(ctx, value)
-			// If any single coordinate token is completely absent from the database,
-			// the edge cannot exist. Return nil gracefully instead of triggering a slice boundary panic.
-			if errors.Is(err, pgx.ErrNoRows) {
-				return nil
-			}
-			if err != nil {
-				return err
-			}
-			s.cache.Set(value, id)
+	subID, foundSub := s.cache.GetID(subject)
+	if !foundSub {
+		var err error
+		subID, err = s.queries().GetDictionaryID(ctx, subject)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
 		}
-		ids = append(ids, id)
+		if err != nil {
+			return err
+		}
+		s.cache.Set(subject, subID)
 	}
 
-	if len(ids) < 3 {
-		return nil
+	predID, foundPred := s.cache.GetID(predicate)
+	if !foundPred {
+		var err error
+		predID, err = s.queries().GetDictionaryID(ctx, predicate)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		s.cache.Set(predicate, predID)
 	}
-	return s.queries().RemoveQuadEdge(ctx, db.RemoveQuadEdgeParams{SubjectID: ids[0], PredicateID: ids[1], ObjectID: ids[2]})
+
+	var objID int64
+	var literalVal string
+
+	// Check if object is in dictionary/cache (IRI), else treat as literal
+	if id, found := s.cache.GetID(object); found {
+		objID = id
+	} else {
+		id, err := s.queries().GetDictionaryID(ctx, object)
+		if err == nil {
+			objID = id
+			s.cache.Set(object, id)
+		} else if errors.Is(err, pgx.ErrNoRows) {
+			literalVal = object
+		} else {
+			return err
+		}
+	}
+
+	var objectID *int64
+	if objID != 0 {
+		objectID = &objID
+	}
+	var literalValue *string
+	if literalVal != "" {
+		literalValue = &literalVal
+	}
+
+	return s.queries().RemoveQuadEdge(ctx, db.RemoveQuadEdgeParams{
+		SubjectID:    subID,
+		PredicateID:  predID,
+		ObjectID:     objectID,
+		LiteralValue: literalValue,
+	})
 }
 
 func (s *PostgresStorage) GetLatestPayload(ctx context.Context, objectIRI string) ([]byte, error) {
@@ -511,7 +585,7 @@ func (s *PostgresStorage) StreamQuadsBySubject(ctx context.Context, subjectIRI s
 	quads := make([]model.Quad, 0, len(rows))
 	for _, row := range rows {
 		objType := model.NamedNode
-		if row.IsLiteral.Valid && row.IsLiteral.Bool {
+		if row.IsLiteral != nil && *row.IsLiteral {
 			objType = model.Literal
 		}
 		quads = append(quads, model.Quad{GraphID: row.GraphID, Subject: subjectIRI, Predicate: row.Predicate, Object: row.Object, ObjType: objType})

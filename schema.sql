@@ -3,7 +3,8 @@ CREATE TYPE activity_status AS ENUM ('pending', 'processing', 'completed', 'fail
 -- Domain Multi-Tenancy Management
 CREATE TABLE server_tenants (
     id SERIAL PRIMARY KEY,
-    domain_name TEXT UNIQUE NOT NULL
+    domain_name TEXT UNIQUE NOT NULL,
+    storage_ceiling_bytes BIGINT NOT NULL DEFAULT 1073741824 -- Default to 1GB per tenant
 );
 
 -- Federation Blocklist (Defederation Early-Exit)
@@ -37,9 +38,24 @@ CREATE TABLE local_actor_credentials (
     identity_guid TEXT REFERENCES nomadic_identities(guid) ON DELETE SET NULL,
     tenant_id INT NOT NULL REFERENCES server_tenants(id) ON DELETE CASCADE,
     username TEXT NOT NULL,
-    private_key_pem TEXT NOT NULL,
+    private_key_rsa_pem TEXT NOT NULL,
+    private_key_ed25519_pem TEXT,
     UNIQUE (tenant_id, username)
 );
+
+-- Create an immutable historical tracking ledger for rotated public keys
+CREATE TABLE actor_public_key_history (
+    id BIGSERIAL PRIMARY KEY,
+    actor_iri TEXT NOT NULL,
+    key_type VARCHAR(50) NOT NULL,            -- Explicitly tracks 'RSA' or 'Ed25519' types
+    public_key_pem TEXT NOT NULL,             -- The pure public key value envelope
+    valid_from TIMESTAMP WITH TIME ZONE NOT NULL,
+    valid_to TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    CONSTRAINT chk_key_history_dates CHECK (valid_from < valid_to)
+);
+-- Compound index for fast time-slice lookups inside the inbound SignatureValidator middleware
+CREATE INDEX idx_actor_keys_historical_window ON actor_public_key_history(actor_iri, valid_from, valid_to);
 
 -- Inbound Lockless Buffering Cache (Deduplicated)
 CREATE TABLE inbound_activity_queue (
@@ -110,12 +126,18 @@ CREATE TABLE rdf_quads (
     graph_id BIGINT NOT NULL REFERENCES rdf_graphs(id) ON DELETE CASCADE,
     subject_id BIGINT NOT NULL REFERENCES rdf_dictionary(id),
     predicate_id BIGINT NOT NULL REFERENCES rdf_dictionary(id),
-    object_id BIGINT NOT NULL REFERENCES rdf_dictionary(id),
+    object_id BIGINT REFERENCES rdf_dictionary(id),
     is_literal BOOLEAN DEFAULT FALSE,
-    PRIMARY KEY (graph_id, subject_id, predicate_id, object_id)
+    literal_value TEXT,
+    CONSTRAINT chk_quad_object CHECK (
+        (is_literal = TRUE AND literal_value IS NOT NULL AND object_id IS NULL) OR
+        (is_literal = FALSE AND literal_value IS NULL AND object_id IS NOT NULL)
+    )
 );
 CREATE INDEX idx_quads_sp ON rdf_quads (graph_id, subject_id, predicate_id);
 CREATE INDEX idx_quads_op ON rdf_quads (graph_id, object_id, predicate_id);
+CREATE UNIQUE INDEX idx_quads_non_literal_uniq ON rdf_quads (graph_id, subject_id, predicate_id, object_id) WHERE object_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_quads_literal_uniq ON rdf_quads (graph_id, subject_id, predicate_id, md5(literal_value)) WHERE object_id IS NULL;
 
 -- Global unique registry for physical media assets stored in the central MinIO bucket.
 CREATE TABLE media_attachments (
@@ -144,6 +166,9 @@ CREATE TABLE actor_media_ownership (
     actor_iri TEXT NOT NULL,
     tenant_id INT NOT NULL REFERENCES server_tenants(id) ON DELETE CASCADE,
     media_attachment_id UUID NOT NULL REFERENCES media_attachments(id) ON DELETE CASCADE,
+    object_name TEXT NOT NULL UNIQUE,
+    file_size BIGINT NOT NULL DEFAULT 0,
     PRIMARY KEY (actor_iri, media_attachment_id)
 );
 CREATE INDEX idx_actor_media_tenant_quota ON actor_media_ownership(tenant_id, actor_iri);
+CREATE INDEX idx_media_ownership_tenant_actor ON actor_media_ownership(tenant_id, actor_iri);
