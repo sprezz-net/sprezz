@@ -132,6 +132,20 @@ type StoragePortMock struct {
 	beforeGetOrCreateTenantByDomainCounter uint64
 	GetOrCreateTenantByDomainMock          mStoragePortMockGetOrCreateTenantByDomain
 
+	funcGetStatementsBySubjectIsolated          func(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error)
+	funcGetStatementsBySubjectIsolatedOrigin    string
+	inspectFuncGetStatementsBySubjectIsolated   func(ctx context.Context, subjectIRI string, tenantID int32)
+	afterGetStatementsBySubjectIsolatedCounter  uint64
+	beforeGetStatementsBySubjectIsolatedCounter uint64
+	GetStatementsBySubjectIsolatedMock          mStoragePortMockGetStatementsBySubjectIsolated
+
+	funcGetTenantIDByActivityIRI          func(ctx context.Context, activityIRI string) (i1 int32, err error)
+	funcGetTenantIDByActivityIRIOrigin    string
+	inspectFuncGetTenantIDByActivityIRI   func(ctx context.Context, activityIRI string)
+	afterGetTenantIDByActivityIRICounter  uint64
+	beforeGetTenantIDByActivityIRICounter uint64
+	GetTenantIDByActivityIRIMock          mStoragePortMockGetTenantIDByActivityIRI
+
 	funcHasActorCredential          func(ctx context.Context, tenantID int32, username string) (b1 bool, err error)
 	funcHasActorCredentialOrigin    string
 	inspectFuncHasActorCredential   func(ctx context.Context, tenantID int32, username string)
@@ -279,6 +293,12 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.GetOrCreateTenantByDomainMock = mStoragePortMockGetOrCreateTenantByDomain{mock: m}
 	m.GetOrCreateTenantByDomainMock.callArgs = []*StoragePortMockGetOrCreateTenantByDomainParams{}
+
+	m.GetStatementsBySubjectIsolatedMock = mStoragePortMockGetStatementsBySubjectIsolated{mock: m}
+	m.GetStatementsBySubjectIsolatedMock.callArgs = []*StoragePortMockGetStatementsBySubjectIsolatedParams{}
+
+	m.GetTenantIDByActivityIRIMock = mStoragePortMockGetTenantIDByActivityIRI{mock: m}
+	m.GetTenantIDByActivityIRIMock.callArgs = []*StoragePortMockGetTenantIDByActivityIRIParams{}
 
 	m.HasActorCredentialMock = mStoragePortMockHasActorCredential{mock: m}
 	m.HasActorCredentialMock.callArgs = []*StoragePortMockHasActorCredentialParams{}
@@ -6523,6 +6543,723 @@ func (m *StoragePortMock) MinimockGetOrCreateTenantByDomainInspect() {
 	}
 }
 
+type mStoragePortMockGetStatementsBySubjectIsolated struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetStatementsBySubjectIsolatedExpectation
+	expectations       []*StoragePortMockGetStatementsBySubjectIsolatedExpectation
+
+	callArgs []*StoragePortMockGetStatementsBySubjectIsolatedParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetStatementsBySubjectIsolatedExpectation specifies expectation struct of the StoragePort.GetStatementsBySubjectIsolated
+type StoragePortMockGetStatementsBySubjectIsolatedExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetStatementsBySubjectIsolatedParams
+	paramPtrs          *StoragePortMockGetStatementsBySubjectIsolatedParamPtrs
+	expectationOrigins StoragePortMockGetStatementsBySubjectIsolatedExpectationOrigins
+	results            *StoragePortMockGetStatementsBySubjectIsolatedResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetStatementsBySubjectIsolatedParams contains parameters of the StoragePort.GetStatementsBySubjectIsolated
+type StoragePortMockGetStatementsBySubjectIsolatedParams struct {
+	ctx        context.Context
+	subjectIRI string
+	tenantID   int32
+}
+
+// StoragePortMockGetStatementsBySubjectIsolatedParamPtrs contains pointers to parameters of the StoragePort.GetStatementsBySubjectIsolated
+type StoragePortMockGetStatementsBySubjectIsolatedParamPtrs struct {
+	ctx        *context.Context
+	subjectIRI *string
+	tenantID   *int32
+}
+
+// StoragePortMockGetStatementsBySubjectIsolatedResults contains results of the StoragePort.GetStatementsBySubjectIsolated
+type StoragePortMockGetStatementsBySubjectIsolatedResults struct {
+	qa1 []model.Quad
+	err error
+}
+
+// StoragePortMockGetStatementsBySubjectIsolatedOrigins contains origins of expectations of the StoragePort.GetStatementsBySubjectIsolated
+type StoragePortMockGetStatementsBySubjectIsolatedExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originSubjectIRI string
+	originTenantID   string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Optional() *mStoragePortMockGetStatementsBySubjectIsolated {
+	mmGetStatementsBySubjectIsolated.optional = true
+	return mmGetStatementsBySubjectIsolated
+}
+
+// Expect sets up expected params for StoragePort.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Expect(ctx context.Context, subjectIRI string, tenantID int32) *mStoragePortMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StoragePortMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by ExpectParams functions")
+	}
+
+	mmGetStatementsBySubjectIsolated.defaultExpectation.params = &StoragePortMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetStatementsBySubjectIsolated.expectations {
+		if minimock.Equal(e.params, mmGetStatementsBySubjectIsolated.defaultExpectation.params) {
+			mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetStatementsBySubjectIsolated.defaultExpectation.params)
+		}
+	}
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StoragePortMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.params != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Expect")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs = &StoragePortMockGetStatementsBySubjectIsolatedParamPtrs{}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// ExpectSubjectIRIParam2 sets up expected param subjectIRI for StoragePort.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) ExpectSubjectIRIParam2(subjectIRI string) *mStoragePortMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StoragePortMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.params != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Expect")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs = &StoragePortMockGetStatementsBySubjectIsolatedParamPtrs{}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs.subjectIRI = &subjectIRI
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.originSubjectIRI = minimock.CallerInfo(1)
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// ExpectTenantIDParam3 sets up expected param tenantID for StoragePort.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) ExpectTenantIDParam3(tenantID int32) *mStoragePortMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StoragePortMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.params != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Expect")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs = &StoragePortMockGetStatementsBySubjectIsolatedParamPtrs{}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Inspect(f func(ctx context.Context, subjectIRI string, tenantID int32)) *mStoragePortMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.inspectFuncGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetStatementsBySubjectIsolated")
+	}
+
+	mmGetStatementsBySubjectIsolated.mock.inspectFuncGetStatementsBySubjectIsolated = f
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// Return sets up results that will be returned by StoragePort.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Return(qa1 []model.Quad, err error) *StoragePortMock {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StoragePortMockGetStatementsBySubjectIsolatedExpectation{mock: mmGetStatementsBySubjectIsolated.mock}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.results = &StoragePortMockGetStatementsBySubjectIsolatedResults{qa1, err}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetStatementsBySubjectIsolated.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetStatementsBySubjectIsolated method
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Set(f func(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error)) *StoragePortMock {
+	if mmGetStatementsBySubjectIsolated.defaultExpectation != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetStatementsBySubjectIsolated method")
+	}
+
+	if len(mmGetStatementsBySubjectIsolated.expectations) > 0 {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetStatementsBySubjectIsolated method")
+	}
+
+	mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated = f
+	mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolatedOrigin = minimock.CallerInfo(1)
+	return mmGetStatementsBySubjectIsolated.mock
+}
+
+// When sets expectation for the StoragePort.GetStatementsBySubjectIsolated which will trigger the result defined by the following
+// Then helper
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) When(ctx context.Context, subjectIRI string, tenantID int32) *StoragePortMockGetStatementsBySubjectIsolatedExpectation {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StoragePortMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetStatementsBySubjectIsolatedExpectation{
+		mock:               mmGetStatementsBySubjectIsolated.mock,
+		params:             &StoragePortMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID},
+		expectationOrigins: StoragePortMockGetStatementsBySubjectIsolatedExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetStatementsBySubjectIsolated.expectations = append(mmGetStatementsBySubjectIsolated.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetStatementsBySubjectIsolated return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetStatementsBySubjectIsolatedExpectation) Then(qa1 []model.Quad, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetStatementsBySubjectIsolatedResults{qa1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetStatementsBySubjectIsolated should be invoked
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Times(n uint64) *mStoragePortMockGetStatementsBySubjectIsolated {
+	if n == 0 {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Times of StoragePortMock.GetStatementsBySubjectIsolated mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetStatementsBySubjectIsolated.expectedInvocations, n)
+	mmGetStatementsBySubjectIsolated.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetStatementsBySubjectIsolated
+}
+
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) invocationsDone() bool {
+	if len(mmGetStatementsBySubjectIsolated.expectations) == 0 && mmGetStatementsBySubjectIsolated.defaultExpectation == nil && mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.mock.afterGetStatementsBySubjectIsolatedCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetStatementsBySubjectIsolated implements mm_port.StoragePort
+func (mmGetStatementsBySubjectIsolated *StoragePortMock) GetStatementsBySubjectIsolated(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error) {
+	mm_atomic.AddUint64(&mmGetStatementsBySubjectIsolated.beforeGetStatementsBySubjectIsolatedCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetStatementsBySubjectIsolated.afterGetStatementsBySubjectIsolatedCounter, 1)
+
+	mmGetStatementsBySubjectIsolated.t.Helper()
+
+	if mmGetStatementsBySubjectIsolated.inspectFuncGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.inspectFuncGetStatementsBySubjectIsolated(ctx, subjectIRI, tenantID)
+	}
+
+	mm_params := StoragePortMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID}
+
+	// Record call args
+	mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.mutex.Lock()
+	mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.callArgs = append(mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.callArgs, &mm_params)
+	mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.mutex.Unlock()
+
+	for _, e := range mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.qa1, e.results.err
+		}
+	}
+
+	if mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.params
+		mm_want_ptrs := mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetStatementsBySubjectIsolated.t.Errorf("StoragePortMock.GetStatementsBySubjectIsolated got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.subjectIRI != nil && !minimock.Equal(*mm_want_ptrs.subjectIRI, mm_got.subjectIRI) {
+				mmGetStatementsBySubjectIsolated.t.Errorf("StoragePortMock.GetStatementsBySubjectIsolated got unexpected parameter subjectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.originSubjectIRI, *mm_want_ptrs.subjectIRI, mm_got.subjectIRI, minimock.Diff(*mm_want_ptrs.subjectIRI, mm_got.subjectIRI))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetStatementsBySubjectIsolated.t.Errorf("StoragePortMock.GetStatementsBySubjectIsolated got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetStatementsBySubjectIsolated.t.Errorf("StoragePortMock.GetStatementsBySubjectIsolated got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetStatementsBySubjectIsolated.t.Fatal("No results are set for the StoragePortMock.GetStatementsBySubjectIsolated")
+		}
+		return (*mm_results).qa1, (*mm_results).err
+	}
+	if mmGetStatementsBySubjectIsolated.funcGetStatementsBySubjectIsolated != nil {
+		return mmGetStatementsBySubjectIsolated.funcGetStatementsBySubjectIsolated(ctx, subjectIRI, tenantID)
+	}
+	mmGetStatementsBySubjectIsolated.t.Fatalf("Unexpected call to StoragePortMock.GetStatementsBySubjectIsolated. %v %v %v", ctx, subjectIRI, tenantID)
+	return
+}
+
+// GetStatementsBySubjectIsolatedAfterCounter returns a count of finished StoragePortMock.GetStatementsBySubjectIsolated invocations
+func (mmGetStatementsBySubjectIsolated *StoragePortMock) GetStatementsBySubjectIsolatedAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.afterGetStatementsBySubjectIsolatedCounter)
+}
+
+// GetStatementsBySubjectIsolatedBeforeCounter returns a count of StoragePortMock.GetStatementsBySubjectIsolated invocations
+func (mmGetStatementsBySubjectIsolated *StoragePortMock) GetStatementsBySubjectIsolatedBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.beforeGetStatementsBySubjectIsolatedCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetStatementsBySubjectIsolated.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetStatementsBySubjectIsolated *mStoragePortMockGetStatementsBySubjectIsolated) Calls() []*StoragePortMockGetStatementsBySubjectIsolatedParams {
+	mmGetStatementsBySubjectIsolated.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetStatementsBySubjectIsolatedParams, len(mmGetStatementsBySubjectIsolated.callArgs))
+	copy(argCopy, mmGetStatementsBySubjectIsolated.callArgs)
+
+	mmGetStatementsBySubjectIsolated.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetStatementsBySubjectIsolatedDone returns true if the count of the GetStatementsBySubjectIsolated invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetStatementsBySubjectIsolatedDone() bool {
+	if m.GetStatementsBySubjectIsolatedMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetStatementsBySubjectIsolatedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetStatementsBySubjectIsolatedMock.invocationsDone()
+}
+
+// MinimockGetStatementsBySubjectIsolatedInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetStatementsBySubjectIsolatedInspect() {
+	for _, e := range m.GetStatementsBySubjectIsolatedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetStatementsBySubjectIsolated at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetStatementsBySubjectIsolatedCounter := mm_atomic.LoadUint64(&m.afterGetStatementsBySubjectIsolatedCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetStatementsBySubjectIsolatedMock.defaultExpectation != nil && afterGetStatementsBySubjectIsolatedCounter < 1 {
+		if m.GetStatementsBySubjectIsolatedMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetStatementsBySubjectIsolated at\n%s", m.GetStatementsBySubjectIsolatedMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetStatementsBySubjectIsolated at\n%s with params: %#v", m.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.origin, *m.GetStatementsBySubjectIsolatedMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetStatementsBySubjectIsolated != nil && afterGetStatementsBySubjectIsolatedCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetStatementsBySubjectIsolated at\n%s", m.funcGetStatementsBySubjectIsolatedOrigin)
+	}
+
+	if !m.GetStatementsBySubjectIsolatedMock.invocationsDone() && afterGetStatementsBySubjectIsolatedCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetStatementsBySubjectIsolated at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetStatementsBySubjectIsolatedMock.expectedInvocations), m.GetStatementsBySubjectIsolatedMock.expectedInvocationsOrigin, afterGetStatementsBySubjectIsolatedCounter)
+	}
+}
+
+type mStoragePortMockGetTenantIDByActivityIRI struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetTenantIDByActivityIRIExpectation
+	expectations       []*StoragePortMockGetTenantIDByActivityIRIExpectation
+
+	callArgs []*StoragePortMockGetTenantIDByActivityIRIParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetTenantIDByActivityIRIExpectation specifies expectation struct of the StoragePort.GetTenantIDByActivityIRI
+type StoragePortMockGetTenantIDByActivityIRIExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetTenantIDByActivityIRIParams
+	paramPtrs          *StoragePortMockGetTenantIDByActivityIRIParamPtrs
+	expectationOrigins StoragePortMockGetTenantIDByActivityIRIExpectationOrigins
+	results            *StoragePortMockGetTenantIDByActivityIRIResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetTenantIDByActivityIRIParams contains parameters of the StoragePort.GetTenantIDByActivityIRI
+type StoragePortMockGetTenantIDByActivityIRIParams struct {
+	ctx         context.Context
+	activityIRI string
+}
+
+// StoragePortMockGetTenantIDByActivityIRIParamPtrs contains pointers to parameters of the StoragePort.GetTenantIDByActivityIRI
+type StoragePortMockGetTenantIDByActivityIRIParamPtrs struct {
+	ctx         *context.Context
+	activityIRI *string
+}
+
+// StoragePortMockGetTenantIDByActivityIRIResults contains results of the StoragePort.GetTenantIDByActivityIRI
+type StoragePortMockGetTenantIDByActivityIRIResults struct {
+	i1  int32
+	err error
+}
+
+// StoragePortMockGetTenantIDByActivityIRIOrigins contains origins of expectations of the StoragePort.GetTenantIDByActivityIRI
+type StoragePortMockGetTenantIDByActivityIRIExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originActivityIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Optional() *mStoragePortMockGetTenantIDByActivityIRI {
+	mmGetTenantIDByActivityIRI.optional = true
+	return mmGetTenantIDByActivityIRI
+}
+
+// Expect sets up expected params for StoragePort.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Expect(ctx context.Context, activityIRI string) *mStoragePortMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StoragePortMockGetTenantIDByActivityIRIExpectation{}
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by ExpectParams functions")
+	}
+
+	mmGetTenantIDByActivityIRI.defaultExpectation.params = &StoragePortMockGetTenantIDByActivityIRIParams{ctx, activityIRI}
+	mmGetTenantIDByActivityIRI.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetTenantIDByActivityIRI.expectations {
+		if minimock.Equal(e.params, mmGetTenantIDByActivityIRI.defaultExpectation.params) {
+			mmGetTenantIDByActivityIRI.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetTenantIDByActivityIRI.defaultExpectation.params)
+		}
+	}
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StoragePortMockGetTenantIDByActivityIRIExpectation{}
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.params != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs = &StoragePortMockGetTenantIDByActivityIRIParamPtrs{}
+	}
+	mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetTenantIDByActivityIRI.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// ExpectActivityIRIParam2 sets up expected param activityIRI for StoragePort.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) ExpectActivityIRIParam2(activityIRI string) *mStoragePortMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StoragePortMockGetTenantIDByActivityIRIExpectation{}
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.params != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs = &StoragePortMockGetTenantIDByActivityIRIParamPtrs{}
+	}
+	mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs.activityIRI = &activityIRI
+	mmGetTenantIDByActivityIRI.defaultExpectation.expectationOrigins.originActivityIRI = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Inspect(f func(ctx context.Context, activityIRI string)) *mStoragePortMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.inspectFuncGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetTenantIDByActivityIRI")
+	}
+
+	mmGetTenantIDByActivityIRI.mock.inspectFuncGetTenantIDByActivityIRI = f
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// Return sets up results that will be returned by StoragePort.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Return(i1 int32, err error) *StoragePortMock {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StoragePortMockGetTenantIDByActivityIRIExpectation{mock: mmGetTenantIDByActivityIRI.mock}
+	}
+	mmGetTenantIDByActivityIRI.defaultExpectation.results = &StoragePortMockGetTenantIDByActivityIRIResults{i1, err}
+	mmGetTenantIDByActivityIRI.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByActivityIRI.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetTenantIDByActivityIRI method
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Set(f func(ctx context.Context, activityIRI string) (i1 int32, err error)) *StoragePortMock {
+	if mmGetTenantIDByActivityIRI.defaultExpectation != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetTenantIDByActivityIRI method")
+	}
+
+	if len(mmGetTenantIDByActivityIRI.expectations) > 0 {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetTenantIDByActivityIRI method")
+	}
+
+	mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI = f
+	mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRIOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByActivityIRI.mock
+}
+
+// When sets expectation for the StoragePort.GetTenantIDByActivityIRI which will trigger the result defined by the following
+// Then helper
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) When(ctx context.Context, activityIRI string) *StoragePortMockGetTenantIDByActivityIRIExpectation {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StoragePortMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetTenantIDByActivityIRIExpectation{
+		mock:               mmGetTenantIDByActivityIRI.mock,
+		params:             &StoragePortMockGetTenantIDByActivityIRIParams{ctx, activityIRI},
+		expectationOrigins: StoragePortMockGetTenantIDByActivityIRIExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetTenantIDByActivityIRI.expectations = append(mmGetTenantIDByActivityIRI.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetTenantIDByActivityIRI return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetTenantIDByActivityIRIExpectation) Then(i1 int32, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetTenantIDByActivityIRIResults{i1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetTenantIDByActivityIRI should be invoked
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Times(n uint64) *mStoragePortMockGetTenantIDByActivityIRI {
+	if n == 0 {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Times of StoragePortMock.GetTenantIDByActivityIRI mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetTenantIDByActivityIRI.expectedInvocations, n)
+	mmGetTenantIDByActivityIRI.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByActivityIRI
+}
+
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) invocationsDone() bool {
+	if len(mmGetTenantIDByActivityIRI.expectations) == 0 && mmGetTenantIDByActivityIRI.defaultExpectation == nil && mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.mock.afterGetTenantIDByActivityIRICounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetTenantIDByActivityIRI implements mm_port.StoragePort
+func (mmGetTenantIDByActivityIRI *StoragePortMock) GetTenantIDByActivityIRI(ctx context.Context, activityIRI string) (i1 int32, err error) {
+	mm_atomic.AddUint64(&mmGetTenantIDByActivityIRI.beforeGetTenantIDByActivityIRICounter, 1)
+	defer mm_atomic.AddUint64(&mmGetTenantIDByActivityIRI.afterGetTenantIDByActivityIRICounter, 1)
+
+	mmGetTenantIDByActivityIRI.t.Helper()
+
+	if mmGetTenantIDByActivityIRI.inspectFuncGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.inspectFuncGetTenantIDByActivityIRI(ctx, activityIRI)
+	}
+
+	mm_params := StoragePortMockGetTenantIDByActivityIRIParams{ctx, activityIRI}
+
+	// Record call args
+	mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.mutex.Lock()
+	mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.callArgs = append(mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.callArgs, &mm_params)
+	mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.mutex.Unlock()
+
+	for _, e := range mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.i1, e.results.err
+		}
+	}
+
+	if mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.params
+		mm_want_ptrs := mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetTenantIDByActivityIRIParams{ctx, activityIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetTenantIDByActivityIRI.t.Errorf("StoragePortMock.GetTenantIDByActivityIRI got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.activityIRI != nil && !minimock.Equal(*mm_want_ptrs.activityIRI, mm_got.activityIRI) {
+				mmGetTenantIDByActivityIRI.t.Errorf("StoragePortMock.GetTenantIDByActivityIRI got unexpected parameter activityIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.originActivityIRI, *mm_want_ptrs.activityIRI, mm_got.activityIRI, minimock.Diff(*mm_want_ptrs.activityIRI, mm_got.activityIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetTenantIDByActivityIRI.t.Errorf("StoragePortMock.GetTenantIDByActivityIRI got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetTenantIDByActivityIRI.t.Fatal("No results are set for the StoragePortMock.GetTenantIDByActivityIRI")
+		}
+		return (*mm_results).i1, (*mm_results).err
+	}
+	if mmGetTenantIDByActivityIRI.funcGetTenantIDByActivityIRI != nil {
+		return mmGetTenantIDByActivityIRI.funcGetTenantIDByActivityIRI(ctx, activityIRI)
+	}
+	mmGetTenantIDByActivityIRI.t.Fatalf("Unexpected call to StoragePortMock.GetTenantIDByActivityIRI. %v %v", ctx, activityIRI)
+	return
+}
+
+// GetTenantIDByActivityIRIAfterCounter returns a count of finished StoragePortMock.GetTenantIDByActivityIRI invocations
+func (mmGetTenantIDByActivityIRI *StoragePortMock) GetTenantIDByActivityIRIAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.afterGetTenantIDByActivityIRICounter)
+}
+
+// GetTenantIDByActivityIRIBeforeCounter returns a count of StoragePortMock.GetTenantIDByActivityIRI invocations
+func (mmGetTenantIDByActivityIRI *StoragePortMock) GetTenantIDByActivityIRIBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.beforeGetTenantIDByActivityIRICounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetTenantIDByActivityIRI.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetTenantIDByActivityIRI *mStoragePortMockGetTenantIDByActivityIRI) Calls() []*StoragePortMockGetTenantIDByActivityIRIParams {
+	mmGetTenantIDByActivityIRI.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetTenantIDByActivityIRIParams, len(mmGetTenantIDByActivityIRI.callArgs))
+	copy(argCopy, mmGetTenantIDByActivityIRI.callArgs)
+
+	mmGetTenantIDByActivityIRI.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetTenantIDByActivityIRIDone returns true if the count of the GetTenantIDByActivityIRI invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetTenantIDByActivityIRIDone() bool {
+	if m.GetTenantIDByActivityIRIMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetTenantIDByActivityIRIMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetTenantIDByActivityIRIMock.invocationsDone()
+}
+
+// MinimockGetTenantIDByActivityIRIInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetTenantIDByActivityIRIInspect() {
+	for _, e := range m.GetTenantIDByActivityIRIMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByActivityIRI at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetTenantIDByActivityIRICounter := mm_atomic.LoadUint64(&m.afterGetTenantIDByActivityIRICounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetTenantIDByActivityIRIMock.defaultExpectation != nil && afterGetTenantIDByActivityIRICounter < 1 {
+		if m.GetTenantIDByActivityIRIMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByActivityIRI at\n%s", m.GetTenantIDByActivityIRIMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByActivityIRI at\n%s with params: %#v", m.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.origin, *m.GetTenantIDByActivityIRIMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetTenantIDByActivityIRI != nil && afterGetTenantIDByActivityIRICounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByActivityIRI at\n%s", m.funcGetTenantIDByActivityIRIOrigin)
+	}
+
+	if !m.GetTenantIDByActivityIRIMock.invocationsDone() && afterGetTenantIDByActivityIRICounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetTenantIDByActivityIRI at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetTenantIDByActivityIRIMock.expectedInvocations), m.GetTenantIDByActivityIRIMock.expectedInvocationsOrigin, afterGetTenantIDByActivityIRICounter)
+	}
+}
+
 type mStoragePortMockHasActorCredential struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -11257,6 +11994,10 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockGetOrCreateTenantByDomainInspect()
 
+			m.MinimockGetStatementsBySubjectIsolatedInspect()
+
+			m.MinimockGetTenantIDByActivityIRIInspect()
+
 			m.MinimockHasActorCredentialInspect()
 
 			m.MinimockIsDomainBlockedInspect()
@@ -11321,6 +12062,8 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockGetLatestPayloadDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
 		m.MinimockGetOrCreateTenantByDomainDone() &&
+		m.MinimockGetStatementsBySubjectIsolatedDone() &&
+		m.MinimockGetTenantIDByActivityIRIDone() &&
 		m.MinimockHasActorCredentialDone() &&
 		m.MinimockIsDomainBlockedDone() &&
 		m.MinimockMarkInboundCompleteDone() &&

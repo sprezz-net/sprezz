@@ -45,6 +45,8 @@ type StoragePort interface {
 	// Core RDF Graph Read Operations
 	GetLatestPayload(ctx context.Context, objectIRI string) ([]byte, error)
 	StreamQuadsBySubject(ctx context.Context, subjectIRI string) ([]model.Quad, error)
+	GetStatementsBySubjectIsolated(ctx context.Context, subjectIRI string, tenantID int32) ([]model.Quad, error)
+	GetTenantIDByActivityIRI(ctx context.Context, activityIRI string) (int32, error)
 	GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error)
 
 	GetActorIRIByUsername(ctx context.Context, tenantID int32, username string) (string, error)

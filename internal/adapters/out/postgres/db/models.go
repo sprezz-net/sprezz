@@ -176,6 +176,13 @@ type RdfQuad struct {
 	LiteralValue *string `json:"literal_value"`
 }
 
+type RdfStatement struct {
+	Subject   string `json:"subject"`
+	Predicate string `json:"predicate"`
+	Object    string `json:"object"`
+	TenantID  int32  `json:"tenant_id"`
+}
+
 type ServerTenant struct {
 	ID                  int32  `json:"id"`
 	DomainName          string `json:"domain_name"`

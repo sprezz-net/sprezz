@@ -5,7 +5,9 @@
 *.key
 
 # Go binaries & build artifacts
+/server
 /sprezz-server
+__*
 *.exe
 *.exe~
 *.dll
@@ -21,3 +23,6 @@ coverage.out
 .DS_Store
 .idea/
 .vscode/
+
+*.zip
+.clinerules

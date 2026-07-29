@@ -35,3 +35,9 @@ WHERE id = $1;
 UPDATE inbound_activity_queue
 SET status = 'failed', error_message = $2, updated_at = NOW()
 WHERE id = $1;
+
+-- name: GetTenantIDByActivityIRI :one
+SELECT tenant_id
+FROM activity_tenant_deliveries
+WHERE activity_iri = $1
+LIMIT 1;

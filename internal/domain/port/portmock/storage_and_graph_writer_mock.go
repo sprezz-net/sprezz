@@ -133,6 +133,20 @@ type StorageAndGraphWriterMock struct {
 	beforeGetOrCreateTenantByDomainCounter uint64
 	GetOrCreateTenantByDomainMock          mStorageAndGraphWriterMockGetOrCreateTenantByDomain
 
+	funcGetStatementsBySubjectIsolated          func(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error)
+	funcGetStatementsBySubjectIsolatedOrigin    string
+	inspectFuncGetStatementsBySubjectIsolated   func(ctx context.Context, subjectIRI string, tenantID int32)
+	afterGetStatementsBySubjectIsolatedCounter  uint64
+	beforeGetStatementsBySubjectIsolatedCounter uint64
+	GetStatementsBySubjectIsolatedMock          mStorageAndGraphWriterMockGetStatementsBySubjectIsolated
+
+	funcGetTenantIDByActivityIRI          func(ctx context.Context, activityIRI string) (i1 int32, err error)
+	funcGetTenantIDByActivityIRIOrigin    string
+	inspectFuncGetTenantIDByActivityIRI   func(ctx context.Context, activityIRI string)
+	afterGetTenantIDByActivityIRICounter  uint64
+	beforeGetTenantIDByActivityIRICounter uint64
+	GetTenantIDByActivityIRIMock          mStorageAndGraphWriterMockGetTenantIDByActivityIRI
+
 	funcHasActorCredential          func(ctx context.Context, tenantID int32, username string) (b1 bool, err error)
 	funcHasActorCredentialOrigin    string
 	inspectFuncHasActorCredential   func(ctx context.Context, tenantID int32, username string)
@@ -294,6 +308,12 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.GetOrCreateTenantByDomainMock = mStorageAndGraphWriterMockGetOrCreateTenantByDomain{mock: m}
 	m.GetOrCreateTenantByDomainMock.callArgs = []*StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{}
+
+	m.GetStatementsBySubjectIsolatedMock = mStorageAndGraphWriterMockGetStatementsBySubjectIsolated{mock: m}
+	m.GetStatementsBySubjectIsolatedMock.callArgs = []*StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams{}
+
+	m.GetTenantIDByActivityIRIMock = mStorageAndGraphWriterMockGetTenantIDByActivityIRI{mock: m}
+	m.GetTenantIDByActivityIRIMock.callArgs = []*StorageAndGraphWriterMockGetTenantIDByActivityIRIParams{}
 
 	m.HasActorCredentialMock = mStorageAndGraphWriterMockHasActorCredential{mock: m}
 	m.HasActorCredentialMock.callArgs = []*StorageAndGraphWriterMockHasActorCredentialParams{}
@@ -6544,6 +6564,723 @@ func (m *StorageAndGraphWriterMock) MinimockGetOrCreateTenantByDomainInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockGetStatementsBySubjectIsolated struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation
+	expectations       []*StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation specifies expectation struct of the StorageAndGraphWriter.GetStatementsBySubjectIsolated
+type StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams
+	paramPtrs          *StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectationOrigins
+	results            *StorageAndGraphWriterMockGetStatementsBySubjectIsolatedResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams contains parameters of the StorageAndGraphWriter.GetStatementsBySubjectIsolated
+type StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams struct {
+	ctx        context.Context
+	subjectIRI string
+	tenantID   int32
+}
+
+// StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetStatementsBySubjectIsolated
+type StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParamPtrs struct {
+	ctx        *context.Context
+	subjectIRI *string
+	tenantID   *int32
+}
+
+// StorageAndGraphWriterMockGetStatementsBySubjectIsolatedResults contains results of the StorageAndGraphWriter.GetStatementsBySubjectIsolated
+type StorageAndGraphWriterMockGetStatementsBySubjectIsolatedResults struct {
+	qa1 []model.Quad
+	err error
+}
+
+// StorageAndGraphWriterMockGetStatementsBySubjectIsolatedOrigins contains origins of expectations of the StorageAndGraphWriter.GetStatementsBySubjectIsolated
+type StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originSubjectIRI string
+	originTenantID   string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Optional() *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	mmGetStatementsBySubjectIsolated.optional = true
+	return mmGetStatementsBySubjectIsolated
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Expect(ctx context.Context, subjectIRI string, tenantID int32) *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by ExpectParams functions")
+	}
+
+	mmGetStatementsBySubjectIsolated.defaultExpectation.params = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetStatementsBySubjectIsolated.expectations {
+		if minimock.Equal(e.params, mmGetStatementsBySubjectIsolated.defaultExpectation.params) {
+			mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetStatementsBySubjectIsolated.defaultExpectation.params)
+		}
+	}
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.params != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Expect")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParamPtrs{}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// ExpectSubjectIRIParam2 sets up expected param subjectIRI for StorageAndGraphWriter.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) ExpectSubjectIRIParam2(subjectIRI string) *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.params != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Expect")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParamPtrs{}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs.subjectIRI = &subjectIRI
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.originSubjectIRI = minimock.CallerInfo(1)
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// ExpectTenantIDParam3 sets up expected param tenantID for StorageAndGraphWriter.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) ExpectTenantIDParam3(tenantID int32) *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation{}
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.params != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Expect")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParamPtrs{}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmGetStatementsBySubjectIsolated.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Inspect(f func(ctx context.Context, subjectIRI string, tenantID int32)) *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	if mmGetStatementsBySubjectIsolated.mock.inspectFuncGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetStatementsBySubjectIsolated")
+	}
+
+	mmGetStatementsBySubjectIsolated.mock.inspectFuncGetStatementsBySubjectIsolated = f
+
+	return mmGetStatementsBySubjectIsolated
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetStatementsBySubjectIsolated
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Return(qa1 []model.Quad, err error) *StorageAndGraphWriterMock {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	if mmGetStatementsBySubjectIsolated.defaultExpectation == nil {
+		mmGetStatementsBySubjectIsolated.defaultExpectation = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation{mock: mmGetStatementsBySubjectIsolated.mock}
+	}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.results = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedResults{qa1, err}
+	mmGetStatementsBySubjectIsolated.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetStatementsBySubjectIsolated.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetStatementsBySubjectIsolated method
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Set(f func(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error)) *StorageAndGraphWriterMock {
+	if mmGetStatementsBySubjectIsolated.defaultExpectation != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetStatementsBySubjectIsolated method")
+	}
+
+	if len(mmGetStatementsBySubjectIsolated.expectations) > 0 {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetStatementsBySubjectIsolated method")
+	}
+
+	mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated = f
+	mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolatedOrigin = minimock.CallerInfo(1)
+	return mmGetStatementsBySubjectIsolated.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetStatementsBySubjectIsolated which will trigger the result defined by the following
+// Then helper
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) When(ctx context.Context, subjectIRI string, tenantID int32) *StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation {
+	if mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation{
+		mock:               mmGetStatementsBySubjectIsolated.mock,
+		params:             &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID},
+		expectationOrigins: StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetStatementsBySubjectIsolated.expectations = append(mmGetStatementsBySubjectIsolated.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetStatementsBySubjectIsolated return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetStatementsBySubjectIsolatedExpectation) Then(qa1 []model.Quad, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetStatementsBySubjectIsolatedResults{qa1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetStatementsBySubjectIsolated should be invoked
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Times(n uint64) *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated {
+	if n == 0 {
+		mmGetStatementsBySubjectIsolated.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetStatementsBySubjectIsolated mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetStatementsBySubjectIsolated.expectedInvocations, n)
+	mmGetStatementsBySubjectIsolated.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetStatementsBySubjectIsolated
+}
+
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) invocationsDone() bool {
+	if len(mmGetStatementsBySubjectIsolated.expectations) == 0 && mmGetStatementsBySubjectIsolated.defaultExpectation == nil && mmGetStatementsBySubjectIsolated.mock.funcGetStatementsBySubjectIsolated == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.mock.afterGetStatementsBySubjectIsolatedCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetStatementsBySubjectIsolated implements mm_port.StorageAndGraphWriter
+func (mmGetStatementsBySubjectIsolated *StorageAndGraphWriterMock) GetStatementsBySubjectIsolated(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error) {
+	mm_atomic.AddUint64(&mmGetStatementsBySubjectIsolated.beforeGetStatementsBySubjectIsolatedCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetStatementsBySubjectIsolated.afterGetStatementsBySubjectIsolatedCounter, 1)
+
+	mmGetStatementsBySubjectIsolated.t.Helper()
+
+	if mmGetStatementsBySubjectIsolated.inspectFuncGetStatementsBySubjectIsolated != nil {
+		mmGetStatementsBySubjectIsolated.inspectFuncGetStatementsBySubjectIsolated(ctx, subjectIRI, tenantID)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID}
+
+	// Record call args
+	mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.mutex.Lock()
+	mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.callArgs = append(mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.callArgs, &mm_params)
+	mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.mutex.Unlock()
+
+	for _, e := range mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.qa1, e.results.err
+		}
+	}
+
+	if mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.params
+		mm_want_ptrs := mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams{ctx, subjectIRI, tenantID}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetStatementsBySubjectIsolated.t.Errorf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.subjectIRI != nil && !minimock.Equal(*mm_want_ptrs.subjectIRI, mm_got.subjectIRI) {
+				mmGetStatementsBySubjectIsolated.t.Errorf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated got unexpected parameter subjectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.originSubjectIRI, *mm_want_ptrs.subjectIRI, mm_got.subjectIRI, minimock.Diff(*mm_want_ptrs.subjectIRI, mm_got.subjectIRI))
+			}
+
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmGetStatementsBySubjectIsolated.t.Errorf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetStatementsBySubjectIsolated.t.Errorf("StorageAndGraphWriterMock.GetStatementsBySubjectIsolated got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetStatementsBySubjectIsolated.GetStatementsBySubjectIsolatedMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetStatementsBySubjectIsolated.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetStatementsBySubjectIsolated")
+		}
+		return (*mm_results).qa1, (*mm_results).err
+	}
+	if mmGetStatementsBySubjectIsolated.funcGetStatementsBySubjectIsolated != nil {
+		return mmGetStatementsBySubjectIsolated.funcGetStatementsBySubjectIsolated(ctx, subjectIRI, tenantID)
+	}
+	mmGetStatementsBySubjectIsolated.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated. %v %v %v", ctx, subjectIRI, tenantID)
+	return
+}
+
+// GetStatementsBySubjectIsolatedAfterCounter returns a count of finished StorageAndGraphWriterMock.GetStatementsBySubjectIsolated invocations
+func (mmGetStatementsBySubjectIsolated *StorageAndGraphWriterMock) GetStatementsBySubjectIsolatedAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.afterGetStatementsBySubjectIsolatedCounter)
+}
+
+// GetStatementsBySubjectIsolatedBeforeCounter returns a count of StorageAndGraphWriterMock.GetStatementsBySubjectIsolated invocations
+func (mmGetStatementsBySubjectIsolated *StorageAndGraphWriterMock) GetStatementsBySubjectIsolatedBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetStatementsBySubjectIsolated.beforeGetStatementsBySubjectIsolatedCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetStatementsBySubjectIsolated *mStorageAndGraphWriterMockGetStatementsBySubjectIsolated) Calls() []*StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams {
+	mmGetStatementsBySubjectIsolated.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams, len(mmGetStatementsBySubjectIsolated.callArgs))
+	copy(argCopy, mmGetStatementsBySubjectIsolated.callArgs)
+
+	mmGetStatementsBySubjectIsolated.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetStatementsBySubjectIsolatedDone returns true if the count of the GetStatementsBySubjectIsolated invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetStatementsBySubjectIsolatedDone() bool {
+	if m.GetStatementsBySubjectIsolatedMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetStatementsBySubjectIsolatedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetStatementsBySubjectIsolatedMock.invocationsDone()
+}
+
+// MinimockGetStatementsBySubjectIsolatedInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetStatementsBySubjectIsolatedInspect() {
+	for _, e := range m.GetStatementsBySubjectIsolatedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetStatementsBySubjectIsolatedCounter := mm_atomic.LoadUint64(&m.afterGetStatementsBySubjectIsolatedCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetStatementsBySubjectIsolatedMock.defaultExpectation != nil && afterGetStatementsBySubjectIsolatedCounter < 1 {
+		if m.GetStatementsBySubjectIsolatedMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated at\n%s", m.GetStatementsBySubjectIsolatedMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated at\n%s with params: %#v", m.GetStatementsBySubjectIsolatedMock.defaultExpectation.expectationOrigins.origin, *m.GetStatementsBySubjectIsolatedMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetStatementsBySubjectIsolated != nil && afterGetStatementsBySubjectIsolatedCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated at\n%s", m.funcGetStatementsBySubjectIsolatedOrigin)
+	}
+
+	if !m.GetStatementsBySubjectIsolatedMock.invocationsDone() && afterGetStatementsBySubjectIsolatedCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetStatementsBySubjectIsolated at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetStatementsBySubjectIsolatedMock.expectedInvocations), m.GetStatementsBySubjectIsolatedMock.expectedInvocationsOrigin, afterGetStatementsBySubjectIsolatedCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockGetTenantIDByActivityIRI struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation
+	expectations       []*StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetTenantIDByActivityIRIParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation specifies expectation struct of the StorageAndGraphWriter.GetTenantIDByActivityIRI
+type StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetTenantIDByActivityIRIParams
+	paramPtrs          *StorageAndGraphWriterMockGetTenantIDByActivityIRIParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectationOrigins
+	results            *StorageAndGraphWriterMockGetTenantIDByActivityIRIResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetTenantIDByActivityIRIParams contains parameters of the StorageAndGraphWriter.GetTenantIDByActivityIRI
+type StorageAndGraphWriterMockGetTenantIDByActivityIRIParams struct {
+	ctx         context.Context
+	activityIRI string
+}
+
+// StorageAndGraphWriterMockGetTenantIDByActivityIRIParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetTenantIDByActivityIRI
+type StorageAndGraphWriterMockGetTenantIDByActivityIRIParamPtrs struct {
+	ctx         *context.Context
+	activityIRI *string
+}
+
+// StorageAndGraphWriterMockGetTenantIDByActivityIRIResults contains results of the StorageAndGraphWriter.GetTenantIDByActivityIRI
+type StorageAndGraphWriterMockGetTenantIDByActivityIRIResults struct {
+	i1  int32
+	err error
+}
+
+// StorageAndGraphWriterMockGetTenantIDByActivityIRIOrigins contains origins of expectations of the StorageAndGraphWriter.GetTenantIDByActivityIRI
+type StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originActivityIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Optional() *mStorageAndGraphWriterMockGetTenantIDByActivityIRI {
+	mmGetTenantIDByActivityIRI.optional = true
+	return mmGetTenantIDByActivityIRI
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Expect(ctx context.Context, activityIRI string) *mStorageAndGraphWriterMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation{}
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by ExpectParams functions")
+	}
+
+	mmGetTenantIDByActivityIRI.defaultExpectation.params = &StorageAndGraphWriterMockGetTenantIDByActivityIRIParams{ctx, activityIRI}
+	mmGetTenantIDByActivityIRI.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetTenantIDByActivityIRI.expectations {
+		if minimock.Equal(e.params, mmGetTenantIDByActivityIRI.defaultExpectation.params) {
+			mmGetTenantIDByActivityIRI.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetTenantIDByActivityIRI.defaultExpectation.params)
+		}
+	}
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation{}
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.params != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetTenantIDByActivityIRIParamPtrs{}
+	}
+	mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetTenantIDByActivityIRI.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// ExpectActivityIRIParam2 sets up expected param activityIRI for StorageAndGraphWriter.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) ExpectActivityIRIParam2(activityIRI string) *mStorageAndGraphWriterMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation{}
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.params != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetTenantIDByActivityIRIParamPtrs{}
+	}
+	mmGetTenantIDByActivityIRI.defaultExpectation.paramPtrs.activityIRI = &activityIRI
+	mmGetTenantIDByActivityIRI.defaultExpectation.expectationOrigins.originActivityIRI = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Inspect(f func(ctx context.Context, activityIRI string)) *mStorageAndGraphWriterMockGetTenantIDByActivityIRI {
+	if mmGetTenantIDByActivityIRI.mock.inspectFuncGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetTenantIDByActivityIRI")
+	}
+
+	mmGetTenantIDByActivityIRI.mock.inspectFuncGetTenantIDByActivityIRI = f
+
+	return mmGetTenantIDByActivityIRI
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetTenantIDByActivityIRI
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Return(i1 int32, err error) *StorageAndGraphWriterMock {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	if mmGetTenantIDByActivityIRI.defaultExpectation == nil {
+		mmGetTenantIDByActivityIRI.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation{mock: mmGetTenantIDByActivityIRI.mock}
+	}
+	mmGetTenantIDByActivityIRI.defaultExpectation.results = &StorageAndGraphWriterMockGetTenantIDByActivityIRIResults{i1, err}
+	mmGetTenantIDByActivityIRI.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByActivityIRI.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetTenantIDByActivityIRI method
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Set(f func(ctx context.Context, activityIRI string) (i1 int32, err error)) *StorageAndGraphWriterMock {
+	if mmGetTenantIDByActivityIRI.defaultExpectation != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetTenantIDByActivityIRI method")
+	}
+
+	if len(mmGetTenantIDByActivityIRI.expectations) > 0 {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetTenantIDByActivityIRI method")
+	}
+
+	mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI = f
+	mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRIOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByActivityIRI.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetTenantIDByActivityIRI which will trigger the result defined by the following
+// Then helper
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) When(ctx context.Context, activityIRI string) *StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation {
+	if mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation{
+		mock:               mmGetTenantIDByActivityIRI.mock,
+		params:             &StorageAndGraphWriterMockGetTenantIDByActivityIRIParams{ctx, activityIRI},
+		expectationOrigins: StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetTenantIDByActivityIRI.expectations = append(mmGetTenantIDByActivityIRI.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetTenantIDByActivityIRI return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetTenantIDByActivityIRIExpectation) Then(i1 int32, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetTenantIDByActivityIRIResults{i1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetTenantIDByActivityIRI should be invoked
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Times(n uint64) *mStorageAndGraphWriterMockGetTenantIDByActivityIRI {
+	if n == 0 {
+		mmGetTenantIDByActivityIRI.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetTenantIDByActivityIRI mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetTenantIDByActivityIRI.expectedInvocations, n)
+	mmGetTenantIDByActivityIRI.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByActivityIRI
+}
+
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) invocationsDone() bool {
+	if len(mmGetTenantIDByActivityIRI.expectations) == 0 && mmGetTenantIDByActivityIRI.defaultExpectation == nil && mmGetTenantIDByActivityIRI.mock.funcGetTenantIDByActivityIRI == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.mock.afterGetTenantIDByActivityIRICounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetTenantIDByActivityIRI implements mm_port.StorageAndGraphWriter
+func (mmGetTenantIDByActivityIRI *StorageAndGraphWriterMock) GetTenantIDByActivityIRI(ctx context.Context, activityIRI string) (i1 int32, err error) {
+	mm_atomic.AddUint64(&mmGetTenantIDByActivityIRI.beforeGetTenantIDByActivityIRICounter, 1)
+	defer mm_atomic.AddUint64(&mmGetTenantIDByActivityIRI.afterGetTenantIDByActivityIRICounter, 1)
+
+	mmGetTenantIDByActivityIRI.t.Helper()
+
+	if mmGetTenantIDByActivityIRI.inspectFuncGetTenantIDByActivityIRI != nil {
+		mmGetTenantIDByActivityIRI.inspectFuncGetTenantIDByActivityIRI(ctx, activityIRI)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetTenantIDByActivityIRIParams{ctx, activityIRI}
+
+	// Record call args
+	mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.mutex.Lock()
+	mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.callArgs = append(mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.callArgs, &mm_params)
+	mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.mutex.Unlock()
+
+	for _, e := range mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.i1, e.results.err
+		}
+	}
+
+	if mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.params
+		mm_want_ptrs := mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetTenantIDByActivityIRIParams{ctx, activityIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetTenantIDByActivityIRI.t.Errorf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.activityIRI != nil && !minimock.Equal(*mm_want_ptrs.activityIRI, mm_got.activityIRI) {
+				mmGetTenantIDByActivityIRI.t.Errorf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI got unexpected parameter activityIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.originActivityIRI, *mm_want_ptrs.activityIRI, mm_got.activityIRI, minimock.Diff(*mm_want_ptrs.activityIRI, mm_got.activityIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetTenantIDByActivityIRI.t.Errorf("StorageAndGraphWriterMock.GetTenantIDByActivityIRI got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetTenantIDByActivityIRI.GetTenantIDByActivityIRIMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetTenantIDByActivityIRI.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetTenantIDByActivityIRI")
+		}
+		return (*mm_results).i1, (*mm_results).err
+	}
+	if mmGetTenantIDByActivityIRI.funcGetTenantIDByActivityIRI != nil {
+		return mmGetTenantIDByActivityIRI.funcGetTenantIDByActivityIRI(ctx, activityIRI)
+	}
+	mmGetTenantIDByActivityIRI.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetTenantIDByActivityIRI. %v %v", ctx, activityIRI)
+	return
+}
+
+// GetTenantIDByActivityIRIAfterCounter returns a count of finished StorageAndGraphWriterMock.GetTenantIDByActivityIRI invocations
+func (mmGetTenantIDByActivityIRI *StorageAndGraphWriterMock) GetTenantIDByActivityIRIAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.afterGetTenantIDByActivityIRICounter)
+}
+
+// GetTenantIDByActivityIRIBeforeCounter returns a count of StorageAndGraphWriterMock.GetTenantIDByActivityIRI invocations
+func (mmGetTenantIDByActivityIRI *StorageAndGraphWriterMock) GetTenantIDByActivityIRIBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByActivityIRI.beforeGetTenantIDByActivityIRICounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetTenantIDByActivityIRI.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetTenantIDByActivityIRI *mStorageAndGraphWriterMockGetTenantIDByActivityIRI) Calls() []*StorageAndGraphWriterMockGetTenantIDByActivityIRIParams {
+	mmGetTenantIDByActivityIRI.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetTenantIDByActivityIRIParams, len(mmGetTenantIDByActivityIRI.callArgs))
+	copy(argCopy, mmGetTenantIDByActivityIRI.callArgs)
+
+	mmGetTenantIDByActivityIRI.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetTenantIDByActivityIRIDone returns true if the count of the GetTenantIDByActivityIRI invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetTenantIDByActivityIRIDone() bool {
+	if m.GetTenantIDByActivityIRIMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetTenantIDByActivityIRIMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetTenantIDByActivityIRIMock.invocationsDone()
+}
+
+// MinimockGetTenantIDByActivityIRIInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetTenantIDByActivityIRIInspect() {
+	for _, e := range m.GetTenantIDByActivityIRIMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByActivityIRI at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetTenantIDByActivityIRICounter := mm_atomic.LoadUint64(&m.afterGetTenantIDByActivityIRICounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetTenantIDByActivityIRIMock.defaultExpectation != nil && afterGetTenantIDByActivityIRICounter < 1 {
+		if m.GetTenantIDByActivityIRIMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByActivityIRI at\n%s", m.GetTenantIDByActivityIRIMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByActivityIRI at\n%s with params: %#v", m.GetTenantIDByActivityIRIMock.defaultExpectation.expectationOrigins.origin, *m.GetTenantIDByActivityIRIMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetTenantIDByActivityIRI != nil && afterGetTenantIDByActivityIRICounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByActivityIRI at\n%s", m.funcGetTenantIDByActivityIRIOrigin)
+	}
+
+	if !m.GetTenantIDByActivityIRIMock.invocationsDone() && afterGetTenantIDByActivityIRICounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetTenantIDByActivityIRI at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetTenantIDByActivityIRIMock.expectedInvocations), m.GetTenantIDByActivityIRIMock.expectedInvocationsOrigin, afterGetTenantIDByActivityIRICounter)
+	}
+}
+
 type mStorageAndGraphWriterMockHasActorCredential struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -12055,6 +12792,10 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockGetOrCreateTenantByDomainInspect()
 
+			m.MinimockGetStatementsBySubjectIsolatedInspect()
+
+			m.MinimockGetTenantIDByActivityIRIInspect()
+
 			m.MinimockHasActorCredentialInspect()
 
 			m.MinimockIsDomainBlockedInspect()
@@ -12123,6 +12864,8 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockGetLatestPayloadDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
 		m.MinimockGetOrCreateTenantByDomainDone() &&
+		m.MinimockGetStatementsBySubjectIsolatedDone() &&
+		m.MinimockGetTenantIDByActivityIRIDone() &&
 		m.MinimockHasActorCredentialDone() &&
 		m.MinimockIsDomainBlockedDone() &&
 		m.MinimockMarkInboundCompleteDone() &&

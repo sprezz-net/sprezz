@@ -54,6 +54,42 @@ func (q *Queries) GetLatestPayload(ctx context.Context, objectIri string) ([]byt
 	return payload, err
 }
 
+const getStatementsBySubjectIsolated = `-- name: GetStatementsBySubjectIsolated :many
+SELECT predicate, object
+FROM rdf_statements
+WHERE subject = $1 AND tenant_id = $2
+`
+
+type GetStatementsBySubjectIsolatedParams struct {
+	Subject  string `json:"subject"`
+	TenantID int32  `json:"tenant_id"`
+}
+
+type GetStatementsBySubjectIsolatedRow struct {
+	Predicate string `json:"predicate"`
+	Object    string `json:"object"`
+}
+
+func (q *Queries) GetStatementsBySubjectIsolated(ctx context.Context, arg GetStatementsBySubjectIsolatedParams) ([]GetStatementsBySubjectIsolatedRow, error) {
+	rows, err := q.db.Query(ctx, getStatementsBySubjectIsolated, arg.Subject, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStatementsBySubjectIsolatedRow{}
+	for rows.Next() {
+		var i GetStatementsBySubjectIsolatedRow
+		if err := rows.Scan(&i.Predicate, &i.Object); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSubjectQuads = `-- name: GetSubjectQuads :many
 SELECT q.graph_id, d_pred.value AS predicate, COALESCE(d_obj.value, q.literal_value)::TEXT AS object, q.is_literal
 FROM rdf_quads q

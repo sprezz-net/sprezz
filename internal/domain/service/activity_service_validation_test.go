@@ -518,6 +518,7 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
 	mockStorage.SaveGraphVersionMock.Return(nil)
 	mockStorage.GetActorDualKeysMock.Return(nil, errors.New("not local"))
+	mockStorage.GetTenantIDByActivityIRIMock.Return(1, nil)
 
 	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
 		if subjectIRI == "https://remote.com/actor/alice" {
@@ -525,6 +526,10 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 				{GraphID: 1, Subject: subjectIRI, Predicate: model.PredicatePublicKeyPem, Object: "mock-pubkey"},
 			}, nil
 		}
+		return nil, nil
+	})
+
+	mockStorage.GetStatementsBySubjectIsolatedMock.Set(func(ctx context.Context, subjectIRI string, tenantID int32) ([]model.Quad, error) {
 		if subjectIRI == "https://remote.com/poll/1" {
 			futureTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339)
 			return []model.Quad{

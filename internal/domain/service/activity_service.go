@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -23,6 +24,8 @@ import (
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
 )
+
+var ErrDropAction = errors.New("drop action gracefully")
 
 type ActivityService struct {
 	storage      port.StoragePort
@@ -170,8 +173,9 @@ func (t *ThreadSafePredicateMap) Len() int {
 }
 
 // validateInboundActivity runs strict security, origin, identity, and state checks on inbound activities
-func (s *ActivityService) validateInboundActivity(ctx context.Context, payload []byte) error {
+func (s *ActivityService) validateInboundActivity(ctx context.Context, activityIRI string, payload []byte) error {
 	var activity struct {
+		ID     string      `json:"id"`
 		Type   string      `json:"type"`
 		Actor  interface{} `json:"actor"`
 		Object interface{} `json:"object"`
@@ -208,16 +212,32 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 			return fmt.Errorf("security violation: actor %s does not have an active public key graph entry", actorIRI)
 		}
 
-		targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+		// Resolve tenant ID
+		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+		if tenantID == 0 {
+			if activityIRI != "" {
+				var lookupErr error
+				tenantID, lookupErr = s.storage.GetTenantIDByActivityIRI(ctx, activityIRI)
+				if lookupErr != nil || tenantID == 0 {
+					tenantID = 1
+				}
+			} else {
+				tenantID = 1
+			}
+		}
+
+		targetQuads, err := s.storage.GetStatementsBySubjectIsolated(ctx, targetIRI, tenantID)
 		if err != nil {
-			return fmt.Errorf("failed to stream quads for target IRI %s: %w", targetIRI, err)
+			return fmt.Errorf("failed to stream isolated quads for target IRI %s: %w", targetIRI, err)
 		}
 
 		targetMap := NewThreadSafePredicateMap(targetQuads)
 
-		// Graceful No-Op for Missing Targets
+		// Enforce graceful fallback pattern: If this scoped query returns 0 rows
+		// because an incoming delete statement targets a resource outside its visible tenant partition
+		// or an item already purged, immediately drop the action with a nil code exit (ErrDropAction).
 		if targetMap.Len() == 0 {
-			return nil
+			return ErrDropAction
 		}
 
 		// Programmatic Identity Constraint Check & Update Scope Constraint
@@ -552,7 +572,10 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
 	// Execute programmatic identity constraint checks on side-effect mutations before any updates
-	if err := s.validateInboundActivity(ctx, task.Payload); err != nil {
+	if err := s.validateInboundActivity(ctx, task.ActivityIRI, task.Payload); err != nil {
+		if errors.Is(err, ErrDropAction) {
+			return nil // graceful fallback / nil code exit
+		}
 		return fmt.Errorf("side-effect mutation rejected: %w", err)
 	}
 

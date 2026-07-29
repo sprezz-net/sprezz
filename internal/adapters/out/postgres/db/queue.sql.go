@@ -75,6 +75,20 @@ func (q *Queries) EnqueueInboundActivity(ctx context.Context, arg EnqueueInbound
 	return err
 }
 
+const getTenantIDByActivityIRI = `-- name: GetTenantIDByActivityIRI :one
+SELECT tenant_id
+FROM activity_tenant_deliveries
+WHERE activity_iri = $1
+LIMIT 1
+`
+
+func (q *Queries) GetTenantIDByActivityIRI(ctx context.Context, activityIri string) (int32, error) {
+	row := q.db.QueryRow(ctx, getTenantIDByActivityIRI, activityIri)
+	var tenant_id int32
+	err := row.Scan(&tenant_id)
+	return tenant_id, err
+}
+
 const markInboundComplete = `-- name: MarkInboundComplete :exec
 UPDATE inbound_activity_queue
 SET status = 'completed', updated_at = NOW()

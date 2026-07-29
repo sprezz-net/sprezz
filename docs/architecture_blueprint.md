@@ -194,11 +194,14 @@ To mitigate this spec hazard, the `ActivityService` implements an explicit **Obj
 
 1. **Verb Detection & Payload Parsing**: The incoming activity payload is unmarshaled to inspect its `"type"`, `"actor"`, and `"object"` target IRI fields.
 2. **Actor Public Key Cross-Validation**: Before applying any database updates or saving quads, the system verifies that the initiator actor has a valid, active public key graph entry (`https://w3id.org/security#publicKeyPem` predicate) stored in the RDF quad database. If missing, the mutation is rejected instantly.
-3. **Programmatic Identity Constraint Check**: The filter queries the RDF store for any existing quads associated with the target `"object"` IRI (the activity or object being undone, deleted, or updated).
-4. **Ownership Verification**: It scans the target's statement quads to locate the original owner/actor (e.g. predicates containing `actor` or `attributedTo`). If found, it ensures that the actor signing/initiating the inbound wrapper is identical to the actor associated with the original target statement graph.
-5. **Atomic Rejection**: If the identity constraint is violated, the transaction is rejected with an explicit security violation error, ensuring unauthorized actors cannot mutate or delete data they do not own.
+3. **Multi-Tenant Isolated Querying**: Instead of unconstrained global IRI queries, the system extracts the current active tenant execution boundary ID (from context or falls back to activity-tenant delivery records) and executes `GetStatementsBySubjectIsolated` querying against the `rdf_statements` view.
+4. **Graceful Early Fallback (Nil Code Exit)**: If the isolated query returns 0 rows—indicating the target resource lies outside this tenant's partition boundary, belongs to an alternate tenant, or has already been purged—the system aborts processing immediately and returns a `nil` error. This guarantees full idempotency and prevents write-amplification or infinite queue retry/deadlock loops.
+5. **Programmatic Identity Constraint Check**: If target quads are present, the filter scans them to locate the original owner/actor (e.g. predicates containing `actor` or `attributedTo`).
+6. **Ownership Verification**: It ensures that the actor signing/initiating the inbound wrapper is identical to the actor associated with the original target statement graph. If the identity constraint is violated, the transaction is rejected with an explicit security violation error, ensuring unauthorized actors cannot mutate or delete data they do not own.
 
-## 5. Identity, Key Rotation, and Tenant Functions
+#### 4.3.1 Query Optimization and Performance Guarantees
+
+Although the multi-tenant isolation relies on an SQL view (`rdf_statements`) that parses domains on the fly from subject URIs, this model preserves optimal constant-time performance. Because the query engine filters on `subject = $1` first using the highly selective Unique Index (`idx_dict_value`) on `rdf_dictionary.value`, the regex-based domain extraction is only executed lazily on the single resolved row—never performing full sequential database scans.
 
 ## 5. Multi-Tenancy and Resource Schema Boundaries
 
@@ -206,9 +209,10 @@ To mitigate this spec hazard, the `ActivityService` implements an explicit **Obj
 
 Multi-tenancy in Sprezz operates via a strict separation of concerns between the unstructured semantic graph layer and the structured tenant ownership metadata database layer.
 
-1. **The Tenantless Graph Plane**: The core quad storage table (`quads`) stores raw, arbitrary IRI strings uniformly. It contains no `tenant_id` column and no direct foreign key relation pointing back to a specific tenant record. The data in the graph is stored as pure, universal RDF statements.
+1. **The Tenantless Graph Plane**: The core quad storage table (`rdf_quads`) stores raw, arbitrary IRI strings uniformly. It contains no `tenant_id` column and no direct foreign key relation pointing back to a specific tenant record. The data in the graph is stored as pure, universal RDF statements.
 2. **Implicit Domain Association**: The data in the storage graph links to a tenant **implicitly by sharing the domain name of the respective tenant within its IRI string** (e.g., `https://tenant-a.com/<uuid>`).
-3. **The Administrative Plane**: Relational tracking metadata tables (such as `actor_credentials`, `server_tenants`, and `actor_media_ownership`) maintain the explicit mapping linking a unique global `actor_iri` string to an internal `tenant_id` integer.
+3. **The Administrative Plane**: Relational tracking metadata tables (such as `local_actor_credentials`, `server_tenants`, and `actor_media_ownership`) maintain the explicit mapping linking a unique global `actor_iri` string to an internal `tenant_id` integer.
+4. **The Statements Ingress View**: The `rdf_statements` view acts as the secure relational gateway mapping the unstructured graph plane onto explicit local multi-tenant partitions. It extracts the host domain from the subject IRI dynamically and joins with `server_tenants` to expose statements aligned with local tenant boundaries while safely excluding foreign federated entities.
 
 ### 5.2 Multi-Tenant Runtime Resolution Flow
 

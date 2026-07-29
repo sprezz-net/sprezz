@@ -40,3 +40,8 @@ FROM rdf_quads q
 JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
 LEFT JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
 WHERE q.subject_id = $1;
+
+-- name: GetStatementsBySubjectIsolated :many
+SELECT predicate, object
+FROM rdf_statements
+WHERE subject = $1 AND tenant_id = $2;

@@ -593,6 +593,39 @@ func (s *PostgresStorage) StreamQuadsBySubject(ctx context.Context, subjectIRI s
 	return quads, nil
 }
 
+func (s *PostgresStorage) GetStatementsBySubjectIsolated(ctx context.Context, subjectIRI string, tenantID int32) ([]model.Quad, error) {
+	rows, err := s.queries().GetStatementsBySubjectIsolated(ctx, db.GetStatementsBySubjectIsolatedParams{
+		Subject:  subjectIRI,
+		TenantID: tenantID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []model.Quad{}, nil
+		}
+		return nil, err
+	}
+	quads := make([]model.Quad, 0, len(rows))
+	for _, row := range rows {
+		quads = append(quads, model.Quad{
+			Subject:   subjectIRI,
+			Predicate: row.Predicate,
+			Object:    row.Object,
+		})
+	}
+	return quads, nil
+}
+
+func (s *PostgresStorage) GetTenantIDByActivityIRI(ctx context.Context, activityIRI string) (int32, error) {
+	tenantID, err := s.queries().GetTenantIDByActivityIRI(ctx, activityIRI)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	return tenantID, nil
+}
+
 func (s *PostgresStorage) dictionaryID(ctx context.Context, queries *db.Queries, value string) (int64, error) {
 	if id, found := s.cache.GetID(value); found {
 		return id, nil
