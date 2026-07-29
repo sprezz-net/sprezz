@@ -186,10 +186,10 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies) {
 		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(deps.cfg.TenantDomains, deps.postgresStorage))
 
 		// Unified Greedy Catch-All Endpoint (Handles GET & POST dynamically)
-		protected.Route("/*", func(router chi.Router) {
+		protected.Group(func(router chi.Router) {
 			router.Use(signatureValidator.Handler)
-			router.Get("/", genericHandler.ServeHTTP)
-			router.Post("/", genericHandler.ServeHTTP)
+			router.Get("/*", genericHandler.ServeHTTP)
+			router.Post("/*", genericHandler.ServeHTTP)
 		})
 	})
 }
