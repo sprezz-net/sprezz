@@ -141,8 +141,9 @@ For incoming HTTP requests, signature validation is dynamically routed based on 
 1. **Endpoint Exclusions**: Any request targeting well-known paths (such as `/.well-known/*`) is completely excluded from signature validation.
 2. **POST Request Signature Rules**:
    - A `POST` request must provide a `Content-Type` header; otherwise, it is rejected with a `400 Bad Request`.
+   - **Strict Collection Content-Type Guard**: Any `POST` request targeting any ActivityPub collection endpoint (paths matching or ending in `/inbox`, `/outbox`, `/followers`, or `/following`) is strictly required to assert standard ActivityPub MIME parameters (`application/activity+json` or `application/ld+json`). Any POST requests to these endpoints using non-standard media configurations (such as `text/plain` or `application/json`) are immediately rejected on the validation perimeter with **`HTTP 415 Unsupported Media Type`**. This ensures unauthenticated, spoof-configured payloads cannot bypass signature validation to reach downstream parsers.
    - If the `Content-Type` is an ActivityPub type (`application/activity+json` or `application/ld+json`), signature verification is strictly mandatory. A missing or invalid signature header results in a `401 Unauthorized` rejection.
-   - For non-ActivityPub `Content-Type` payloads, signature verification is bypassed.
+   - For non-collection endpoints (such as multi-part media `/upload`), non-ActivityPub `Content-Type` payloads bypass signature verification.
 3. **GET Request Signature Rules**:
    - Signature validation is only performed on `GET` requests if the `Content-Type` is an ActivityPub type **and** a `Signature` header is explicitly provided.
    - If the `Signature` header is absent, verification is bypassed (making signatures optional for ActivityPub `GET` requests).
@@ -382,6 +383,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - A clean database starts with all required tables, indexes, and enum types.
 - A valid signed inbox request is accepted once and is safely deduplicated on replay.
 - Invalid signatures, mismatched digests, stale dates, blocked domains, malformed JSON, and oversized bodies are rejected before queue insertion.
+- Inbound `POST` requests to collections (`/inbox`, `/outbox`, `/followers`, `/following`) with missing or invalid `Content-Type` headers are blocked directly at the middleware boundary with the appropriate HTTP status codes (`400 Bad Request` or `415 Unsupported Media Type`).
 - Concurrent workers claim disjoint queue records.
 - High-throughput streaming operations leverage integer-based `QuadID` structures (with inline literal text values) to isolate IRI/Named Node string heap replication from the database engine, bypassing the interning dictionary for arbitrary literal values.
 - A parser or quad persistence failure leaves no orphaned graph version.

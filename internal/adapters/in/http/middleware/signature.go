@@ -43,13 +43,30 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 		isActivityPub := strings.Contains(contentType, "application/activity+json") ||
 			strings.Contains(contentType, "application/ld+json")
 
-		// 3. Method-based signature validation routing
-		switch r.Method {
-		case http.MethodPost:
+		// 3. Strict Content-Type check for S2S/C2S ActivityPub collections on POST
+		if r.Method == http.MethodPost {
 			if contentType == "" {
 				http.Error(w, "Bad Request: Missing Content-Type header", http.StatusBadRequest)
 				return
 			}
+
+			path := r.URL.Path
+			isCollectionPost := strings.HasSuffix(path, "/inbox") ||
+				strings.HasSuffix(path, "/outbox") ||
+				strings.HasSuffix(path, "/followers") ||
+				strings.HasSuffix(path, "/following") ||
+				path == "/inbox" ||
+				path == "/outbox"
+
+			if isCollectionPost && !isActivityPub {
+				http.Error(w, "Unsupported Media Type: POST requests to ActivityPub collections must use standard ActivityPub MIME types", http.StatusUnsupportedMediaType)
+				return
+			}
+		}
+
+		// 4. Method-based signature validation routing
+		switch r.Method {
+		case http.MethodPost:
 			// For POST: verify signatures on any URL, but only when content-type is activitypub
 			if !isActivityPub {
 				next.ServeHTTP(w, r)
