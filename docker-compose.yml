@@ -24,8 +24,8 @@ services:
     image: quay.io/minio/minio:latest
     container_name: sprezz_minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9005:9000"
+      - "9006:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio_admin}
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?Error: MINIO_ROOT_PASSWORD must be set in environment or .env file}"
