@@ -579,22 +579,16 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	_ = json.Unmarshal(task.Payload, &activity)
 	actType := strings.ToLower(activity.Type)
 
-	if actType == "delete" {
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI != "" {
-			latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
-			if err == nil && len(latest) > 0 {
-				var latestMap map[string]interface{}
-				if json.Unmarshal(latest, &latestMap) == nil {
-					if latestMap["type"] == "Tombstone" {
-						return nil // successful idempotent no-op!
-					}
-				}
-			}
-		}
+	// A. Check for idempotent delete redundant actions
+	isIdempotent, err := s.handleIdempotentDelete(ctx, actType, activity.Object)
+	if err != nil {
+		return err
+	}
+	if isIdempotent {
+		return nil
 	}
 
-	// Execute programmatic identity constraint checks on side-effect mutations before any updates
+	// B. Execute programmatic identity constraint checks on side-effect mutations before any updates
 	if err := s.validateInboundActivity(ctx, task.ActivityIRI, task.Payload); err != nil {
 		if errors.Is(err, ErrDropAction) {
 			return nil // graceful fallback / nil code exit
@@ -602,118 +596,159 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		return fmt.Errorf("side-effect mutation rejected: %w", err)
 	}
 
-	var quads []model.Quad
-	var err error
-
+	// C. Process actual delete side-effect and tombstone creation/saving
 	if actType == "delete" {
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI != "" {
-			latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
-			formerType := "Note"
-			if err == nil && len(latest) > 0 {
-				var latestMap map[string]interface{}
-				if json.Unmarshal(latest, &latestMap) == nil {
-					if t, ok := latestMap["type"].(string); ok && t != "" {
-						formerType = t
-					}
-				}
-			}
-
-			tombstone := map[string]interface{}{
-				"id":         targetIRI,
-				"type":       "Tombstone",
-				"formerType": formerType,
-				"deleted":    time.Now().UTC().Format(time.RFC3339),
-			}
-			tombstonePayload, _ := json.Marshal(tombstone)
-
-			if writer, ok := s.storage.(port.GraphVersionWriter); ok {
-				tombstoneQuads, err := s.parser.ToQuads(ctx, 0, targetIRI, tombstonePayload)
-				if err != nil {
-					return fmt.Errorf("failed to parse tombstone payload: %w", err)
-				}
-				if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, targetIRI, tombstonePayload, tombstoneQuads); err != nil {
-					return fmt.Errorf("failed to save tombstone graph version: %w", err)
-				}
-			} else {
-				graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, targetIRI, tombstonePayload)
-				if err != nil {
-					return fmt.Errorf("failed to create tombstone graph version: %w", err)
-				}
-				tombstoneQuads, err := s.parser.ToQuads(ctx, graphID, targetIRI, tombstonePayload)
-				if err != nil {
-					return fmt.Errorf("failed to parse tombstone payload: %w", err)
-				}
-				if err := s.storage.SaveQuads(ctx, tombstoneQuads); err != nil {
-					return fmt.Errorf("failed to save tombstone quads: %w", err)
-				}
-			}
-
-			// Perform standard inbox delivery mapping for the Delete activity
-			targetsMap, err := extractAddressingTargets(task.Payload)
-			if err != nil {
-				return err
-			}
-			if task.ObjectIRI != "" {
-				targetsMap[task.ObjectIRI] = struct{}{}
-			}
-			s.expandFollowers(ctx, targetsMap)
-			for target := range targetsMap {
-				target = strings.TrimSpace(target)
-				if target == "" {
-					continue
-				}
-				_, err := s.storage.GetActorDualKeys(ctx, target)
-				if err == nil {
-					_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
-				}
-			}
-			return nil
-		}
+		return s.processDeleteActivity(ctx, task, activity.Object)
 	}
 
-	// 1. Parse activity payload into RDF quads
-	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
-		quads, err = s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
-		if err != nil {
-			return fmt.Errorf("failed to parse activity payload to quads: %w", err)
-		}
-		if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload, quads); err != nil {
-			return fmt.Errorf("failed to save graph version and quads: %w", err)
-		}
-	} else {
-		// Fallback path utilizing explicit graph versioning combined with the optimized ports layer
-		graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload)
-		if err != nil {
-			return fmt.Errorf("failed to create graph version: %w", err)
-		}
-
-		quads, err = s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
-		if err != nil {
-			return fmt.Errorf("failed to parse activity payload to quads: %w", err)
-		}
-
-		if err := s.storage.SaveQuads(ctx, quads); err != nil {
-			return fmt.Errorf("failed to save quads: %w", err)
-		}
+	// D. Parse activity payload into RDF quads and version them
+	if _, err := s.saveInboundActivityQuads(ctx, task); err != nil {
+		return err
 	}
 
-	// 2. Perform spec-compliant shared and direct inbox delivery mapping.
-	targetsMap, err := extractAddressingTargets(task.Payload)
+	// E. Perform spec-compliant direct and shared local inbox deliveries
+	localRecipients, err := s.deliverToLocalInboxes(ctx, task)
 	if err != nil {
 		return err
 	}
 
-	// Also check if the task.ObjectIRI itself is a target. In standard direct inbox deliveries,
-	// the requested direct inbox URL matches a local actor's configured inbox collection.
+	// F. Perform Section 7.1.2 inbox forwarding on behalf of the original author
+	return s.performInboxForwarding(ctx, task, localRecipients)
+}
+
+// handleIdempotentDelete detects if a delete action is a duplicate attempt on a tombstone.
+func (s *ActivityService) handleIdempotentDelete(ctx context.Context, actType string, object interface{}) (bool, error) {
+	if actType != "delete" {
+		return false, nil
+	}
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return false, nil
+	}
+	latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
+	if err == nil && len(latest) > 0 {
+		var latestMap map[string]interface{}
+		if json.Unmarshal(latest, &latestMap) == nil {
+			if latestMap["type"] == "Tombstone" {
+				return true, nil // successful idempotent no-op!
+			}
+		}
+	}
+	return false, nil
+}
+
+// processDeleteActivity executes the state changes for a deleted object resource.
+func (s *ActivityService) processDeleteActivity(ctx context.Context, task model.InboundTask, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return nil
+	}
+	latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
+	formerType := "Note"
+	if err == nil && len(latest) > 0 {
+		var latestMap map[string]interface{}
+		if json.Unmarshal(latest, &latestMap) == nil {
+			if t, ok := latestMap["type"].(string); ok && t != "" {
+				formerType = t
+			}
+		}
+	}
+
+	tombstone := map[string]interface{}{
+		"id":         targetIRI,
+		"type":       "Tombstone",
+		"formerType": formerType,
+		"deleted":    time.Now().UTC().Format(time.RFC3339),
+	}
+	tombstonePayload, _ := json.Marshal(tombstone)
+
+	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
+		tombstoneQuads, err := s.parser.ToQuads(ctx, 0, targetIRI, tombstonePayload)
+		if err != nil {
+			return fmt.Errorf("failed to parse tombstone payload: %w", err)
+		}
+		if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, targetIRI, tombstonePayload, tombstoneQuads); err != nil {
+			return fmt.Errorf("failed to save tombstone graph version: %w", err)
+		}
+	} else {
+		graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, targetIRI, tombstonePayload)
+		if err != nil {
+			return fmt.Errorf("failed to create tombstone graph version: %w", err)
+		}
+		tombstoneQuads, err := s.parser.ToQuads(ctx, graphID, targetIRI, tombstonePayload)
+		if err != nil {
+			return fmt.Errorf("failed to parse tombstone payload: %w", err)
+		}
+		if err := s.storage.SaveQuads(ctx, tombstoneQuads); err != nil {
+			return fmt.Errorf("failed to save tombstone quads: %w", err)
+		}
+	}
+
+	// Perform standard inbox delivery mapping for the Delete activity
+	targetsMap, err := extractAddressingTargets(task.Payload)
+	if err != nil {
+		return err
+	}
+	if task.ObjectIRI != "" {
+		targetsMap[task.ObjectIRI] = struct{}{}
+	}
+	s.expandFollowers(ctx, targetsMap)
+	for target := range targetsMap {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		_, err := s.storage.GetActorDualKeys(ctx, target)
+		if err == nil {
+			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
+		}
+	}
+	return nil
+}
+
+// saveInboundActivityQuads stores standard activity payload versions and parses RDF quads.
+func (s *ActivityService) saveInboundActivityQuads(ctx context.Context, task model.InboundTask) ([]model.Quad, error) {
+	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
+		quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
+		}
+		if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload, quads); err != nil {
+			return nil, fmt.Errorf("failed to save graph version and quads: %w", err)
+		}
+		return quads, nil
+	}
+
+	// Fallback path utilizing explicit graph versioning combined with the optimized ports layer
+	graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create graph version: %w", err)
+	}
+
+	quads, err := s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
+	}
+
+	if err := s.storage.SaveQuads(ctx, quads); err != nil {
+		return nil, fmt.Errorf("failed to save quads: %w", err)
+	}
+	return quads, nil
+}
+
+// deliverToLocalInboxes delivers the activity to matching local actor inboxes.
+func (s *ActivityService) deliverToLocalInboxes(ctx context.Context, task model.InboundTask) ([]string, error) {
+	targetsMap, err := extractAddressingTargets(task.Payload)
+	if err != nil {
+		return nil, err
+	}
+
 	if task.ObjectIRI != "" {
 		targetsMap[task.ObjectIRI] = struct{}{}
 	}
 
-	// Expand target followers
 	s.expandFollowers(ctx, targetsMap)
 
-	// Deliver to matching local targets
 	var localRecipients []string
 	for target := range targetsMap {
 		target = strings.TrimSpace(target)
@@ -721,87 +756,94 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 			continue
 		}
 
-		// Check if target is a direct local actor IRI
 		_, err := s.storage.GetActorDualKeys(ctx, target)
 		if err == nil {
 			localRecipients = append(localRecipients, target)
-			// Deliver to this local actor's inbox!
 			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
 		}
 	}
+	return localRecipients, nil
+}
 
-	// Inbox Forwarding (Section 7.1.2)
-	if len(localRecipients) > 0 && s.forwarder != nil {
-		origTargets, err := extractAddressingTargets(task.Payload)
+// performInboxForwarding handles relaying thread replies and shared content to related remote servers.
+func (s *ActivityService) performInboxForwarding(ctx context.Context, task model.InboundTask, localRecipients []string) error {
+	if len(localRecipients) == 0 || s.forwarder == nil {
+		return nil
+	}
+
+	origTargets, err := extractAddressingTargets(task.Payload)
+	if err != nil {
+		return nil
+	}
+
+	remoteTargets := make(map[string]struct{})
+	for target := range origTargets {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		if _, err := s.storage.GetActorDualKeys(ctx, target); err == nil {
+			continue
+		}
+		remoteTargets[target] = struct{}{}
+	}
+
+	if len(remoteTargets) == 0 {
+		return nil
+	}
+
+	domainToRecipients := s.groupRemoteTargetsByDomain(ctx, remoteTargets)
+
+	// Determine signing credentials
+	serverActorIRI, serverKeys, err := s.getLocalServerCredentials(ctx, localRecipients[0])
+	var targetKeyID string
+	var privateKeyRSAPEM, privateKeyEd25519PEM string
+	if err == nil {
+		targetKeyID = serverActorIRI + "#main-key"
+		privateKeyRSAPEM = serverKeys.PrivateKeyRSAPEM
+		privateKeyEd25519PEM = serverKeys.PrivateKeyEd25519PEM
+	} else {
+		serverActorIRI = localRecipients[0]
+		targetKeyID = serverActorIRI + "#main-key"
+		dualKeys, err := s.storage.GetActorDualKeys(ctx, serverActorIRI)
 		if err == nil {
-			remoteTargets := make(map[string]struct{})
-			for target := range origTargets {
-				target = strings.TrimSpace(target)
-				if target == "" {
-					continue
-				}
-				// Skip if local actor
-				if _, err := s.storage.GetActorDualKeys(ctx, target); err == nil {
-					continue
-				}
-				remoteTargets[target] = struct{}{}
-			}
+			privateKeyRSAPEM = dualKeys.PrivateKeyRSAPEM
+			privateKeyEd25519PEM = dualKeys.PrivateKeyEd25519PEM
+		}
+	}
 
-			if len(remoteTargets) > 0 {
-				domainToRecipients := s.groupRemoteTargetsByDomain(ctx, remoteTargets)
+	if privateKeyRSAPEM == "" {
+		return nil
+	}
 
-				// Determine signing credentials
-				serverActorIRI, serverKeys, err := s.getLocalServerCredentials(ctx, localRecipients[0])
-				var targetKeyID string
-				var privateKeyRSAPEM, privateKeyEd25519PEM string
-				if err == nil {
-					targetKeyID = serverActorIRI + "#main-key"
-					privateKeyRSAPEM = serverKeys.PrivateKeyRSAPEM
-					privateKeyEd25519PEM = serverKeys.PrivateKeyEd25519PEM
-				} else {
-					// Fallback to the local recipient
-					serverActorIRI = localRecipients[0]
-					targetKeyID = serverActorIRI + "#main-key"
-					dualKeys, err := s.storage.GetActorDualKeys(ctx, serverActorIRI)
-					if err == nil {
-						privateKeyRSAPEM = dualKeys.PrivateKeyRSAPEM
-						privateKeyEd25519PEM = dualKeys.PrivateKeyEd25519PEM
-					}
-				}
+	for domain, recipients := range domainToRecipients {
+		hasRel, _ := s.hasRelationshipWithDomain(ctx, localRecipients, domain)
+		if !hasRel {
+			continue
+		}
 
-				if privateKeyRSAPEM != "" {
-					for domain, recipients := range domainToRecipients {
-						hasRel, _ := s.hasRelationshipWithDomain(ctx, localRecipients, domain)
-						if !hasRel {
-							continue
-						}
-
-						inboxesMap := make(map[string]struct{})
-						sharedInboxURL, err := s.resolveServerActorInbox(ctx, domain, serverActorIRI)
-						if err == nil && sharedInboxURL != "" {
-							inboxesMap[sharedInboxURL] = struct{}{}
-						} else {
-							for _, target := range recipients {
-								inboxURL, err := s.resolveActorInbox(ctx, target)
-								if err == nil && inboxURL != "" {
-									inboxesMap[inboxURL] = struct{}{}
-								}
-							}
-						}
-
-						for inbox := range inboxesMap {
-							_ = s.forwarder.ForwardFederatedActivity(
-								ctx,
-								inbox,
-								targetKeyID,
-								privateKeyRSAPEM,
-								privateKeyEd25519PEM,
-								task.Payload,
-							)
-						}
-					}
+		inboxesMap := make(map[string]struct{})
+		sharedInboxURL, err := s.resolveServerActorInbox(ctx, domain, serverActorIRI)
+		if err == nil && sharedInboxURL != "" {
+			inboxesMap[sharedInboxURL] = struct{}{}
+		} else {
+			for _, target := range recipients {
+				inboxURL, err := s.resolveActorInbox(ctx, target)
+				if err == nil && inboxURL != "" {
+					inboxesMap[inboxURL] = struct{}{}
 				}
 			}
+		}
+
+		for inbox := range inboxesMap {
+			_ = s.forwarder.ForwardFederatedActivity(
+				ctx,
+				inbox,
+				targetKeyID,
+				privateKeyRSAPEM,
+				privateKeyEd25519PEM,
+				task.Payload,
+			)
 		}
 	}
 
