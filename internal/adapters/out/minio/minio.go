@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"sprezz/internal/domain/port"
 	"sync"
+	"time"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -45,6 +47,7 @@ func NewMinIOStorageAdapter(endpoint, accessKey, secretKey, bucketName string, u
 		}
 	}
 
+	log.Println("Connecting to MinIO...")
 	client, err := minio.New(endpoint, &opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize MinIO client core: %w", err)
@@ -56,7 +59,8 @@ func NewMinIOStorageAdapter(endpoint, accessKey, secretKey, bucketName string, u
 	}
 
 	// 3. Idempotently verify or provision bucket status immediately upon initialization
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	if err := adapter.ensureBucket(ctx, bucketName); err != nil {
 		return nil, err
 	}

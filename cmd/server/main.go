@@ -98,6 +98,7 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 	dbConfig.MinConns = 10
 	dbConfig.MaxConnLifetime = 5 * time.Minute
 
+	log.Println("Connecting to database...")
 	db, err := pgxpool.NewWithConfig(context.Background(), dbConfig)
 	if err != nil {
 		log.Fatalf("Failed to connect to postgres: %v", err)
