@@ -606,10 +606,15 @@ func (s *PostgresStorage) GetStatementsBySubjectIsolated(ctx context.Context, su
 	}
 	quads := make([]model.Quad, 0, len(rows))
 	for _, row := range rows {
+		objType := model.NamedNode
+		if row.IsLiteral != nil && *row.IsLiteral {
+			objType = model.Literal
+		}
 		quads = append(quads, model.Quad{
 			Subject:   subjectIRI,
 			Predicate: row.Predicate,
 			Object:    row.Object,
+			ObjType:   objType,
 		})
 	}
 	return quads, nil

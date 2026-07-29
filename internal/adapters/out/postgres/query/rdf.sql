@@ -42,6 +42,6 @@ LEFT JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
 WHERE q.subject_id = $1;
 
 -- name: GetStatementsBySubjectIsolated :many
-SELECT predicate, object
+SELECT predicate, object, is_literal
 FROM rdf_statements
 WHERE subject = $1 AND tenant_id = $2;

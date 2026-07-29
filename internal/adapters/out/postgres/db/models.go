@@ -180,6 +180,7 @@ type RdfStatement struct {
 	Subject   string `json:"subject"`
 	Predicate string `json:"predicate"`
 	Object    string `json:"object"`
+	IsLiteral *bool  `json:"is_literal"`
 	TenantID  int32  `json:"tenant_id"`
 }
 

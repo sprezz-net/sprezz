@@ -55,7 +55,7 @@ func (q *Queries) GetLatestPayload(ctx context.Context, objectIri string) ([]byt
 }
 
 const getStatementsBySubjectIsolated = `-- name: GetStatementsBySubjectIsolated :many
-SELECT predicate, object
+SELECT predicate, object, is_literal
 FROM rdf_statements
 WHERE subject = $1 AND tenant_id = $2
 `
@@ -68,6 +68,7 @@ type GetStatementsBySubjectIsolatedParams struct {
 type GetStatementsBySubjectIsolatedRow struct {
 	Predicate string `json:"predicate"`
 	Object    string `json:"object"`
+	IsLiteral *bool  `json:"is_literal"`
 }
 
 func (q *Queries) GetStatementsBySubjectIsolated(ctx context.Context, arg GetStatementsBySubjectIsolatedParams) ([]GetStatementsBySubjectIsolatedRow, error) {
@@ -79,7 +80,7 @@ func (q *Queries) GetStatementsBySubjectIsolated(ctx context.Context, arg GetSta
 	items := []GetStatementsBySubjectIsolatedRow{}
 	for rows.Next() {
 		var i GetStatementsBySubjectIsolatedRow
-		if err := rows.Scan(&i.Predicate, &i.Object); err != nil {
+		if err := rows.Scan(&i.Predicate, &i.Object, &i.IsLiteral); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
