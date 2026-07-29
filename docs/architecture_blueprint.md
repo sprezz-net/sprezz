@@ -253,7 +253,7 @@ Graph version creation and quad persistence are one database transaction. A pars
 
 ### 6.2 Dictionary and Quad Store
 
-Subjects, predicates, and objects are mapped to compact numeric dictionary identifiers. The quad store retains graph identity, term identity, and literal status. Dictionary lookups use the Ristretto TinyLFU cache for both URI-to-ID and ID-to-URI directions.
+Subjects, predicates, and Named Node objects (IRIs) are mapped to compact numeric dictionary identifiers. Literals (where `is_literal` is `TRUE`) bypass the dictionary mapping entirely and are stored inline as raw strings under `literal_value` directly inside the quad store table. This prevents unbounded dictionary and index bloat from highly variable text payloads, protecting ingestion scalability. The quad store retains graph identity, term identity, literal status, and inline literal values. Dictionary lookups use the Ristretto TinyLFU cache for both URI-to-ID and ID-to-URI directions.
 
 The system utilizes two distinct persistence pathways:
 
@@ -383,7 +383,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - A valid signed inbox request is accepted once and is safely deduplicated on replay.
 - Invalid signatures, mismatched digests, stale dates, blocked domains, malformed JSON, and oversized bodies are rejected before queue insertion.
 - Concurrent workers claim disjoint queue records.
-- High-throughput streaming operations leverage integer-based `QuadID` structures to isolate string heap replication from the database engine.
+- High-throughput streaming operations leverage integer-based `QuadID` structures (with inline literal text values) to isolate IRI/Named Node string heap replication from the database engine, bypassing the interning dictionary for arbitrary literal values.
 - A parser or quad persistence failure leaves no orphaned graph version.
 - Equivalent JSON-LD payloads produce stable blank-node identifiers.
 - Actor, inbox, outbox, followers, and following resources return the required ActivityPub shapes and media types.
