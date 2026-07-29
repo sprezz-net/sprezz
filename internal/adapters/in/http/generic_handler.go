@@ -195,7 +195,7 @@ func (h *GenericHandler) serveRelationshipCollection(w http.ResponseWriter, r *h
 		return
 	}
 
-	predicate := "https://www.w3.org/ns/activitystreams#" + collection
+	predicate := model.NamespaceActivityStreams + collection
 
 	items := make([]string, 0)
 	for _, quad := range quads {

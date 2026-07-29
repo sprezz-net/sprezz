@@ -72,11 +72,11 @@ func TestActivityService_AcceptFollow_Success(t *testing.T) {
 		q := quads[0]
 		switch q.Subject {
 		case followActivityIRI:
-			if q.Predicate != "https://www.w3.org/ns/activitystreams#accepted" || q.Object != "true" {
+			if q.Predicate != model.PredicateAccepted || q.Object != "true" {
 				t.Errorf("Unexpected follow state quad saved: %v", q)
 			}
 		case followedActorIRI:
-			if q.Predicate != "https://www.w3.org/ns/activitystreams#follower" || q.Object != followerActorIRI {
+			if q.Predicate != model.PredicateFollower || q.Object != followerActorIRI {
 				t.Errorf("Unexpected follower relationship quad saved: %v", q)
 			}
 		default:
@@ -166,7 +166,7 @@ func TestActivityService_RejectFollow_Success(t *testing.T) {
 		q := quads[0]
 		switch q.Subject {
 		case followActivityIRI:
-			if q.Predicate != "https://www.w3.org/ns/activitystreams#rejected" || q.Object != "true" {
+			if q.Predicate != model.PredicateRejected || q.Object != "true" {
 				t.Errorf("Unexpected follow state quad saved: %v", q)
 			}
 		default:

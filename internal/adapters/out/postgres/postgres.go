@@ -729,14 +729,14 @@ func (s *PostgresStorage) GetLatestPayload(ctx context.Context, objectIRI string
 func (s *PostgresStorage) GetLikesForObject(ctx context.Context, objectIRI string) ([]string, error) {
 	return s.queries().GetEngagementActivities(ctx, db.GetEngagementActivitiesParams{
 		Value:   objectIRI,
-		Value_2: "https://www.w3.org/ns/activitystreams#Like",
+		Value_2: model.TypeLike,
 	})
 }
 
 func (s *PostgresStorage) GetSharesForObject(ctx context.Context, objectIRI string) ([]string, error) {
 	return s.queries().GetEngagementActivities(ctx, db.GetEngagementActivitiesParams{
 		Value:   objectIRI,
-		Value_2: "https://www.w3.org/ns/activitystreams#Announce",
+		Value_2: model.TypeAnnounce,
 	})
 }
 

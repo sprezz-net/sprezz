@@ -503,8 +503,7 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 			for pred, objects := range targetMap.m {
 				if strings.Contains(pred, "type") {
 					for _, obj := range objects {
-						objVal := strings.ToLower(obj)
-						if strings.Contains(objVal, "group") || strings.Contains(objVal, "collection") {
+						if model.IsGroupOrCollection(obj) {
 							isGroupOrCollection = true
 							break
 						}
@@ -599,7 +598,7 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	}
 
 	// C. Process actual delete side-effect and tombstone creation/saving
-	if actType == "delete" {
+	if actType == strings.ToLower(model.ShortDelete) {
 		return s.processDeleteActivity(ctx, task, activity.Object)
 	}
 
@@ -631,7 +630,7 @@ func (s *ActivityService) handleIdempotentDelete(ctx context.Context, actType st
 	if err == nil && len(latest) > 0 {
 		var latestMap map[string]interface{}
 		if json.Unmarshal(latest, &latestMap) == nil {
-			if latestMap["type"] == "Tombstone" {
+			if latestMap["type"] == model.ShortTombstone {
 				return true, nil // successful idempotent no-op!
 			}
 		}
@@ -646,7 +645,7 @@ func (s *ActivityService) processDeleteActivity(ctx context.Context, task model.
 		return nil
 	}
 	latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
-	formerType := "Note"
+	formerType := model.ShortNote
 	if err == nil && len(latest) > 0 {
 		var latestMap map[string]interface{}
 		if json.Unmarshal(latest, &latestMap) == nil {
@@ -658,7 +657,7 @@ func (s *ActivityService) processDeleteActivity(ctx context.Context, task model.
 
 	tombstone := map[string]interface{}{
 		"id":         targetIRI,
-		"type":       "Tombstone",
+		"type":       model.ShortTombstone,
 		"formerType": formerType,
 		"deleted":    time.Now().UTC().Format(time.RFC3339),
 	}
@@ -1518,9 +1517,9 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 		return fmt.Errorf("unauthorized: followed actor mismatch")
 	}
 
-	activityType := "Reject"
+	activityType := model.ShortReject
 	if accept {
-		activityType = "Accept"
+		activityType = model.ShortAccept
 	}
 
 	followPayload, _ := s.storage.GetLatestPayload(ctx, followActivityIRI)
@@ -1560,9 +1559,9 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 	}
 
 	// 1. Write the state transition quad (accepted or rejected) on the original follow activity subject
-	statePredicate := "https://www.w3.org/ns/activitystreams#rejected"
+	statePredicate := model.PredicateRejected
 	if accept {
-		statePredicate = "https://www.w3.org/ns/activitystreams#accepted"
+		statePredicate = model.PredicateAccepted
 	}
 
 	stateQuads := []model.Quad{
@@ -1580,7 +1579,7 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 		followerQuads := []model.Quad{
 			{
 				Subject:   followedActorIRI,
-				Predicate: "https://www.w3.org/ns/activitystreams#follower",
+				Predicate: model.PredicateFollower,
 				Object:    followerIRI,
 				ObjType:   model.NamedNode,
 			},

@@ -160,7 +160,7 @@ func buildWebfingerResponse(resource, tenantHost string, profile *model.ActorPro
 	// Existing human channel Nomadic fallback linkages.
 	if profile.NomadGUID != "" {
 		resp.Links = append(resp.Links, WebfingerReferenceLink{
-			Rel:  "http://purl.org/zot/protocol/6.0#guid",
+			Rel:  model.PredicateNomadGUID,
 			Type: "application/x-zot+json",
 			Href: profile.NomadGUID,
 		})

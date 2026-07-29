@@ -36,8 +36,8 @@ func TestIdentityTranslatorService_InjectNomadicTriples_Success(t *testing.T) {
 	rdfTypeQuad := quads[0]
 	if rdfTypeQuad.GraphID != targetGraphID ||
 		rdfTypeQuad.Subject != actorIRI ||
-		rdfTypeQuad.Predicate != "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" ||
-		rdfTypeQuad.Object != "https://www.w3.org/ns/activitystreams#Person" ||
+		rdfTypeQuad.Predicate != model.RDFType ||
+		rdfTypeQuad.Object != model.ActorPerson ||
 		rdfTypeQuad.ObjType != model.NamedNode {
 		t.Errorf("RDF type Quad generation malformed or misaligned: %+v", rdfTypeQuad)
 	}
@@ -46,7 +46,7 @@ func TestIdentityTranslatorService_InjectNomadicTriples_Success(t *testing.T) {
 	expectedObjectLiteral := "alice-guid-12345"
 	if zotGuidQuad.GraphID != targetGraphID ||
 		zotGuidQuad.Subject != actorIRI ||
-		zotGuidQuad.Predicate != "http://purl.org/zot/protocol/guid" ||
+		zotGuidQuad.Predicate != model.PredicateZotGUID ||
 		zotGuidQuad.Object != expectedObjectLiteral ||
 		zotGuidQuad.ObjType != model.Literal {
 		t.Errorf("Zot network identifier mapping tracking Quad malformed: %+v", zotGuidQuad)

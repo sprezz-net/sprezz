@@ -20,14 +20,14 @@ func (t *IdentityTranslatorService) InjectNomadicTriples(ctx context.Context, gr
 		{
 			GraphID:   graphID,
 			Subject:   actorIRI,
-			Predicate: "http://www.w3.org/1999/02/22-rdf-syntax-ns#type",
-			Object:    "https://www.w3.org/ns/activitystreams#Person",
+			Predicate: model.RDFType,
+			Object:    model.ActorPerson,
 			ObjType:   model.NamedNode,
 		},
 		{
 			GraphID:   graphID,
 			Subject:   actorIRI,
-			Predicate: "http://purl.org/zot/protocol/guid",
+			Predicate: model.PredicateZotGUID,
 			Object:    guid,
 			ObjType:   model.Literal,
 		},

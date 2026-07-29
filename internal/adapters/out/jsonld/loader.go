@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"sprezz/internal/domain/model"
+
 	"github.com/piprate/json-gold/ld"
 )
 
@@ -55,9 +57,9 @@ func NewEmbeddedDocumentLoaderWithFallback(fallback ld.DocumentLoader) *Embedded
 func (l *EmbeddedDocumentLoader) LoadDocument(u string) (*ld.RemoteDocument, error) {
 	var filePath string
 	switch {
-	case strings.HasPrefix(u, "https://w3.org") || strings.HasPrefix(u, "http://w3.org"):
+	case strings.HasPrefix(u, model.BaseW3OrgHTTPS) || strings.HasPrefix(u, model.BaseW3OrgHTTP):
 		filePath = "contexts/activitystreams.jsonld"
-	case strings.HasPrefix(u, "https://w3id.org") || strings.HasPrefix(u, "http://w3id.org"):
+	case strings.HasPrefix(u, model.BaseW3IDHTTPS) || strings.HasPrefix(u, model.BaseW3IDHTTP):
 		filePath = "contexts/security_v1.jsonld"
 	}
 
