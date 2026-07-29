@@ -1,7 +1,6 @@
 package service_test
 
 import (
-
 	"context"
 	"errors"
 	"net/http"
@@ -557,5 +556,3 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 		t.Fatalf("Expected success for re-voting via Update activity, got error: %v", err)
 	}
 }
-
-

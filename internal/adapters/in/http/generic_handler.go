@@ -64,54 +64,78 @@ func (h *GenericHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func extractCollection(requestedIRI string) (string, string) {
+	suffixes := []string{"/inbox", "/outbox", "/followers", "/following", "/likes", "/shares", "/replies"}
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(requestedIRI, suffix) {
+			return strings.TrimPrefix(suffix, "/"), strings.TrimSuffix(requestedIRI, suffix)
+		}
+	}
+	return "", requestedIRI
+}
+
+func (h *GenericHandler) handleServerActorRedirect(w http.ResponseWriter, r *http.Request, actorIRI, collection string) bool {
+	ctx := r.Context()
+	tenantHost := httputil.RequestHost(r)
+	cleanActorIRI := strings.TrimRight(actorIRI, "/")
+	if cleanActorIRI != httputil.HTTPSPrefix+tenantHost && cleanActorIRI != httputil.HTTPPrefix+tenantHost {
+		return false
+	}
+
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		tenantDomain := middleware.GetTenantDomain(ctx)
+		tenantID, _ = h.storage.GetOrCreateTenantByDomain(ctx, tenantDomain)
+	}
+	serverIRI, err := h.storage.GetActorIRIByUsername(ctx, tenantID, "server")
+	if err == nil && serverIRI != "" {
+		targetRedirect := serverIRI
+		if collection != "" {
+			targetRedirect = serverIRI + "/" + collection
+		}
+		http.Redirect(w, r, targetRedirect, http.StatusSeeOther)
+		return true
+	}
+	return false
+}
+
+func (h *GenericHandler) handleAliasRedirect(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {
+	canonicalIRI, err := h.storage.GetActorIRIByAlias(r.Context(), actorIRI)
+	if err == nil && canonicalIRI != "" {
+		targetRedirect := canonicalIRI
+		if collection != "" {
+			targetRedirect = canonicalIRI + "/" + collection
+		}
+		http.Redirect(w, r, targetRedirect, http.StatusSeeOther)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func handleHTMLRedirect(w http.ResponseWriter, r *http.Request, payload []byte) bool {
+	accept := r.Header.Get(httputil.HeaderAccept)
+	if !strings.Contains(accept, "text/html") {
+		return false
+	}
+	var profile struct {
+		PreferredUsername string `json:"preferredUsername"`
+	}
+	if err := json.Unmarshal(payload, &profile); err == nil && profile.PreferredUsername != "" {
+		http.Redirect(w, r, httputil.HTTPSPrefix+httputil.RequestHost(r)+"/@"+profile.PreferredUsername, http.StatusFound)
+		return true
+	}
+	return false
+}
+
 func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, requestedIRI string) {
 	ctx := r.Context()
 
 	// 1. Detect and strip standard collections from the requested path
-	collection := ""
-	actorIRI := requestedIRI
-
-	if strings.HasSuffix(requestedIRI, "/inbox") {
-		collection = "inbox"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/inbox")
-	} else if strings.HasSuffix(requestedIRI, "/outbox") {
-		collection = "outbox"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/outbox")
-	} else if strings.HasSuffix(requestedIRI, "/followers") {
-		collection = "followers"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/followers")
-	} else if strings.HasSuffix(requestedIRI, "/following") {
-		collection = "following"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/following")
-	} else if strings.HasSuffix(requestedIRI, "/likes") {
-		collection = "likes"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/likes")
-	} else if strings.HasSuffix(requestedIRI, "/shares") {
-		collection = "shares"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/shares")
-	} else if strings.HasSuffix(requestedIRI, "/replies") {
-		collection = "replies"
-		actorIRI = strings.TrimSuffix(requestedIRI, "/replies")
-	}
+	collection, actorIRI := extractCollection(requestedIRI)
 
 	// Intercept FEP-d556 root domain and decoupled shared inbox lookups
-	tenantHost := httputil.RequestHost(r)
-	cleanActorIRI := strings.TrimRight(actorIRI, "/")
-	if cleanActorIRI == httputil.HTTPSPrefix+tenantHost || cleanActorIRI == httputil.HTTPPrefix+tenantHost {
-		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
-		if tenantID == 0 {
-			tenantDomain := middleware.GetTenantDomain(ctx)
-			tenantID, _ = h.storage.GetOrCreateTenantByDomain(ctx, tenantDomain)
-		}
-		serverIRI, err := h.storage.GetActorIRIByUsername(ctx, tenantID, "server")
-		if err == nil && serverIRI != "" {
-			targetRedirect := serverIRI
-			if collection != "" {
-				targetRedirect = serverIRI + "/" + collection
-			}
-			http.Redirect(w, r, targetRedirect, http.StatusSeeOther)
-			return
-		}
+	if h.handleServerActorRedirect(w, r, actorIRI, collection) {
+		return
 	}
 
 	// 2. Lookup the actor payload directly by IRI
@@ -123,30 +147,13 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 
 	// 3. If not found directly, check if the requested IRI is a registered alsoKnownAs alias
 	if len(payload) == 0 {
-		canonicalIRI, err := h.storage.GetActorIRIByAlias(ctx, actorIRI)
-		if err == nil && canonicalIRI != "" {
-			targetRedirect := canonicalIRI
-			if collection != "" {
-				targetRedirect = canonicalIRI + "/" + collection
-			}
-			http.Redirect(w, r, targetRedirect, http.StatusSeeOther)
-			return
-		}
-
-		http.NotFound(w, r)
+		h.handleAliasRedirect(w, r, actorIRI, collection)
 		return
 	}
 
 	// 4. Content Negotiation / MIME Type Branching
-	accept := r.Header.Get(httputil.HeaderAccept)
-	if strings.Contains(accept, "text/html") {
-		var profile struct {
-			PreferredUsername string `json:"preferredUsername"`
-		}
-		if err := json.Unmarshal(payload, &profile); err == nil && profile.PreferredUsername != "" {
-			http.Redirect(w, r, httputil.HTTPSPrefix+httputil.RequestHost(r)+"/@"+profile.PreferredUsername, http.StatusFound)
-			return
-		}
+	if handleHTMLRedirect(w, r, payload) {
+		return
 	}
 
 	// 5. Serve the actual ActivityPub payload collections or actor profile

@@ -1383,7 +1383,6 @@ func (s *ActivityService) cacheServerInbox(ctx context.Context, targetDomain, sh
 	}
 }
 
-
 // hasRelationshipWithDomain checks if the local server/actor has a federated relationship with the given remote domain.
 func (s *ActivityService) hasRelationshipWithDomain(ctx context.Context, localRecipients []string, targetDomain string) (bool, error) {
 	blocked, err := s.storage.IsDomainBlocked(ctx, targetDomain)

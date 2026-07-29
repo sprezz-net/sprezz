@@ -1,7 +1,6 @@
 package service_test
 
 import (
-
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
@@ -765,5 +764,3 @@ func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 		}
 	}
 }
-
-
