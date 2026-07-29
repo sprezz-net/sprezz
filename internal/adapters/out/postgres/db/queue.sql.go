@@ -53,9 +53,9 @@ func (q *Queries) ClaimInboundTasks(ctx context.Context, limit int32) ([]ClaimIn
 }
 
 const claimOutboundTasks = `-- name: ClaimOutboundTasks :many
-SELECT id, activity_iri, actor_iri, payload
+SELECT id, activity_iri, actor_iri, payload, attempts
 FROM outbound_activity_queue
-WHERE status = 'pending' OR status = 'failed'
+WHERE (status = 'pending') OR (status = 'failed' AND next_run_at <= NOW())
 ORDER BY created_at ASC
 LIMIT $1
 FOR UPDATE SKIP LOCKED
@@ -66,6 +66,7 @@ type ClaimOutboundTasksRow struct {
 	ActivityIri string      `json:"activity_iri"`
 	ActorIri    string      `json:"actor_iri"`
 	Payload     []byte      `json:"payload"`
+	Attempts    *int32      `json:"attempts"`
 }
 
 func (q *Queries) ClaimOutboundTasks(ctx context.Context, limit int32) ([]ClaimOutboundTasksRow, error) {
@@ -82,6 +83,7 @@ func (q *Queries) ClaimOutboundTasks(ctx context.Context, limit int32) ([]ClaimO
 			&i.ActivityIri,
 			&i.ActorIri,
 			&i.Payload,
+			&i.Attempts,
 		); err != nil {
 			return nil, err
 		}
@@ -181,12 +183,18 @@ func (q *Queries) MarkOutboundComplete(ctx context.Context, id pgtype.UUID) erro
 
 const markOutboundFailed = `-- name: MarkOutboundFailed :exec
 UPDATE outbound_activity_queue
-SET status = 'failed', updated_at = NOW()
+SET status = 'failed', error_message = $2, next_run_at = $3, updated_at = NOW()
 WHERE id = $1
 `
 
-func (q *Queries) MarkOutboundFailed(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, markOutboundFailed, id)
+type MarkOutboundFailedParams struct {
+	ID           pgtype.UUID        `json:"id"`
+	ErrorMessage *string            `json:"error_message"`
+	NextRunAt    pgtype.Timestamptz `json:"next_run_at"`
+}
+
+func (q *Queries) MarkOutboundFailed(ctx context.Context, arg MarkOutboundFailedParams) error {
+	_, err := q.db.Exec(ctx, markOutboundFailed, arg.ID, arg.ErrorMessage, arg.NextRunAt)
 	return err
 }
 

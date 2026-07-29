@@ -52,4 +52,5 @@ type OutboundTask struct {
 	ActivityIRI string
 	ActorIRI    string
 	Payload     []byte
+	Attempts    int
 }

@@ -234,7 +234,17 @@ func (s *PostgresStorage) ClaimOutboundBatch(ctx context.Context, batchSize int)
 			return nil, err
 		}
 		ids = append(ids, row.ID)
-		tasks = append(tasks, model.OutboundTask{ID: id.String(), ActivityIRI: row.ActivityIri, ActorIRI: row.ActorIri, Payload: row.Payload})
+		var attempts int
+		if row.Attempts != nil {
+			attempts = int(*row.Attempts)
+		}
+		tasks = append(tasks, model.OutboundTask{
+			ID:          id.String(),
+			ActivityIRI: row.ActivityIri,
+			ActorIRI:    row.ActorIri,
+			Payload:     row.Payload,
+			Attempts:    attempts,
+		})
 	}
 	if len(ids) > 0 {
 		if err := queries.MarkOutboundProcessing(ctx, ids); err != nil {
@@ -260,7 +270,34 @@ func (s *PostgresStorage) MarkOutboundFailed(ctx context.Context, id string, rea
 	if err != nil {
 		return err
 	}
-	return s.queries().MarkOutboundFailed(ctx, queueID)
+
+	// Fetch current attempts to calculate exponential backoff delay
+	var attempts int32
+	err = s.db.QueryRow(ctx, "SELECT attempts FROM outbound_activity_queue WHERE id = $1", queueID).Scan(&attempts)
+	if err != nil {
+		return err
+	}
+
+	// Calculate truncated exponential backoff delay: 2^attempts * BaseDelay
+	baseDelay := 1 * time.Second
+	maxDelay := 2 * time.Hour
+	tempDelay := baseDelay * (1 << uint(attempts))
+	if tempDelay > maxDelay || tempDelay < baseDelay {
+		tempDelay = maxDelay
+	}
+
+	nextRunAt := time.Now().Add(tempDelay)
+
+	var errMsg *string
+	if reason != "" {
+		errMsg = &reason
+	}
+
+	return s.queries().MarkOutboundFailed(ctx, db.MarkOutboundFailedParams{
+		ID:           queueID,
+		ErrorMessage: errMsg,
+		NextRunAt:    pgtype.Timestamptz{Time: nextRunAt, Valid: true},
+	})
 }
 
 func (s *PostgresStorage) GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error) {

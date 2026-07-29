@@ -43,9 +43,9 @@ WHERE activity_iri = $1
 LIMIT 1;
 
 -- name: ClaimOutboundTasks :many
-SELECT id, activity_iri, actor_iri, payload
+SELECT id, activity_iri, actor_iri, payload, attempts
 FROM outbound_activity_queue
-WHERE status = 'pending' OR status = 'failed'
+WHERE (status = 'pending') OR (status = 'failed' AND next_run_at <= NOW())
 ORDER BY created_at ASC
 LIMIT $1
 FOR UPDATE SKIP LOCKED;
@@ -62,5 +62,5 @@ WHERE id = $1;
 
 -- name: MarkOutboundFailed :exec
 UPDATE outbound_activity_queue
-SET status = 'failed', updated_at = NOW()
+SET status = 'failed', error_message = $2, next_run_at = $3, updated_at = NOW()
 WHERE id = $1;

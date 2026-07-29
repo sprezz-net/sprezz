@@ -99,10 +99,13 @@ CREATE TABLE outbound_activity_queue (
     payload JSONB NOT NULL,
     status activity_status DEFAULT 'pending',
     attempts INT DEFAULT 0,
+    next_run_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    error_message TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 CREATE INDEX idx_outbox_timeline ON outbound_activity_queue(actor_iri, created_at DESC);
+CREATE INDEX idx_outbound_queue_process ON outbound_activity_queue(status, next_run_at) WHERE status = 'pending' OR status = 'failed';
 
 -- RDF Dictionary Compression Layer
 CREATE TABLE rdf_dictionary (

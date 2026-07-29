@@ -139,14 +139,16 @@ type NomadicIdentity struct {
 }
 
 type OutboundActivityQueue struct {
-	ID          pgtype.UUID        `json:"id"`
-	ActivityIri string             `json:"activity_iri"`
-	ActorIri    string             `json:"actor_iri"`
-	Payload     []byte             `json:"payload"`
-	Status      *ActivityStatus    `json:"status"`
-	Attempts    *int32             `json:"attempts"`
-	CreatedAt   pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+	ID           pgtype.UUID        `json:"id"`
+	ActivityIri  string             `json:"activity_iri"`
+	ActorIri     string             `json:"actor_iri"`
+	Payload      []byte             `json:"payload"`
+	Status       *ActivityStatus    `json:"status"`
+	Attempts     *int32             `json:"attempts"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+	NextRunAt    pgtype.Timestamptz `json:"next_run_at"`
+	ErrorMessage *string            `json:"error_message"`
 }
 
 type RdfDictionary struct {
