@@ -45,3 +45,13 @@ WHERE q.subject_id = $1;
 SELECT predicate, object, is_literal
 FROM rdf_statements
 WHERE subject = $1 AND tenant_id = $2;
+
+-- name: GetStatementsBySubjectExpanded :many
+SELECT
+    p_dict.value AS predicate,
+    COALESCE(o_dict.value, r.object_literal) AS object_value,
+    r.object_literal IS NULL AS is_iri
+FROM rdf_statements r
+JOIN rdf_dictionary p_dict ON r.predicate_id = p_dict.id
+LEFT JOIN rdf_dictionary o_dict ON r.object_id = o_dict.id
+WHERE r.subject_id = $1 AND r.tenant_id = $2;

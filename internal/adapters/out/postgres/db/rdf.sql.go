@@ -54,6 +54,48 @@ func (q *Queries) GetLatestPayload(ctx context.Context, objectIri string) ([]byt
 	return payload, err
 }
 
+const getStatementsBySubjectExpanded = `-- name: GetStatementsBySubjectExpanded :many
+SELECT
+    p_dict.value AS predicate,
+    COALESCE(o_dict.value, r.object_literal) AS object_value,
+    r.object_literal IS NULL AS is_iri
+FROM rdf_statements r
+JOIN rdf_dictionary p_dict ON r.predicate_id = p_dict.id
+LEFT JOIN rdf_dictionary o_dict ON r.object_id = o_dict.id
+WHERE r.subject_id = $1 AND r.tenant_id = $2
+`
+
+type GetStatementsBySubjectExpandedParams struct {
+	SubjectID int64 `json:"subject_id"`
+	TenantID  int32 `json:"tenant_id"`
+}
+
+type GetStatementsBySubjectExpandedRow struct {
+	Predicate   string      `json:"predicate"`
+	ObjectValue string      `json:"object_value"`
+	IsIri       interface{} `json:"is_iri"`
+}
+
+func (q *Queries) GetStatementsBySubjectExpanded(ctx context.Context, arg GetStatementsBySubjectExpandedParams) ([]GetStatementsBySubjectExpandedRow, error) {
+	rows, err := q.db.Query(ctx, getStatementsBySubjectExpanded, arg.SubjectID, arg.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetStatementsBySubjectExpandedRow{}
+	for rows.Next() {
+		var i GetStatementsBySubjectExpandedRow
+		if err := rows.Scan(&i.Predicate, &i.ObjectValue, &i.IsIri); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStatementsBySubjectIsolated = `-- name: GetStatementsBySubjectIsolated :many
 SELECT predicate, object, is_literal
 FROM rdf_statements

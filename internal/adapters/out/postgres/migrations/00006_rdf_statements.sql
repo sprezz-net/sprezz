@@ -6,7 +6,11 @@ SELECT
     d_pred.value AS predicate,
     COALESCE(d_obj.value, q.literal_value)::TEXT AS object,
     q.is_literal,
-    st.id AS tenant_id
+    st.id AS tenant_id,
+    q.subject_id,
+    q.predicate_id,
+    q.object_id,
+    q.literal_value AS object_literal
 FROM rdf_quads q
 JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
 JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id

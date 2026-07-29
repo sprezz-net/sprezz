@@ -177,11 +177,15 @@ type RdfQuad struct {
 }
 
 type RdfStatement struct {
-	Subject   string `json:"subject"`
-	Predicate string `json:"predicate"`
-	Object    string `json:"object"`
-	IsLiteral *bool  `json:"is_literal"`
-	TenantID  int32  `json:"tenant_id"`
+	Subject       string  `json:"subject"`
+	Predicate     string  `json:"predicate"`
+	Object        string  `json:"object"`
+	IsLiteral     *bool   `json:"is_literal"`
+	TenantID      int32   `json:"tenant_id"`
+	SubjectID     int64   `json:"subject_id"`
+	PredicateID   int64   `json:"predicate_id"`
+	ObjectID      *int64  `json:"object_id"`
+	ObjectLiteral *string `json:"object_literal"`
 }
 
 type ServerTenant struct {
