@@ -23,6 +23,8 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+
+	"github.com/google/uuid"
 )
 
 var ErrDropAction = errors.New("drop action gracefully")
@@ -1486,4 +1488,115 @@ func (s *ActivityService) hasRelationshipWithDomain(ctx context.Context, localRe
 	}
 
 	return false, nil
+}
+
+func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActorIRI, followActivityIRI string, accept bool) error {
+	quads, err := s.storage.StreamQuadsBySubject(ctx, followActivityIRI)
+	if err != nil {
+		return err
+	}
+	if len(quads) == 0 {
+		return fmt.Errorf("prior activity %s not found in database", followActivityIRI)
+	}
+
+	var followerIRI string
+	var followedIRI string
+	for _, q := range quads {
+		pred := strings.ToLower(q.Predicate)
+		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+			followerIRI = strings.Trim(q.Object, `"'`)
+		}
+		if strings.Contains(pred, "object") {
+			followedIRI = strings.Trim(q.Object, `"'`)
+		}
+	}
+	if followerIRI == "" || followedIRI == "" {
+		return fmt.Errorf("invalid follow activity structure")
+	}
+
+	if followedIRI != followedActorIRI {
+		return fmt.Errorf("unauthorized: followed actor mismatch")
+	}
+
+	activityType := "Reject"
+	if accept {
+		activityType = "Accept"
+	}
+
+	followPayload, _ := s.storage.GetLatestPayload(ctx, followActivityIRI)
+	var originalFollow interface{}
+	if len(followPayload) > 0 {
+		var parsed map[string]interface{}
+		if json.Unmarshal(followPayload, &parsed) == nil {
+			originalFollow = parsed
+		}
+	}
+	if originalFollow == nil {
+		originalFollow = followActivityIRI
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	activityIRI := fmt.Sprintf("%s/activities/%s-%s", followedActorIRI, strings.ToLower(activityType), id.String())
+
+	responseActivity := map[string]interface{}{
+		"@context": "https://www.w3.org/ns/activitystreams",
+		"id":       activityIRI,
+		"type":     activityType,
+		"actor":    followedActorIRI,
+		"object":   originalFollow,
+		"to":       []string{followerIRI},
+	}
+	payload, err := json.Marshal(responseActivity)
+	if err != nil {
+		return err
+	}
+
+	err = s.DispatchOutboundActivity(ctx, activityIRI, followedActorIRI, payload)
+	if err != nil {
+		return fmt.Errorf("dispatch follow response activity: %w", err)
+	}
+
+	// 1. Write the state transition quad (accepted or rejected) on the original follow activity subject
+	statePredicate := "https://www.w3.org/ns/activitystreams#rejected"
+	if accept {
+		statePredicate = "https://www.w3.org/ns/activitystreams#accepted"
+	}
+
+	stateQuads := []model.Quad{
+		{
+			Subject:   followActivityIRI,
+			Predicate: statePredicate,
+			Object:    "true",
+			ObjType:   model.Literal,
+		},
+	}
+	_ = s.storage.SaveQuads(ctx, stateQuads)
+
+	// 2. On Accept, write the activitystreams#follower edge into the RDF graph
+	if accept {
+		followerQuads := []model.Quad{
+			{
+				Subject:   followedActorIRI,
+				Predicate: "https://www.w3.org/ns/activitystreams#follower",
+				Object:    followerIRI,
+				ObjType:   model.NamedNode,
+			},
+		}
+		if err := s.storage.SaveQuads(ctx, followerQuads); err != nil {
+			return fmt.Errorf("failed to save follower relationship quads: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *ActivityService) AcceptFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error {
+	return s.handleFollowResponse(ctx, followedActorIRI, followActivityIRI, true)
+}
+
+func (s *ActivityService) RejectFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error {
+	return s.handleFollowResponse(ctx, followedActorIRI, followActivityIRI, false)
 }

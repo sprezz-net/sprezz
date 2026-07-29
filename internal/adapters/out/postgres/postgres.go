@@ -151,6 +151,18 @@ func (s *PostgresStorage) RecordActorInboxDelivery(ctx context.Context, actorIRI
 	return s.queries().RecordActorInboxDelivery(ctx, db.RecordActorInboxDeliveryParams{ActorIri: actorIRI, ActivityIri: activityIRI})
 }
 
+func extractDomain(iri string) string {
+	parts := strings.Split(iri, "://")
+	if len(parts) < 2 {
+		return ""
+	}
+	subParts := strings.Split(parts[1], "/")
+	if len(subParts) == 0 {
+		return ""
+	}
+	return strings.ToLower(subParts[0])
+}
+
 func (s *PostgresStorage) GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error) {
 	queries := s.queries()
 	switch collection {
@@ -158,6 +170,53 @@ func (s *PostgresStorage) GetCollectionPayloads(ctx context.Context, actorIRI, c
 		return queries.GetInboxPayloads(ctx, db.GetInboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
 	case "outbox":
 		return queries.GetOutboxPayloads(ctx, db.GetOutboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
+	case "pending_follows":
+		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+		if tenantID == 0 {
+			host := extractDomain(actorIRI)
+			if host != "" {
+				tenantID, _ = s.GetOrCreateTenantByDomain(ctx, host)
+			}
+		}
+		if tenantID == 0 {
+			tenantID = 1
+		}
+
+		query := `
+			SELECT DISTINCT g.payload
+			FROM rdf_graphs g
+			JOIN rdf_statements rs_obj ON g.activity_id = rs_obj.subject
+			JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
+			WHERE rs_obj.tenant_id = $1
+			  AND rs_obj.object = $2
+			  AND (rs_obj.predicate ILIKE '%object%' OR rs_obj.predicate ILIKE '%as:object%')
+			  AND rs_type.tenant_id = $1
+			  AND rs_type.predicate ILIKE '%type%'
+			  AND rs_type.object ILIKE '%Follow%'
+			  AND NOT EXISTS (
+				  SELECT 1 FROM rdf_statements rs_state
+				  WHERE rs_state.subject = g.activity_id
+					AND rs_state.tenant_id = $1
+					AND (rs_state.predicate ILIKE '%accepted%' OR rs_state.predicate ILIKE '%rejected%' OR rs_state.predicate ILIKE '%result%')
+			  )
+			ORDER BY g.created_at DESC
+			LIMIT $3 OFFSET $4;
+		`
+		rows, err := s.db.Query(ctx, query, tenantID, actorIRI, int32(limit), int32(offset))
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var payloads [][]byte
+		for rows.Next() {
+			var payload []byte
+			if err := rows.Scan(&payload); err != nil {
+				return nil, err
+			}
+			payloads = append(payloads, payload)
+		}
+		return payloads, nil
 	default:
 		return nil, fmt.Errorf("unsupported collection %q", collection)
 	}

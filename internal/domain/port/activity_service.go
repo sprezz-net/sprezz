@@ -25,4 +25,6 @@ type ActivityServicePort interface {
 	DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error
 	GetFollowersTimeline(ctx context.Context, actorIRI string, limit, offset int) ([]string, error)
 	GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error)
+	AcceptFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error
+	RejectFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error
 }

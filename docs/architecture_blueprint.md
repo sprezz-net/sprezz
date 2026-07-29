@@ -315,6 +315,17 @@ Followers and following resources are exposed at `https://<domain>/actor/<uuidv4
 
 Items are sourced by scanning historical RDF relationship edges matching designated graph predicates (`activitystreams#follower` or `activitystreams#following`). The resolution pipeline filters out literal values, excludes duplicate entries, and preserves stable storage index ordering to guarantee deterministic pagination windows.
 
+### 7.3.1 Interactive Relationship Lifecycle (Follow / Accept / Reject)
+
+To support spec-compliant activity lifecycle transitions, follows operate as an active state machine within the RDF quad store rather than static immediate edges:
+
+1. **Inbound Follow Ingestion**: When a remote actor sends a `Follow` activity targeting a local actor, the system parses and stores the `Follow` activity itself in the RDF quad store. Because it does not yet contain any triples containing `accepted`, `rejected`, or `result`, it remains in an implicit "pending" state.
+2. **Pending Follows Collection**: The system exposes a `"pending_follows"` collection for local actors. It evaluates pending follow entries by performing a tenant-isolated query on the `rdf_statements` view to find `Follow` activities targeting the local actor that do not have `accepted`, `rejected`, or `result` predicates.
+3. **Accepting/Rejecting Follows**: Local actors confirm or reject follows using dedicated service methods (`AcceptFollow` and `RejectFollow`). These methods:
+   - Construct and dispatch a spec-compliant `Accept` or `Reject` activity back to the follower's inbox.
+   - For `Accept`, write a state transition quad (`<followActivityIRI> <as:accepted> "true"`) and establish the active follow relationship edge (`<followedActorIRI> <activitystreams#follower> <followerActorIRI>`) in the RDF graph.
+   - For `Reject`, write a state transition quad (`<followActivityIRI> <as:rejected> "true"`) and do not write any relationship edge.
+
 ### 7.4 Privacy and Audience Rules
 
 Timeline and thread views MUST evaluate the ActivityStreams public audience explicitly. Public activities are eligible for general display. Private activities are eligible only when the requesting actor is present in the addressed audience or has an authorized relationship in the local graph.

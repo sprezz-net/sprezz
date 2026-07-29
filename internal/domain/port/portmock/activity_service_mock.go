@@ -20,6 +20,13 @@ type ActivityServicePortMock struct {
 	t          minimock.Tester
 	finishOnce sync.Once
 
+	funcAcceptFollow          func(ctx context.Context, followedActorIRI string, followActivityIRI string) (err error)
+	funcAcceptFollowOrigin    string
+	inspectFuncAcceptFollow   func(ctx context.Context, followedActorIRI string, followActivityIRI string)
+	afterAcceptFollowCounter  uint64
+	beforeAcceptFollowCounter uint64
+	AcceptFollowMock          mActivityServicePortMockAcceptFollow
+
 	funcDispatchOutboundActivity          func(ctx context.Context, activityIRI string, actorIRI string, payload []byte) (err error)
 	funcDispatchOutboundActivityOrigin    string
 	inspectFuncDispatchOutboundActivity   func(ctx context.Context, activityIRI string, actorIRI string, payload []byte)
@@ -61,6 +68,13 @@ type ActivityServicePortMock struct {
 	afterPurgeOrphanedMediaCounter  uint64
 	beforePurgeOrphanedMediaCounter uint64
 	PurgeOrphanedMediaMock          mActivityServicePortMockPurgeOrphanedMedia
+
+	funcRejectFollow          func(ctx context.Context, followedActorIRI string, followActivityIRI string) (err error)
+	funcRejectFollowOrigin    string
+	inspectFuncRejectFollow   func(ctx context.Context, followedActorIRI string, followActivityIRI string)
+	afterRejectFollowCounter  uint64
+	beforeRejectFollowCounter uint64
+	RejectFollowMock          mActivityServicePortMockRejectFollow
 }
 
 // NewActivityServicePortMock returns a mock for mm_port.ActivityServicePort
@@ -70,6 +84,9 @@ func NewActivityServicePortMock(t minimock.Tester) *ActivityServicePortMock {
 	if controller, ok := t.(minimock.MockController); ok {
 		controller.RegisterMocker(m)
 	}
+
+	m.AcceptFollowMock = mActivityServicePortMockAcceptFollow{mock: m}
+	m.AcceptFollowMock.callArgs = []*ActivityServicePortMockAcceptFollowParams{}
 
 	m.DispatchOutboundActivityMock = mActivityServicePortMockDispatchOutboundActivity{mock: m}
 	m.DispatchOutboundActivityMock.callArgs = []*ActivityServicePortMockDispatchOutboundActivityParams{}
@@ -89,9 +106,385 @@ func NewActivityServicePortMock(t minimock.Tester) *ActivityServicePortMock {
 	m.PurgeOrphanedMediaMock = mActivityServicePortMockPurgeOrphanedMedia{mock: m}
 	m.PurgeOrphanedMediaMock.callArgs = []*ActivityServicePortMockPurgeOrphanedMediaParams{}
 
+	m.RejectFollowMock = mActivityServicePortMockRejectFollow{mock: m}
+	m.RejectFollowMock.callArgs = []*ActivityServicePortMockRejectFollowParams{}
+
 	t.Cleanup(m.MinimockFinish)
 
 	return m
+}
+
+type mActivityServicePortMockAcceptFollow struct {
+	optional           bool
+	mock               *ActivityServicePortMock
+	defaultExpectation *ActivityServicePortMockAcceptFollowExpectation
+	expectations       []*ActivityServicePortMockAcceptFollowExpectation
+
+	callArgs []*ActivityServicePortMockAcceptFollowParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// ActivityServicePortMockAcceptFollowExpectation specifies expectation struct of the ActivityServicePort.AcceptFollow
+type ActivityServicePortMockAcceptFollowExpectation struct {
+	mock               *ActivityServicePortMock
+	params             *ActivityServicePortMockAcceptFollowParams
+	paramPtrs          *ActivityServicePortMockAcceptFollowParamPtrs
+	expectationOrigins ActivityServicePortMockAcceptFollowExpectationOrigins
+	results            *ActivityServicePortMockAcceptFollowResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// ActivityServicePortMockAcceptFollowParams contains parameters of the ActivityServicePort.AcceptFollow
+type ActivityServicePortMockAcceptFollowParams struct {
+	ctx               context.Context
+	followedActorIRI  string
+	followActivityIRI string
+}
+
+// ActivityServicePortMockAcceptFollowParamPtrs contains pointers to parameters of the ActivityServicePort.AcceptFollow
+type ActivityServicePortMockAcceptFollowParamPtrs struct {
+	ctx               *context.Context
+	followedActorIRI  *string
+	followActivityIRI *string
+}
+
+// ActivityServicePortMockAcceptFollowResults contains results of the ActivityServicePort.AcceptFollow
+type ActivityServicePortMockAcceptFollowResults struct {
+	err error
+}
+
+// ActivityServicePortMockAcceptFollowOrigins contains origins of expectations of the ActivityServicePort.AcceptFollow
+type ActivityServicePortMockAcceptFollowExpectationOrigins struct {
+	origin                  string
+	originCtx               string
+	originFollowedActorIRI  string
+	originFollowActivityIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Optional() *mActivityServicePortMockAcceptFollow {
+	mmAcceptFollow.optional = true
+	return mmAcceptFollow
+}
+
+// Expect sets up expected params for ActivityServicePort.AcceptFollow
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Expect(ctx context.Context, followedActorIRI string, followActivityIRI string) *mActivityServicePortMockAcceptFollow {
+	if mmAcceptFollow.mock.funcAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Set")
+	}
+
+	if mmAcceptFollow.defaultExpectation == nil {
+		mmAcceptFollow.defaultExpectation = &ActivityServicePortMockAcceptFollowExpectation{}
+	}
+
+	if mmAcceptFollow.defaultExpectation.paramPtrs != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by ExpectParams functions")
+	}
+
+	mmAcceptFollow.defaultExpectation.params = &ActivityServicePortMockAcceptFollowParams{ctx, followedActorIRI, followActivityIRI}
+	mmAcceptFollow.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmAcceptFollow.expectations {
+		if minimock.Equal(e.params, mmAcceptFollow.defaultExpectation.params) {
+			mmAcceptFollow.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmAcceptFollow.defaultExpectation.params)
+		}
+	}
+
+	return mmAcceptFollow
+}
+
+// ExpectCtxParam1 sets up expected param ctx for ActivityServicePort.AcceptFollow
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) ExpectCtxParam1(ctx context.Context) *mActivityServicePortMockAcceptFollow {
+	if mmAcceptFollow.mock.funcAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Set")
+	}
+
+	if mmAcceptFollow.defaultExpectation == nil {
+		mmAcceptFollow.defaultExpectation = &ActivityServicePortMockAcceptFollowExpectation{}
+	}
+
+	if mmAcceptFollow.defaultExpectation.params != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Expect")
+	}
+
+	if mmAcceptFollow.defaultExpectation.paramPtrs == nil {
+		mmAcceptFollow.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptFollowParamPtrs{}
+	}
+	mmAcceptFollow.defaultExpectation.paramPtrs.ctx = &ctx
+	mmAcceptFollow.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmAcceptFollow
+}
+
+// ExpectFollowedActorIRIParam2 sets up expected param followedActorIRI for ActivityServicePort.AcceptFollow
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) ExpectFollowedActorIRIParam2(followedActorIRI string) *mActivityServicePortMockAcceptFollow {
+	if mmAcceptFollow.mock.funcAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Set")
+	}
+
+	if mmAcceptFollow.defaultExpectation == nil {
+		mmAcceptFollow.defaultExpectation = &ActivityServicePortMockAcceptFollowExpectation{}
+	}
+
+	if mmAcceptFollow.defaultExpectation.params != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Expect")
+	}
+
+	if mmAcceptFollow.defaultExpectation.paramPtrs == nil {
+		mmAcceptFollow.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptFollowParamPtrs{}
+	}
+	mmAcceptFollow.defaultExpectation.paramPtrs.followedActorIRI = &followedActorIRI
+	mmAcceptFollow.defaultExpectation.expectationOrigins.originFollowedActorIRI = minimock.CallerInfo(1)
+
+	return mmAcceptFollow
+}
+
+// ExpectFollowActivityIRIParam3 sets up expected param followActivityIRI for ActivityServicePort.AcceptFollow
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) ExpectFollowActivityIRIParam3(followActivityIRI string) *mActivityServicePortMockAcceptFollow {
+	if mmAcceptFollow.mock.funcAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Set")
+	}
+
+	if mmAcceptFollow.defaultExpectation == nil {
+		mmAcceptFollow.defaultExpectation = &ActivityServicePortMockAcceptFollowExpectation{}
+	}
+
+	if mmAcceptFollow.defaultExpectation.params != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Expect")
+	}
+
+	if mmAcceptFollow.defaultExpectation.paramPtrs == nil {
+		mmAcceptFollow.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptFollowParamPtrs{}
+	}
+	mmAcceptFollow.defaultExpectation.paramPtrs.followActivityIRI = &followActivityIRI
+	mmAcceptFollow.defaultExpectation.expectationOrigins.originFollowActivityIRI = minimock.CallerInfo(1)
+
+	return mmAcceptFollow
+}
+
+// Inspect accepts an inspector function that has same arguments as the ActivityServicePort.AcceptFollow
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Inspect(f func(ctx context.Context, followedActorIRI string, followActivityIRI string)) *mActivityServicePortMockAcceptFollow {
+	if mmAcceptFollow.mock.inspectFuncAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("Inspect function is already set for ActivityServicePortMock.AcceptFollow")
+	}
+
+	mmAcceptFollow.mock.inspectFuncAcceptFollow = f
+
+	return mmAcceptFollow
+}
+
+// Return sets up results that will be returned by ActivityServicePort.AcceptFollow
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Return(err error) *ActivityServicePortMock {
+	if mmAcceptFollow.mock.funcAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Set")
+	}
+
+	if mmAcceptFollow.defaultExpectation == nil {
+		mmAcceptFollow.defaultExpectation = &ActivityServicePortMockAcceptFollowExpectation{mock: mmAcceptFollow.mock}
+	}
+	mmAcceptFollow.defaultExpectation.results = &ActivityServicePortMockAcceptFollowResults{err}
+	mmAcceptFollow.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmAcceptFollow.mock
+}
+
+// Set uses given function f to mock the ActivityServicePort.AcceptFollow method
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Set(f func(ctx context.Context, followedActorIRI string, followActivityIRI string) (err error)) *ActivityServicePortMock {
+	if mmAcceptFollow.defaultExpectation != nil {
+		mmAcceptFollow.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.AcceptFollow method")
+	}
+
+	if len(mmAcceptFollow.expectations) > 0 {
+		mmAcceptFollow.mock.t.Fatalf("Some expectations are already set for the ActivityServicePort.AcceptFollow method")
+	}
+
+	mmAcceptFollow.mock.funcAcceptFollow = f
+	mmAcceptFollow.mock.funcAcceptFollowOrigin = minimock.CallerInfo(1)
+	return mmAcceptFollow.mock
+}
+
+// When sets expectation for the ActivityServicePort.AcceptFollow which will trigger the result defined by the following
+// Then helper
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) When(ctx context.Context, followedActorIRI string, followActivityIRI string) *ActivityServicePortMockAcceptFollowExpectation {
+	if mmAcceptFollow.mock.funcAcceptFollow != nil {
+		mmAcceptFollow.mock.t.Fatalf("ActivityServicePortMock.AcceptFollow mock is already set by Set")
+	}
+
+	expectation := &ActivityServicePortMockAcceptFollowExpectation{
+		mock:               mmAcceptFollow.mock,
+		params:             &ActivityServicePortMockAcceptFollowParams{ctx, followedActorIRI, followActivityIRI},
+		expectationOrigins: ActivityServicePortMockAcceptFollowExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmAcceptFollow.expectations = append(mmAcceptFollow.expectations, expectation)
+	return expectation
+}
+
+// Then sets up ActivityServicePort.AcceptFollow return parameters for the expectation previously defined by the When method
+func (e *ActivityServicePortMockAcceptFollowExpectation) Then(err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockAcceptFollowResults{err}
+	return e.mock
+}
+
+// Times sets number of times ActivityServicePort.AcceptFollow should be invoked
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Times(n uint64) *mActivityServicePortMockAcceptFollow {
+	if n == 0 {
+		mmAcceptFollow.mock.t.Fatalf("Times of ActivityServicePortMock.AcceptFollow mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmAcceptFollow.expectedInvocations, n)
+	mmAcceptFollow.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmAcceptFollow
+}
+
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) invocationsDone() bool {
+	if len(mmAcceptFollow.expectations) == 0 && mmAcceptFollow.defaultExpectation == nil && mmAcceptFollow.mock.funcAcceptFollow == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmAcceptFollow.mock.afterAcceptFollowCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmAcceptFollow.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// AcceptFollow implements mm_port.ActivityServicePort
+func (mmAcceptFollow *ActivityServicePortMock) AcceptFollow(ctx context.Context, followedActorIRI string, followActivityIRI string) (err error) {
+	mm_atomic.AddUint64(&mmAcceptFollow.beforeAcceptFollowCounter, 1)
+	defer mm_atomic.AddUint64(&mmAcceptFollow.afterAcceptFollowCounter, 1)
+
+	mmAcceptFollow.t.Helper()
+
+	if mmAcceptFollow.inspectFuncAcceptFollow != nil {
+		mmAcceptFollow.inspectFuncAcceptFollow(ctx, followedActorIRI, followActivityIRI)
+	}
+
+	mm_params := ActivityServicePortMockAcceptFollowParams{ctx, followedActorIRI, followActivityIRI}
+
+	// Record call args
+	mmAcceptFollow.AcceptFollowMock.mutex.Lock()
+	mmAcceptFollow.AcceptFollowMock.callArgs = append(mmAcceptFollow.AcceptFollowMock.callArgs, &mm_params)
+	mmAcceptFollow.AcceptFollowMock.mutex.Unlock()
+
+	for _, e := range mmAcceptFollow.AcceptFollowMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmAcceptFollow.AcceptFollowMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmAcceptFollow.AcceptFollowMock.defaultExpectation.Counter, 1)
+		mm_want := mmAcceptFollow.AcceptFollowMock.defaultExpectation.params
+		mm_want_ptrs := mmAcceptFollow.AcceptFollowMock.defaultExpectation.paramPtrs
+
+		mm_got := ActivityServicePortMockAcceptFollowParams{ctx, followedActorIRI, followActivityIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmAcceptFollow.t.Errorf("ActivityServicePortMock.AcceptFollow got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptFollow.AcceptFollowMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.followedActorIRI != nil && !minimock.Equal(*mm_want_ptrs.followedActorIRI, mm_got.followedActorIRI) {
+				mmAcceptFollow.t.Errorf("ActivityServicePortMock.AcceptFollow got unexpected parameter followedActorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptFollow.AcceptFollowMock.defaultExpectation.expectationOrigins.originFollowedActorIRI, *mm_want_ptrs.followedActorIRI, mm_got.followedActorIRI, minimock.Diff(*mm_want_ptrs.followedActorIRI, mm_got.followedActorIRI))
+			}
+
+			if mm_want_ptrs.followActivityIRI != nil && !minimock.Equal(*mm_want_ptrs.followActivityIRI, mm_got.followActivityIRI) {
+				mmAcceptFollow.t.Errorf("ActivityServicePortMock.AcceptFollow got unexpected parameter followActivityIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptFollow.AcceptFollowMock.defaultExpectation.expectationOrigins.originFollowActivityIRI, *mm_want_ptrs.followActivityIRI, mm_got.followActivityIRI, minimock.Diff(*mm_want_ptrs.followActivityIRI, mm_got.followActivityIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmAcceptFollow.t.Errorf("ActivityServicePortMock.AcceptFollow got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmAcceptFollow.AcceptFollowMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmAcceptFollow.AcceptFollowMock.defaultExpectation.results
+		if mm_results == nil {
+			mmAcceptFollow.t.Fatal("No results are set for the ActivityServicePortMock.AcceptFollow")
+		}
+		return (*mm_results).err
+	}
+	if mmAcceptFollow.funcAcceptFollow != nil {
+		return mmAcceptFollow.funcAcceptFollow(ctx, followedActorIRI, followActivityIRI)
+	}
+	mmAcceptFollow.t.Fatalf("Unexpected call to ActivityServicePortMock.AcceptFollow. %v %v %v", ctx, followedActorIRI, followActivityIRI)
+	return
+}
+
+// AcceptFollowAfterCounter returns a count of finished ActivityServicePortMock.AcceptFollow invocations
+func (mmAcceptFollow *ActivityServicePortMock) AcceptFollowAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmAcceptFollow.afterAcceptFollowCounter)
+}
+
+// AcceptFollowBeforeCounter returns a count of ActivityServicePortMock.AcceptFollow invocations
+func (mmAcceptFollow *ActivityServicePortMock) AcceptFollowBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmAcceptFollow.beforeAcceptFollowCounter)
+}
+
+// Calls returns a list of arguments used in each call to ActivityServicePortMock.AcceptFollow.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmAcceptFollow *mActivityServicePortMockAcceptFollow) Calls() []*ActivityServicePortMockAcceptFollowParams {
+	mmAcceptFollow.mutex.RLock()
+
+	argCopy := make([]*ActivityServicePortMockAcceptFollowParams, len(mmAcceptFollow.callArgs))
+	copy(argCopy, mmAcceptFollow.callArgs)
+
+	mmAcceptFollow.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockAcceptFollowDone returns true if the count of the AcceptFollow invocations corresponds
+// the number of defined expectations
+func (m *ActivityServicePortMock) MinimockAcceptFollowDone() bool {
+	if m.AcceptFollowMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.AcceptFollowMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.AcceptFollowMock.invocationsDone()
+}
+
+// MinimockAcceptFollowInspect logs each unmet expectation
+func (m *ActivityServicePortMock) MinimockAcceptFollowInspect() {
+	for _, e := range m.AcceptFollowMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to ActivityServicePortMock.AcceptFollow at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterAcceptFollowCounter := mm_atomic.LoadUint64(&m.afterAcceptFollowCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.AcceptFollowMock.defaultExpectation != nil && afterAcceptFollowCounter < 1 {
+		if m.AcceptFollowMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to ActivityServicePortMock.AcceptFollow at\n%s", m.AcceptFollowMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to ActivityServicePortMock.AcceptFollow at\n%s with params: %#v", m.AcceptFollowMock.defaultExpectation.expectationOrigins.origin, *m.AcceptFollowMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcAcceptFollow != nil && afterAcceptFollowCounter < 1 {
+		m.t.Errorf("Expected call to ActivityServicePortMock.AcceptFollow at\n%s", m.funcAcceptFollowOrigin)
+	}
+
+	if !m.AcceptFollowMock.invocationsDone() && afterAcceptFollowCounter > 0 {
+		m.t.Errorf("Expected %d calls to ActivityServicePortMock.AcceptFollow at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.AcceptFollowMock.expectedInvocations), m.AcceptFollowMock.expectedInvocationsOrigin, afterAcceptFollowCounter)
+	}
 }
 
 type mActivityServicePortMockDispatchOutboundActivity struct {
@@ -2427,10 +2820,385 @@ func (m *ActivityServicePortMock) MinimockPurgeOrphanedMediaInspect() {
 	}
 }
 
+type mActivityServicePortMockRejectFollow struct {
+	optional           bool
+	mock               *ActivityServicePortMock
+	defaultExpectation *ActivityServicePortMockRejectFollowExpectation
+	expectations       []*ActivityServicePortMockRejectFollowExpectation
+
+	callArgs []*ActivityServicePortMockRejectFollowParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// ActivityServicePortMockRejectFollowExpectation specifies expectation struct of the ActivityServicePort.RejectFollow
+type ActivityServicePortMockRejectFollowExpectation struct {
+	mock               *ActivityServicePortMock
+	params             *ActivityServicePortMockRejectFollowParams
+	paramPtrs          *ActivityServicePortMockRejectFollowParamPtrs
+	expectationOrigins ActivityServicePortMockRejectFollowExpectationOrigins
+	results            *ActivityServicePortMockRejectFollowResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// ActivityServicePortMockRejectFollowParams contains parameters of the ActivityServicePort.RejectFollow
+type ActivityServicePortMockRejectFollowParams struct {
+	ctx               context.Context
+	followedActorIRI  string
+	followActivityIRI string
+}
+
+// ActivityServicePortMockRejectFollowParamPtrs contains pointers to parameters of the ActivityServicePort.RejectFollow
+type ActivityServicePortMockRejectFollowParamPtrs struct {
+	ctx               *context.Context
+	followedActorIRI  *string
+	followActivityIRI *string
+}
+
+// ActivityServicePortMockRejectFollowResults contains results of the ActivityServicePort.RejectFollow
+type ActivityServicePortMockRejectFollowResults struct {
+	err error
+}
+
+// ActivityServicePortMockRejectFollowOrigins contains origins of expectations of the ActivityServicePort.RejectFollow
+type ActivityServicePortMockRejectFollowExpectationOrigins struct {
+	origin                  string
+	originCtx               string
+	originFollowedActorIRI  string
+	originFollowActivityIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Optional() *mActivityServicePortMockRejectFollow {
+	mmRejectFollow.optional = true
+	return mmRejectFollow
+}
+
+// Expect sets up expected params for ActivityServicePort.RejectFollow
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Expect(ctx context.Context, followedActorIRI string, followActivityIRI string) *mActivityServicePortMockRejectFollow {
+	if mmRejectFollow.mock.funcRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Set")
+	}
+
+	if mmRejectFollow.defaultExpectation == nil {
+		mmRejectFollow.defaultExpectation = &ActivityServicePortMockRejectFollowExpectation{}
+	}
+
+	if mmRejectFollow.defaultExpectation.paramPtrs != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by ExpectParams functions")
+	}
+
+	mmRejectFollow.defaultExpectation.params = &ActivityServicePortMockRejectFollowParams{ctx, followedActorIRI, followActivityIRI}
+	mmRejectFollow.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRejectFollow.expectations {
+		if minimock.Equal(e.params, mmRejectFollow.defaultExpectation.params) {
+			mmRejectFollow.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRejectFollow.defaultExpectation.params)
+		}
+	}
+
+	return mmRejectFollow
+}
+
+// ExpectCtxParam1 sets up expected param ctx for ActivityServicePort.RejectFollow
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) ExpectCtxParam1(ctx context.Context) *mActivityServicePortMockRejectFollow {
+	if mmRejectFollow.mock.funcRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Set")
+	}
+
+	if mmRejectFollow.defaultExpectation == nil {
+		mmRejectFollow.defaultExpectation = &ActivityServicePortMockRejectFollowExpectation{}
+	}
+
+	if mmRejectFollow.defaultExpectation.params != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Expect")
+	}
+
+	if mmRejectFollow.defaultExpectation.paramPtrs == nil {
+		mmRejectFollow.defaultExpectation.paramPtrs = &ActivityServicePortMockRejectFollowParamPtrs{}
+	}
+	mmRejectFollow.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRejectFollow.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRejectFollow
+}
+
+// ExpectFollowedActorIRIParam2 sets up expected param followedActorIRI for ActivityServicePort.RejectFollow
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) ExpectFollowedActorIRIParam2(followedActorIRI string) *mActivityServicePortMockRejectFollow {
+	if mmRejectFollow.mock.funcRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Set")
+	}
+
+	if mmRejectFollow.defaultExpectation == nil {
+		mmRejectFollow.defaultExpectation = &ActivityServicePortMockRejectFollowExpectation{}
+	}
+
+	if mmRejectFollow.defaultExpectation.params != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Expect")
+	}
+
+	if mmRejectFollow.defaultExpectation.paramPtrs == nil {
+		mmRejectFollow.defaultExpectation.paramPtrs = &ActivityServicePortMockRejectFollowParamPtrs{}
+	}
+	mmRejectFollow.defaultExpectation.paramPtrs.followedActorIRI = &followedActorIRI
+	mmRejectFollow.defaultExpectation.expectationOrigins.originFollowedActorIRI = minimock.CallerInfo(1)
+
+	return mmRejectFollow
+}
+
+// ExpectFollowActivityIRIParam3 sets up expected param followActivityIRI for ActivityServicePort.RejectFollow
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) ExpectFollowActivityIRIParam3(followActivityIRI string) *mActivityServicePortMockRejectFollow {
+	if mmRejectFollow.mock.funcRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Set")
+	}
+
+	if mmRejectFollow.defaultExpectation == nil {
+		mmRejectFollow.defaultExpectation = &ActivityServicePortMockRejectFollowExpectation{}
+	}
+
+	if mmRejectFollow.defaultExpectation.params != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Expect")
+	}
+
+	if mmRejectFollow.defaultExpectation.paramPtrs == nil {
+		mmRejectFollow.defaultExpectation.paramPtrs = &ActivityServicePortMockRejectFollowParamPtrs{}
+	}
+	mmRejectFollow.defaultExpectation.paramPtrs.followActivityIRI = &followActivityIRI
+	mmRejectFollow.defaultExpectation.expectationOrigins.originFollowActivityIRI = minimock.CallerInfo(1)
+
+	return mmRejectFollow
+}
+
+// Inspect accepts an inspector function that has same arguments as the ActivityServicePort.RejectFollow
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Inspect(f func(ctx context.Context, followedActorIRI string, followActivityIRI string)) *mActivityServicePortMockRejectFollow {
+	if mmRejectFollow.mock.inspectFuncRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("Inspect function is already set for ActivityServicePortMock.RejectFollow")
+	}
+
+	mmRejectFollow.mock.inspectFuncRejectFollow = f
+
+	return mmRejectFollow
+}
+
+// Return sets up results that will be returned by ActivityServicePort.RejectFollow
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Return(err error) *ActivityServicePortMock {
+	if mmRejectFollow.mock.funcRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Set")
+	}
+
+	if mmRejectFollow.defaultExpectation == nil {
+		mmRejectFollow.defaultExpectation = &ActivityServicePortMockRejectFollowExpectation{mock: mmRejectFollow.mock}
+	}
+	mmRejectFollow.defaultExpectation.results = &ActivityServicePortMockRejectFollowResults{err}
+	mmRejectFollow.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRejectFollow.mock
+}
+
+// Set uses given function f to mock the ActivityServicePort.RejectFollow method
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Set(f func(ctx context.Context, followedActorIRI string, followActivityIRI string) (err error)) *ActivityServicePortMock {
+	if mmRejectFollow.defaultExpectation != nil {
+		mmRejectFollow.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.RejectFollow method")
+	}
+
+	if len(mmRejectFollow.expectations) > 0 {
+		mmRejectFollow.mock.t.Fatalf("Some expectations are already set for the ActivityServicePort.RejectFollow method")
+	}
+
+	mmRejectFollow.mock.funcRejectFollow = f
+	mmRejectFollow.mock.funcRejectFollowOrigin = minimock.CallerInfo(1)
+	return mmRejectFollow.mock
+}
+
+// When sets expectation for the ActivityServicePort.RejectFollow which will trigger the result defined by the following
+// Then helper
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) When(ctx context.Context, followedActorIRI string, followActivityIRI string) *ActivityServicePortMockRejectFollowExpectation {
+	if mmRejectFollow.mock.funcRejectFollow != nil {
+		mmRejectFollow.mock.t.Fatalf("ActivityServicePortMock.RejectFollow mock is already set by Set")
+	}
+
+	expectation := &ActivityServicePortMockRejectFollowExpectation{
+		mock:               mmRejectFollow.mock,
+		params:             &ActivityServicePortMockRejectFollowParams{ctx, followedActorIRI, followActivityIRI},
+		expectationOrigins: ActivityServicePortMockRejectFollowExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRejectFollow.expectations = append(mmRejectFollow.expectations, expectation)
+	return expectation
+}
+
+// Then sets up ActivityServicePort.RejectFollow return parameters for the expectation previously defined by the When method
+func (e *ActivityServicePortMockRejectFollowExpectation) Then(err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockRejectFollowResults{err}
+	return e.mock
+}
+
+// Times sets number of times ActivityServicePort.RejectFollow should be invoked
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Times(n uint64) *mActivityServicePortMockRejectFollow {
+	if n == 0 {
+		mmRejectFollow.mock.t.Fatalf("Times of ActivityServicePortMock.RejectFollow mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRejectFollow.expectedInvocations, n)
+	mmRejectFollow.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRejectFollow
+}
+
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) invocationsDone() bool {
+	if len(mmRejectFollow.expectations) == 0 && mmRejectFollow.defaultExpectation == nil && mmRejectFollow.mock.funcRejectFollow == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRejectFollow.mock.afterRejectFollowCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRejectFollow.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RejectFollow implements mm_port.ActivityServicePort
+func (mmRejectFollow *ActivityServicePortMock) RejectFollow(ctx context.Context, followedActorIRI string, followActivityIRI string) (err error) {
+	mm_atomic.AddUint64(&mmRejectFollow.beforeRejectFollowCounter, 1)
+	defer mm_atomic.AddUint64(&mmRejectFollow.afterRejectFollowCounter, 1)
+
+	mmRejectFollow.t.Helper()
+
+	if mmRejectFollow.inspectFuncRejectFollow != nil {
+		mmRejectFollow.inspectFuncRejectFollow(ctx, followedActorIRI, followActivityIRI)
+	}
+
+	mm_params := ActivityServicePortMockRejectFollowParams{ctx, followedActorIRI, followActivityIRI}
+
+	// Record call args
+	mmRejectFollow.RejectFollowMock.mutex.Lock()
+	mmRejectFollow.RejectFollowMock.callArgs = append(mmRejectFollow.RejectFollowMock.callArgs, &mm_params)
+	mmRejectFollow.RejectFollowMock.mutex.Unlock()
+
+	for _, e := range mmRejectFollow.RejectFollowMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRejectFollow.RejectFollowMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRejectFollow.RejectFollowMock.defaultExpectation.Counter, 1)
+		mm_want := mmRejectFollow.RejectFollowMock.defaultExpectation.params
+		mm_want_ptrs := mmRejectFollow.RejectFollowMock.defaultExpectation.paramPtrs
+
+		mm_got := ActivityServicePortMockRejectFollowParams{ctx, followedActorIRI, followActivityIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRejectFollow.t.Errorf("ActivityServicePortMock.RejectFollow got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRejectFollow.RejectFollowMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.followedActorIRI != nil && !minimock.Equal(*mm_want_ptrs.followedActorIRI, mm_got.followedActorIRI) {
+				mmRejectFollow.t.Errorf("ActivityServicePortMock.RejectFollow got unexpected parameter followedActorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRejectFollow.RejectFollowMock.defaultExpectation.expectationOrigins.originFollowedActorIRI, *mm_want_ptrs.followedActorIRI, mm_got.followedActorIRI, minimock.Diff(*mm_want_ptrs.followedActorIRI, mm_got.followedActorIRI))
+			}
+
+			if mm_want_ptrs.followActivityIRI != nil && !minimock.Equal(*mm_want_ptrs.followActivityIRI, mm_got.followActivityIRI) {
+				mmRejectFollow.t.Errorf("ActivityServicePortMock.RejectFollow got unexpected parameter followActivityIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRejectFollow.RejectFollowMock.defaultExpectation.expectationOrigins.originFollowActivityIRI, *mm_want_ptrs.followActivityIRI, mm_got.followActivityIRI, minimock.Diff(*mm_want_ptrs.followActivityIRI, mm_got.followActivityIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRejectFollow.t.Errorf("ActivityServicePortMock.RejectFollow got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRejectFollow.RejectFollowMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRejectFollow.RejectFollowMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRejectFollow.t.Fatal("No results are set for the ActivityServicePortMock.RejectFollow")
+		}
+		return (*mm_results).err
+	}
+	if mmRejectFollow.funcRejectFollow != nil {
+		return mmRejectFollow.funcRejectFollow(ctx, followedActorIRI, followActivityIRI)
+	}
+	mmRejectFollow.t.Fatalf("Unexpected call to ActivityServicePortMock.RejectFollow. %v %v %v", ctx, followedActorIRI, followActivityIRI)
+	return
+}
+
+// RejectFollowAfterCounter returns a count of finished ActivityServicePortMock.RejectFollow invocations
+func (mmRejectFollow *ActivityServicePortMock) RejectFollowAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRejectFollow.afterRejectFollowCounter)
+}
+
+// RejectFollowBeforeCounter returns a count of ActivityServicePortMock.RejectFollow invocations
+func (mmRejectFollow *ActivityServicePortMock) RejectFollowBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRejectFollow.beforeRejectFollowCounter)
+}
+
+// Calls returns a list of arguments used in each call to ActivityServicePortMock.RejectFollow.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRejectFollow *mActivityServicePortMockRejectFollow) Calls() []*ActivityServicePortMockRejectFollowParams {
+	mmRejectFollow.mutex.RLock()
+
+	argCopy := make([]*ActivityServicePortMockRejectFollowParams, len(mmRejectFollow.callArgs))
+	copy(argCopy, mmRejectFollow.callArgs)
+
+	mmRejectFollow.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRejectFollowDone returns true if the count of the RejectFollow invocations corresponds
+// the number of defined expectations
+func (m *ActivityServicePortMock) MinimockRejectFollowDone() bool {
+	if m.RejectFollowMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RejectFollowMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RejectFollowMock.invocationsDone()
+}
+
+// MinimockRejectFollowInspect logs each unmet expectation
+func (m *ActivityServicePortMock) MinimockRejectFollowInspect() {
+	for _, e := range m.RejectFollowMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to ActivityServicePortMock.RejectFollow at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRejectFollowCounter := mm_atomic.LoadUint64(&m.afterRejectFollowCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RejectFollowMock.defaultExpectation != nil && afterRejectFollowCounter < 1 {
+		if m.RejectFollowMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to ActivityServicePortMock.RejectFollow at\n%s", m.RejectFollowMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to ActivityServicePortMock.RejectFollow at\n%s with params: %#v", m.RejectFollowMock.defaultExpectation.expectationOrigins.origin, *m.RejectFollowMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRejectFollow != nil && afterRejectFollowCounter < 1 {
+		m.t.Errorf("Expected call to ActivityServicePortMock.RejectFollow at\n%s", m.funcRejectFollowOrigin)
+	}
+
+	if !m.RejectFollowMock.invocationsDone() && afterRejectFollowCounter > 0 {
+		m.t.Errorf("Expected %d calls to ActivityServicePortMock.RejectFollow at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RejectFollowMock.expectedInvocations), m.RejectFollowMock.expectedInvocationsOrigin, afterRejectFollowCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *ActivityServicePortMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
 		if !m.minimockDone() {
+			m.MinimockAcceptFollowInspect()
+
 			m.MinimockDispatchOutboundActivityInspect()
 
 			m.MinimockGetCollectionTimelineInspect()
@@ -2442,6 +3210,8 @@ func (m *ActivityServicePortMock) MinimockFinish() {
 			m.MinimockProcessInboundTaskInspect()
 
 			m.MinimockPurgeOrphanedMediaInspect()
+
+			m.MinimockRejectFollowInspect()
 		}
 	})
 }
@@ -2465,10 +3235,12 @@ func (m *ActivityServicePortMock) MinimockWait(timeout mm_time.Duration) {
 func (m *ActivityServicePortMock) minimockDone() bool {
 	done := true
 	return done &&
+		m.MinimockAcceptFollowDone() &&
 		m.MinimockDispatchOutboundActivityDone() &&
 		m.MinimockGetCollectionTimelineDone() &&
 		m.MinimockGetFollowersTimelineDone() &&
 		m.MinimockProcessInboundMediaTaskDone() &&
 		m.MinimockProcessInboundTaskDone() &&
-		m.MinimockPurgeOrphanedMediaDone()
+		m.MinimockPurgeOrphanedMediaDone() &&
+		m.MinimockRejectFollowDone()
 }
