@@ -13,7 +13,6 @@ import (
 
 func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 	mc := minimock.NewController(t)
-	defer mc.Finish()
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
