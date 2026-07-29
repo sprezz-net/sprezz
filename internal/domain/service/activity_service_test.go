@@ -631,3 +631,136 @@ func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
 		t.Errorf("expected discovered sharedInbox quads to be saved to database")
 	}
 }
+
+func TestProcessInboundTask_InboxForwarding(t *testing.T) {
+	ctx := context.Background()
+	mc := minimock.NewController(t)
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
+
+	// Mock Storage Setups
+	mockStorage.GetOrCreateTenantByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+		return 1, nil
+	})
+	mockStorage.GetActorCredentialsMock.Set(func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
+		return "https://local.com/actor/server", &model.ActorDualKeys{
+			PrivateKeyRSAPEM: "-----BEGIN RSA PRIVATE KEY-----",
+		}, nil
+	})
+
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local.com/actor/alice" {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM: "-----BEGIN RSA PRIVATE KEY-----",
+			}, nil
+		}
+		return nil, errors.New("remote actor")
+	})
+
+	mockStorage.IsDomainBlockedMock.Set(func(ctx context.Context, domainName string) (bool, error) {
+		if domainName == "blocked.com" {
+			return true, nil
+		}
+		return false, nil
+	})
+
+	// Setup stream quads mock
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		if subjectIRI == "https://cached-relationship.com" {
+			// Cached shared inbox indicates relationship
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox", Object: "https://cached-relationship.com/inbox"},
+			}, nil
+		}
+		if subjectIRI == "https://local.com/actor/alice" {
+			// Alice has a follower on followers-relationship.com
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#follower", Object: "https://followers-relationship.com/actor/bob"},
+			}, nil
+		}
+		if subjectIRI == "https://followers-relationship.com/actor/charlie" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#inbox", Object: "https://followers-relationship.com/actor/charlie/inbox"},
+			}, nil
+		}
+		return nil, errors.New("not found")
+	})
+
+	mockStorage.CreateGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error) {
+		return 1, nil
+	})
+	mockStorage.SaveQuadsMock.Set(func(ctx context.Context, quads []model.Quad) error {
+		return nil
+	})
+	mockStorage.RecordActorInboxDeliveryMock.Set(func(ctx context.Context, actorIRI, activityIRI string) error {
+		return nil
+	})
+
+	// Parser mock to return some quads
+	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, subjectIRI string, payload []byte) ([]model.Quad, error) {
+		return []model.Quad{
+			{Subject: subjectIRI, Predicate: "type", Object: "Note"},
+		}, nil
+	})
+
+	// Outbound Dispatcher setup to track forwarded inboxes
+	forwardedInboxes := make(map[string]int)
+	mockDispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		forwardedInboxes[targetInbox]++
+		return nil
+	})
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), mockDispatcher)
+
+	// Activity payload addressing a local actor (alice),
+	// a remote actor with a cached relationship,
+	// a remote actor with relationship via followers,
+	// a remote actor with no relationship, and a blocked domain actor.
+	payload := []byte(`{
+		"id": "https://remote.com/activity/1",
+		"type": "Create",
+		"actor": "https://remote.com/actor/original-author",
+		"to": [
+			"https://local.com/actor/alice",
+			"https://cached-relationship.com/actor/bob",
+			"https://followers-relationship.com/actor/charlie",
+			"https://no-relationship.com/actor/dan",
+			"https://blocked.com/actor/eve"
+		]
+	}`)
+
+	task := model.InboundTask{
+		ActivityIRI: "https://remote.com/activity/1",
+		ObjectIRI:   "https://local.com/actor/alice",
+		Payload:     payload,
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err != nil {
+		t.Fatalf("expected ProcessInboundTask to succeed, got error: %v", err)
+	}
+
+	// Verify forwarding targets
+	if forwardedInboxes["https://cached-relationship.com/inbox"] != 1 {
+		t.Errorf("expected 1 forward to cached relationship domain, got: %d", forwardedInboxes["https://cached-relationship.com/inbox"])
+	}
+
+	// For followers-relationship.com, it will fallback to resolving individual direct inbox
+	// because s.resolveServerActorInbox doesn't find a cached/resolved sharedInbox in StreamQuadsBySubject for that domain
+	// and discoverRemoteActorIRI isn't fully stubbed to succeed (so it falls back to resolving direct actor inbox).
+	if forwardedInboxes["https://followers-relationship.com/actor/charlie/inbox"] != 1 {
+		t.Errorf("expected 1 forward to followers relationship domain direct inbox, got: %d", forwardedInboxes["https://followers-relationship.com/actor/charlie/inbox"])
+	}
+
+	// No-relationship should not be forwarded
+	for inbox := range forwardedInboxes {
+		if strings.Contains(inbox, "no-relationship.com") {
+			t.Errorf("should not have forwarded to no-relationship domain: %s", inbox)
+		}
+		if strings.Contains(inbox, "blocked.com") {
+			t.Errorf("should not have forwarded to blocked domain: %s", inbox)
+		}
+	}
+}

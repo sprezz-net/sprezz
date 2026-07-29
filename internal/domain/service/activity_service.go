@@ -714,6 +714,7 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	s.expandFollowers(ctx, targetsMap)
 
 	// Deliver to matching local targets
+	var localRecipients []string
 	for target := range targetsMap {
 		target = strings.TrimSpace(target)
 		if target == "" {
@@ -723,8 +724,84 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		// Check if target is a direct local actor IRI
 		_, err := s.storage.GetActorDualKeys(ctx, target)
 		if err == nil {
+			localRecipients = append(localRecipients, target)
 			// Deliver to this local actor's inbox!
 			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
+		}
+	}
+
+	// Inbox Forwarding (Section 7.1.2)
+	if len(localRecipients) > 0 && s.forwarder != nil {
+		origTargets, err := extractAddressingTargets(task.Payload)
+		if err == nil {
+			remoteTargets := make(map[string]struct{})
+			for target := range origTargets {
+				target = strings.TrimSpace(target)
+				if target == "" {
+					continue
+				}
+				// Skip if local actor
+				if _, err := s.storage.GetActorDualKeys(ctx, target); err == nil {
+					continue
+				}
+				remoteTargets[target] = struct{}{}
+			}
+
+			if len(remoteTargets) > 0 {
+				domainToRecipients := s.groupRemoteTargetsByDomain(ctx, remoteTargets)
+
+				// Determine signing credentials
+				serverActorIRI, serverKeys, err := s.getLocalServerCredentials(ctx, localRecipients[0])
+				var targetKeyID string
+				var privateKeyRSAPEM, privateKeyEd25519PEM string
+				if err == nil {
+					targetKeyID = serverActorIRI + "#main-key"
+					privateKeyRSAPEM = serverKeys.PrivateKeyRSAPEM
+					privateKeyEd25519PEM = serverKeys.PrivateKeyEd25519PEM
+				} else {
+					// Fallback to the local recipient
+					serverActorIRI = localRecipients[0]
+					targetKeyID = serverActorIRI + "#main-key"
+					dualKeys, err := s.storage.GetActorDualKeys(ctx, serverActorIRI)
+					if err == nil {
+						privateKeyRSAPEM = dualKeys.PrivateKeyRSAPEM
+						privateKeyEd25519PEM = dualKeys.PrivateKeyEd25519PEM
+					}
+				}
+
+				if privateKeyRSAPEM != "" {
+					for domain, recipients := range domainToRecipients {
+						hasRel, _ := s.hasRelationshipWithDomain(ctx, localRecipients, domain)
+						if !hasRel {
+							continue
+						}
+
+						inboxesMap := make(map[string]struct{})
+						sharedInboxURL, err := s.resolveServerActorInbox(ctx, domain, serverActorIRI)
+						if err == nil && sharedInboxURL != "" {
+							inboxesMap[sharedInboxURL] = struct{}{}
+						} else {
+							for _, target := range recipients {
+								inboxURL, err := s.resolveActorInbox(ctx, target)
+								if err == nil && inboxURL != "" {
+									inboxesMap[inboxURL] = struct{}{}
+								}
+							}
+						}
+
+						for inbox := range inboxesMap {
+							_ = s.forwarder.ForwardFederatedActivity(
+								ctx,
+								inbox,
+								targetKeyID,
+								privateKeyRSAPEM,
+								privateKeyEd25519PEM,
+								task.Payload,
+							)
+						}
+					}
+				}
+			}
 		}
 	}
 
@@ -1339,4 +1416,32 @@ func signStringRSA(message, privateKeyPEM string) (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(sigBytes), nil
+}
+
+// hasRelationshipWithDomain checks if the local server/actor has a federated relationship with the given remote domain.
+func (s *ActivityService) hasRelationshipWithDomain(ctx context.Context, localRecipients []string, targetDomain string) (bool, error) {
+	blocked, err := s.storage.IsDomainBlocked(ctx, targetDomain)
+	if err != nil || blocked {
+		return false, nil
+	}
+
+	// 1. If we have a cached server inbox for this domain, we have a relationship
+	if s.resolveCachedServerInbox(ctx, targetDomain) != "" {
+		return true, nil
+	}
+
+	// 2. Check if any local recipient has follower relationships on that domain
+	for _, localActor := range localRecipients {
+		followers, err := s.GetFollowersTimeline(ctx, localActor, 1000, 0)
+		if err != nil {
+			continue
+		}
+		for _, follower := range followers {
+			if extractDomain(follower) == targetDomain {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
 }
