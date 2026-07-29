@@ -265,6 +265,16 @@ The system utilizes two distinct persistence pathways:
 1. `SaveQuads`: Translates unmapped domain string graphs into compact numeric keys using an explicit database insertion fallback routine to prevent `Unique Constraint Violations (SQLSTATE 23505)` during concurrent worker windows.
 2. `SaveQuadIDs`: Accepts pre-resolved integer matrices directly, eliminating string heap copies and allocation cycles during batch stream writes.
 
+#### 6.2.1 Pointer Heap Escape Defenses
+
+Since nullable schema columns (e.g. `object_id`, `literal_value`) are compiled by `sqlc` to map directly onto pointers (due to `emit_pointers_for_null_types: true`), instantiating millions of small transient pointers inside fast database save loops would trigger significant memory-header escape to the heap, creating Garbage Collector (GC) bottlenecks.
+
+To eliminate this heap overhead, the storage layer enforces a zero-transient pointer policy within batch execution and parsing loops:
+
+- **Pre-Allocated Booleans**: A thread-safe, non-allocating wrapper (`boolPtr`) serves pointers pointing directly to pre-allocated, static package-level variables for `true` and `false`.
+- **Value Factories**: Lightweight helper functions (`stringPtr`, `int64Ptr`) wrap pointer-resolution logic for strings and numbers cleanly.
+- **Zero Transient Variables**: Loop parameters are bound directly via these helper functions to prevent the allocation and escape of stack-allocated placeholder variables inside inner execution loops.
+
 The PostgreSQL adapter uses pgx v5 for connection pooling and transactions. sqlc-generated queries are the only SQL execution surface; the domain adapter maps generated records into domain models. Transaction rollbacks are context-bound to eliminate orphaned connection sockets.
 
 ### 6.3 Blank-Node Stability
@@ -390,6 +400,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - Inbound `POST` requests to collections (`/inbox`, `/outbox`, `/followers`, `/following`) with missing or invalid `Content-Type` headers are blocked directly at the middleware boundary with the appropriate HTTP status codes (`400 Bad Request` or `415 Unsupported Media Type`).
 - Concurrent workers claim disjoint queue records.
 - High-throughput streaming operations leverage integer-based `QuadID` structures (with inline literal text values) to isolate IRI/Named Node string heap replication from the database engine, bypassing the interning dictionary for arbitrary literal values.
+- Ingestion and database save loops employ thread-safe pointer wrapper factories (`boolPtr`, `stringPtr`, `int64Ptr`) and pre-allocated boolean variables to prevent heap escape and minimize GC overhead.
 - A parser or quad persistence failure leaves no orphaned graph version.
 - Equivalent JSON-LD payloads produce stable blank-node identifiers.
 - Actor, inbox, outbox, followers, and following resources return the required ActivityPub shapes and media types.

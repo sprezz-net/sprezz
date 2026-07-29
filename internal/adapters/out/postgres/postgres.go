@@ -452,28 +452,45 @@ func (s *PostgresStorage) toQuadIDs(ctx context.Context, queries *db.Queries, de
 	return quadIDs, nil
 }
 
+var (
+	trueVal  = true
+	falseVal = false
+)
+
+func stringPtr(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func int64Ptr(v int64) *int64 {
+	if v == 0 {
+		return nil
+	}
+	return &v
+}
+
+func boolPtr(v bool) *bool {
+	if v {
+		return &trueVal
+	}
+	return &falseVal
+}
+
 // saveQuadIDs natively processes and writes clean slices of model.QuadID to the database.
 func (s *PostgresStorage) saveQuadIDs(ctx context.Context, queries *db.Queries, quadIDs []model.QuadID) error {
 	for _, qID := range quadIDs {
-		var objectID *int64
-		if qID.ObjectID != 0 {
-			val := qID.ObjectID
-			objectID = &val
-		}
-		var isLiteral *bool
-		valLit := qID.IsLiteral
-		isLiteral = &valLit
 		var literalValue *string
 		if qID.IsLiteral {
-			valText := qID.LiteralValue
-			literalValue = &valText
+			literalValue = stringPtr(qID.LiteralValue)
 		}
 		params := db.InsertQuadParams{
 			GraphID:      qID.GraphID,
 			SubjectID:    qID.SubjectID,
 			PredicateID:  qID.PredicateID,
-			ObjectID:     objectID,
-			IsLiteral:    isLiteral,
+			ObjectID:     int64Ptr(qID.ObjectID),
+			IsLiteral:    boolPtr(qID.IsLiteral),
 			LiteralValue: literalValue,
 		}
 		if err := queries.InsertQuad(ctx, params); err != nil {
