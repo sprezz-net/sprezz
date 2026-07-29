@@ -56,7 +56,7 @@ func HandleWebfinger(tenantDomains []string, storage port.StoragePort) http.Hand
 
 		w.Header().Set(headerContentType, "application/jrd+json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(buildWebfingerResponse(resource, tenantHost, profile))
+		_ = json.NewEncoder(w).Encode(buildWebfingerResponse(resource, profile))
 	}
 }
 
@@ -138,7 +138,7 @@ func parseAndValidateResource(resource, tenantHost string) (string, error) {
 	return username, nil
 }
 
-func buildWebfingerResponse(resource, tenantHost string, profile *model.ActorProfile) WebfingerResponse {
+func buildWebfingerResponse(resource string, profile *model.ActorProfile) WebfingerResponse {
 	resp := WebfingerResponse{
 		Subject:    resource,
 		Aliases:    []string{profile.IRI}, // Outputs the precise, safe UUIDv4 path string
