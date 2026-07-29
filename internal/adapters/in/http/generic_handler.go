@@ -82,6 +82,15 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 	} else if strings.HasSuffix(requestedIRI, "/following") {
 		collection = "following"
 		actorIRI = strings.TrimSuffix(requestedIRI, "/following")
+	} else if strings.HasSuffix(requestedIRI, "/likes") {
+		collection = "likes"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/likes")
+	} else if strings.HasSuffix(requestedIRI, "/shares") {
+		collection = "shares"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/shares")
+	} else if strings.HasSuffix(requestedIRI, "/replies") {
+		collection = "replies"
+		actorIRI = strings.TrimSuffix(requestedIRI, "/replies")
 	}
 
 	// Intercept FEP-d556 root domain and decoupled shared inbox lookups
@@ -148,7 +157,35 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 		h.serveRelationshipCollection(w, r, actorIRI, collection)
 		return
 	}
+	if collection == "likes" || collection == "shares" || collection == "replies" {
+		h.serveEngagementCollection(w, r, actorIRI, collection)
+		return
+	}
 	h.servePayloadCollection(w, r, actorIRI, collection)
+}
+
+func (h *GenericHandler) serveEngagementCollection(w http.ResponseWriter, r *http.Request, objectIRI, collection string) {
+	var items []string
+	var err error
+
+	switch collection {
+	case "likes":
+		items, err = h.storage.GetLikesForObject(r.Context(), objectIRI)
+	case "shares":
+		items, err = h.storage.GetSharesForObject(r.Context(), objectIRI)
+	case "replies":
+		items, err = h.storage.GetRepliesForObject(r.Context(), objectIRI)
+	default:
+		http.Error(w, "Unsupported collection", http.StatusBadRequest)
+		return
+	}
+
+	if err != nil {
+		http.Error(w, internalServerError, http.StatusInternalServerError)
+		return
+	}
+
+	writeCollection(w, r.URL.String(), items)
 }
 
 func (h *GenericHandler) serveRelationshipCollection(w http.ResponseWriter, r *http.Request, actorIRI, collection string) {

@@ -55,6 +55,9 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 				strings.HasSuffix(path, "/outbox") ||
 				strings.HasSuffix(path, "/followers") ||
 				strings.HasSuffix(path, "/following") ||
+				strings.HasSuffix(path, "/likes") ||
+				strings.HasSuffix(path, "/shares") ||
+				strings.HasSuffix(path, "/replies") ||
 				path == "/inbox" ||
 				path == "/outbox"
 

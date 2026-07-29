@@ -141,7 +141,7 @@ For incoming HTTP requests, signature validation is dynamically routed based on 
 1. **Endpoint Exclusions**: Any request targeting well-known paths (such as `/.well-known/*`) is completely excluded from signature validation.
 2. **POST Request Signature Rules**:
    - A `POST` request must provide a `Content-Type` header; otherwise, it is rejected with a `400 Bad Request`.
-   - **Strict Collection Content-Type Guard**: Any `POST` request targeting any ActivityPub collection endpoint (paths matching or ending in `/inbox`, `/outbox`, `/followers`, or `/following`) is strictly required to assert standard ActivityPub MIME parameters (`application/activity+json` or `application/ld+json`). Any POST requests to these endpoints using non-standard media configurations (such as `text/plain` or `application/json`) are immediately rejected on the validation perimeter with **`HTTP 415 Unsupported Media Type`**. This ensures unauthenticated, spoof-configured payloads cannot bypass signature validation to reach downstream parsers.
+   - **Strict Collection Content-Type Guard**: Any `POST` request targeting any ActivityPub collection endpoint (paths matching or ending in `/inbox`, `/outbox`, `/followers`, `/following`, `/likes`, `/shares`, or `/replies`) is strictly required to assert standard ActivityPub MIME parameters (`application/activity+json` or `application/ld+json`). Any POST requests to these endpoints using non-standard media configurations (such as `text/plain` or `application/json`) are immediately rejected on the validation perimeter with **`HTTP 415 Unsupported Media Type`**. This ensures unauthenticated, spoof-configured payloads cannot bypass signature validation to reach downstream parsers.
    - If the `Content-Type` is an ActivityPub type (`application/activity+json` or `application/ld+json`), signature verification is strictly mandatory. A missing or invalid signature header results in a `401 Unauthorized` rejection.
    - For non-collection endpoints (such as multi-part media `/upload`), non-ActivityPub `Content-Type` payloads bypass signature verification.
 3. **GET Request Signature Rules**:
@@ -322,6 +322,16 @@ Timeline and thread views MUST evaluate the ActivityStreams public audience expl
 The domain service provides a low-complexity, graph-based privacy filtration pipeline. It groups quads by version, validates canonical case-insensitive target namespaces (`activitystreams#to`, `activitystreams#cc`, `activitystreams#audience`, `activitystreams#Public`), and safely prunes unauthorized graphs.
 
 Privacy filtering occurs before collection serialization and before pagination so private records do not affect visible counts or page boundaries.
+
+### 7.5 Side-Channel Engagement Collections (Likes, Shares, Replies)
+
+Sprezz standardizes resource engagement collections by serving URL-agnostic side-channel collections pointing directly to targeting activities inside the clustered triple store. The routing system extracts `/likes`, `/shares`, and `/replies` suffixes dynamically from requested object paths, stripping the suffix to evaluate the core object's payload existence.
+
+- **`likes` Collection**: An `OrderedCollection` served at `<object-IRI>/likes` pointing to the `Like` activity IRIs targeting the parent object. Sourced by querying matching subjects with predicate `as:object` and type `as:Like`.
+- **`shares` Collection**: An `OrderedCollection` served at `<object-IRI>/shares` pointing to the `Announce` (share) activity IRIs targeting the parent object. Sourced by querying matching subjects with predicate `as:object` and type `as:Announce`.
+- **`replies` Collection**: An `OrderedCollection` served at `<object-IRI>/replies` pointing to replies targeting the parent object. Sourced by querying subjects with predicate `as:inReplyTo` and object matching the parent object's IRI.
+
+These collections use standard AS2 MIME content headers and support high-performance, index-assisted queries to ensure constant-time resolution without redundant relational tables or database schema duplication.
 
 ## 8. Outbound Federation and Dual-Key Alignment
 

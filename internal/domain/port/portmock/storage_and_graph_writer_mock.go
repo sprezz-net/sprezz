@@ -126,6 +126,13 @@ type StorageAndGraphWriterMock struct {
 	beforeGetLatestPayloadCounter uint64
 	GetLatestPayloadMock          mStorageAndGraphWriterMockGetLatestPayload
 
+	funcGetLikesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
+	funcGetLikesForObjectOrigin    string
+	inspectFuncGetLikesForObject   func(ctx context.Context, objectIRI string)
+	afterGetLikesForObjectCounter  uint64
+	beforeGetLikesForObjectCounter uint64
+	GetLikesForObjectMock          mStorageAndGraphWriterMockGetLikesForObject
+
 	funcGetNomadicIdentity          func(ctx context.Context, guid string) (np1 *model.NomadicIdentity, err error)
 	funcGetNomadicIdentityOrigin    string
 	inspectFuncGetNomadicIdentity   func(ctx context.Context, guid string)
@@ -139,6 +146,20 @@ type StorageAndGraphWriterMock struct {
 	afterGetOrCreateTenantByDomainCounter  uint64
 	beforeGetOrCreateTenantByDomainCounter uint64
 	GetOrCreateTenantByDomainMock          mStorageAndGraphWriterMockGetOrCreateTenantByDomain
+
+	funcGetRepliesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
+	funcGetRepliesForObjectOrigin    string
+	inspectFuncGetRepliesForObject   func(ctx context.Context, objectIRI string)
+	afterGetRepliesForObjectCounter  uint64
+	beforeGetRepliesForObjectCounter uint64
+	GetRepliesForObjectMock          mStorageAndGraphWriterMockGetRepliesForObject
+
+	funcGetSharesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
+	funcGetSharesForObjectOrigin    string
+	inspectFuncGetSharesForObject   func(ctx context.Context, objectIRI string)
+	afterGetSharesForObjectCounter  uint64
+	beforeGetSharesForObjectCounter uint64
+	GetSharesForObjectMock          mStorageAndGraphWriterMockGetSharesForObject
 
 	funcGetStatementsBySubjectIsolated          func(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error)
 	funcGetStatementsBySubjectIsolatedOrigin    string
@@ -327,11 +348,20 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 	m.GetLatestPayloadMock = mStorageAndGraphWriterMockGetLatestPayload{mock: m}
 	m.GetLatestPayloadMock.callArgs = []*StorageAndGraphWriterMockGetLatestPayloadParams{}
 
+	m.GetLikesForObjectMock = mStorageAndGraphWriterMockGetLikesForObject{mock: m}
+	m.GetLikesForObjectMock.callArgs = []*StorageAndGraphWriterMockGetLikesForObjectParams{}
+
 	m.GetNomadicIdentityMock = mStorageAndGraphWriterMockGetNomadicIdentity{mock: m}
 	m.GetNomadicIdentityMock.callArgs = []*StorageAndGraphWriterMockGetNomadicIdentityParams{}
 
 	m.GetOrCreateTenantByDomainMock = mStorageAndGraphWriterMockGetOrCreateTenantByDomain{mock: m}
 	m.GetOrCreateTenantByDomainMock.callArgs = []*StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{}
+
+	m.GetRepliesForObjectMock = mStorageAndGraphWriterMockGetRepliesForObject{mock: m}
+	m.GetRepliesForObjectMock.callArgs = []*StorageAndGraphWriterMockGetRepliesForObjectParams{}
+
+	m.GetSharesForObjectMock = mStorageAndGraphWriterMockGetSharesForObject{mock: m}
+	m.GetSharesForObjectMock.callArgs = []*StorageAndGraphWriterMockGetSharesForObjectParams{}
 
 	m.GetStatementsBySubjectIsolatedMock = mStorageAndGraphWriterMockGetStatementsBySubjectIsolated{mock: m}
 	m.GetStatementsBySubjectIsolatedMock.callArgs = []*StorageAndGraphWriterMockGetStatementsBySubjectIsolatedParams{}
@@ -6251,6 +6281,349 @@ func (m *StorageAndGraphWriterMock) MinimockGetLatestPayloadInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockGetLikesForObject struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetLikesForObjectExpectation
+	expectations       []*StorageAndGraphWriterMockGetLikesForObjectExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetLikesForObjectParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetLikesForObjectExpectation specifies expectation struct of the StorageAndGraphWriter.GetLikesForObject
+type StorageAndGraphWriterMockGetLikesForObjectExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetLikesForObjectParams
+	paramPtrs          *StorageAndGraphWriterMockGetLikesForObjectParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetLikesForObjectExpectationOrigins
+	results            *StorageAndGraphWriterMockGetLikesForObjectResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetLikesForObjectParams contains parameters of the StorageAndGraphWriter.GetLikesForObject
+type StorageAndGraphWriterMockGetLikesForObjectParams struct {
+	ctx       context.Context
+	objectIRI string
+}
+
+// StorageAndGraphWriterMockGetLikesForObjectParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetLikesForObject
+type StorageAndGraphWriterMockGetLikesForObjectParamPtrs struct {
+	ctx       *context.Context
+	objectIRI *string
+}
+
+// StorageAndGraphWriterMockGetLikesForObjectResults contains results of the StorageAndGraphWriter.GetLikesForObject
+type StorageAndGraphWriterMockGetLikesForObjectResults struct {
+	sa1 []string
+	err error
+}
+
+// StorageAndGraphWriterMockGetLikesForObjectOrigins contains origins of expectations of the StorageAndGraphWriter.GetLikesForObject
+type StorageAndGraphWriterMockGetLikesForObjectExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originObjectIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Optional() *mStorageAndGraphWriterMockGetLikesForObject {
+	mmGetLikesForObject.optional = true
+	return mmGetLikesForObject
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetLikesForObject
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Expect(ctx context.Context, objectIRI string) *mStorageAndGraphWriterMockGetLikesForObject {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StorageAndGraphWriterMockGetLikesForObjectExpectation{}
+	}
+
+	if mmGetLikesForObject.defaultExpectation.paramPtrs != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by ExpectParams functions")
+	}
+
+	mmGetLikesForObject.defaultExpectation.params = &StorageAndGraphWriterMockGetLikesForObjectParams{ctx, objectIRI}
+	mmGetLikesForObject.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetLikesForObject.expectations {
+		if minimock.Equal(e.params, mmGetLikesForObject.defaultExpectation.params) {
+			mmGetLikesForObject.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetLikesForObject.defaultExpectation.params)
+		}
+	}
+
+	return mmGetLikesForObject
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetLikesForObject
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetLikesForObject {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StorageAndGraphWriterMockGetLikesForObjectExpectation{}
+	}
+
+	if mmGetLikesForObject.defaultExpectation.params != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Expect")
+	}
+
+	if mmGetLikesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetLikesForObject.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetLikesForObjectParamPtrs{}
+	}
+	mmGetLikesForObject.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetLikesForObject.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetLikesForObject
+}
+
+// ExpectObjectIRIParam2 sets up expected param objectIRI for StorageAndGraphWriter.GetLikesForObject
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) ExpectObjectIRIParam2(objectIRI string) *mStorageAndGraphWriterMockGetLikesForObject {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StorageAndGraphWriterMockGetLikesForObjectExpectation{}
+	}
+
+	if mmGetLikesForObject.defaultExpectation.params != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Expect")
+	}
+
+	if mmGetLikesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetLikesForObject.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetLikesForObjectParamPtrs{}
+	}
+	mmGetLikesForObject.defaultExpectation.paramPtrs.objectIRI = &objectIRI
+	mmGetLikesForObject.defaultExpectation.expectationOrigins.originObjectIRI = minimock.CallerInfo(1)
+
+	return mmGetLikesForObject
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetLikesForObject
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Inspect(f func(ctx context.Context, objectIRI string)) *mStorageAndGraphWriterMockGetLikesForObject {
+	if mmGetLikesForObject.mock.inspectFuncGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetLikesForObject")
+	}
+
+	mmGetLikesForObject.mock.inspectFuncGetLikesForObject = f
+
+	return mmGetLikesForObject
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetLikesForObject
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Return(sa1 []string, err error) *StorageAndGraphWriterMock {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StorageAndGraphWriterMockGetLikesForObjectExpectation{mock: mmGetLikesForObject.mock}
+	}
+	mmGetLikesForObject.defaultExpectation.results = &StorageAndGraphWriterMockGetLikesForObjectResults{sa1, err}
+	mmGetLikesForObject.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetLikesForObject.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetLikesForObject method
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Set(f func(ctx context.Context, objectIRI string) (sa1 []string, err error)) *StorageAndGraphWriterMock {
+	if mmGetLikesForObject.defaultExpectation != nil {
+		mmGetLikesForObject.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetLikesForObject method")
+	}
+
+	if len(mmGetLikesForObject.expectations) > 0 {
+		mmGetLikesForObject.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetLikesForObject method")
+	}
+
+	mmGetLikesForObject.mock.funcGetLikesForObject = f
+	mmGetLikesForObject.mock.funcGetLikesForObjectOrigin = minimock.CallerInfo(1)
+	return mmGetLikesForObject.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetLikesForObject which will trigger the result defined by the following
+// Then helper
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) When(ctx context.Context, objectIRI string) *StorageAndGraphWriterMockGetLikesForObjectExpectation {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetLikesForObject mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetLikesForObjectExpectation{
+		mock:               mmGetLikesForObject.mock,
+		params:             &StorageAndGraphWriterMockGetLikesForObjectParams{ctx, objectIRI},
+		expectationOrigins: StorageAndGraphWriterMockGetLikesForObjectExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetLikesForObject.expectations = append(mmGetLikesForObject.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetLikesForObject return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetLikesForObjectExpectation) Then(sa1 []string, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetLikesForObjectResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetLikesForObject should be invoked
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Times(n uint64) *mStorageAndGraphWriterMockGetLikesForObject {
+	if n == 0 {
+		mmGetLikesForObject.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetLikesForObject mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetLikesForObject.expectedInvocations, n)
+	mmGetLikesForObject.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetLikesForObject
+}
+
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) invocationsDone() bool {
+	if len(mmGetLikesForObject.expectations) == 0 && mmGetLikesForObject.defaultExpectation == nil && mmGetLikesForObject.mock.funcGetLikesForObject == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetLikesForObject.mock.afterGetLikesForObjectCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetLikesForObject.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetLikesForObject implements mm_port.StorageAndGraphWriter
+func (mmGetLikesForObject *StorageAndGraphWriterMock) GetLikesForObject(ctx context.Context, objectIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetLikesForObject.beforeGetLikesForObjectCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetLikesForObject.afterGetLikesForObjectCounter, 1)
+
+	mmGetLikesForObject.t.Helper()
+
+	if mmGetLikesForObject.inspectFuncGetLikesForObject != nil {
+		mmGetLikesForObject.inspectFuncGetLikesForObject(ctx, objectIRI)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetLikesForObjectParams{ctx, objectIRI}
+
+	// Record call args
+	mmGetLikesForObject.GetLikesForObjectMock.mutex.Lock()
+	mmGetLikesForObject.GetLikesForObjectMock.callArgs = append(mmGetLikesForObject.GetLikesForObjectMock.callArgs, &mm_params)
+	mmGetLikesForObject.GetLikesForObjectMock.mutex.Unlock()
+
+	for _, e := range mmGetLikesForObject.GetLikesForObjectMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.params
+		mm_want_ptrs := mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetLikesForObjectParams{ctx, objectIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetLikesForObject.t.Errorf("StorageAndGraphWriterMock.GetLikesForObject got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectIRI != nil && !minimock.Equal(*mm_want_ptrs.objectIRI, mm_got.objectIRI) {
+				mmGetLikesForObject.t.Errorf("StorageAndGraphWriterMock.GetLikesForObject got unexpected parameter objectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetLikesForObject.t.Errorf("StorageAndGraphWriterMock.GetLikesForObject got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetLikesForObject.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetLikesForObject")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetLikesForObject.funcGetLikesForObject != nil {
+		return mmGetLikesForObject.funcGetLikesForObject(ctx, objectIRI)
+	}
+	mmGetLikesForObject.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetLikesForObject. %v %v", ctx, objectIRI)
+	return
+}
+
+// GetLikesForObjectAfterCounter returns a count of finished StorageAndGraphWriterMock.GetLikesForObject invocations
+func (mmGetLikesForObject *StorageAndGraphWriterMock) GetLikesForObjectAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetLikesForObject.afterGetLikesForObjectCounter)
+}
+
+// GetLikesForObjectBeforeCounter returns a count of StorageAndGraphWriterMock.GetLikesForObject invocations
+func (mmGetLikesForObject *StorageAndGraphWriterMock) GetLikesForObjectBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetLikesForObject.beforeGetLikesForObjectCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetLikesForObject.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetLikesForObject *mStorageAndGraphWriterMockGetLikesForObject) Calls() []*StorageAndGraphWriterMockGetLikesForObjectParams {
+	mmGetLikesForObject.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetLikesForObjectParams, len(mmGetLikesForObject.callArgs))
+	copy(argCopy, mmGetLikesForObject.callArgs)
+
+	mmGetLikesForObject.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetLikesForObjectDone returns true if the count of the GetLikesForObject invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetLikesForObjectDone() bool {
+	if m.GetLikesForObjectMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetLikesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetLikesForObjectMock.invocationsDone()
+}
+
+// MinimockGetLikesForObjectInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetLikesForObjectInspect() {
+	for _, e := range m.GetLikesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetLikesForObject at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetLikesForObjectCounter := mm_atomic.LoadUint64(&m.afterGetLikesForObjectCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetLikesForObjectMock.defaultExpectation != nil && afterGetLikesForObjectCounter < 1 {
+		if m.GetLikesForObjectMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetLikesForObject at\n%s", m.GetLikesForObjectMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetLikesForObject at\n%s with params: %#v", m.GetLikesForObjectMock.defaultExpectation.expectationOrigins.origin, *m.GetLikesForObjectMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetLikesForObject != nil && afterGetLikesForObjectCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetLikesForObject at\n%s", m.funcGetLikesForObjectOrigin)
+	}
+
+	if !m.GetLikesForObjectMock.invocationsDone() && afterGetLikesForObjectCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetLikesForObject at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetLikesForObjectMock.expectedInvocations), m.GetLikesForObjectMock.expectedInvocationsOrigin, afterGetLikesForObjectCounter)
+	}
+}
+
 type mStorageAndGraphWriterMockGetNomadicIdentity struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -6934,6 +7307,692 @@ func (m *StorageAndGraphWriterMock) MinimockGetOrCreateTenantByDomainInspect() {
 	if !m.GetOrCreateTenantByDomainMock.invocationsDone() && afterGetOrCreateTenantByDomainCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetOrCreateTenantByDomain at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetOrCreateTenantByDomainMock.expectedInvocations), m.GetOrCreateTenantByDomainMock.expectedInvocationsOrigin, afterGetOrCreateTenantByDomainCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockGetRepliesForObject struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetRepliesForObjectExpectation
+	expectations       []*StorageAndGraphWriterMockGetRepliesForObjectExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetRepliesForObjectParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetRepliesForObjectExpectation specifies expectation struct of the StorageAndGraphWriter.GetRepliesForObject
+type StorageAndGraphWriterMockGetRepliesForObjectExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetRepliesForObjectParams
+	paramPtrs          *StorageAndGraphWriterMockGetRepliesForObjectParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetRepliesForObjectExpectationOrigins
+	results            *StorageAndGraphWriterMockGetRepliesForObjectResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetRepliesForObjectParams contains parameters of the StorageAndGraphWriter.GetRepliesForObject
+type StorageAndGraphWriterMockGetRepliesForObjectParams struct {
+	ctx       context.Context
+	objectIRI string
+}
+
+// StorageAndGraphWriterMockGetRepliesForObjectParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetRepliesForObject
+type StorageAndGraphWriterMockGetRepliesForObjectParamPtrs struct {
+	ctx       *context.Context
+	objectIRI *string
+}
+
+// StorageAndGraphWriterMockGetRepliesForObjectResults contains results of the StorageAndGraphWriter.GetRepliesForObject
+type StorageAndGraphWriterMockGetRepliesForObjectResults struct {
+	sa1 []string
+	err error
+}
+
+// StorageAndGraphWriterMockGetRepliesForObjectOrigins contains origins of expectations of the StorageAndGraphWriter.GetRepliesForObject
+type StorageAndGraphWriterMockGetRepliesForObjectExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originObjectIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Optional() *mStorageAndGraphWriterMockGetRepliesForObject {
+	mmGetRepliesForObject.optional = true
+	return mmGetRepliesForObject
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetRepliesForObject
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Expect(ctx context.Context, objectIRI string) *mStorageAndGraphWriterMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StorageAndGraphWriterMockGetRepliesForObjectExpectation{}
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.paramPtrs != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by ExpectParams functions")
+	}
+
+	mmGetRepliesForObject.defaultExpectation.params = &StorageAndGraphWriterMockGetRepliesForObjectParams{ctx, objectIRI}
+	mmGetRepliesForObject.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetRepliesForObject.expectations {
+		if minimock.Equal(e.params, mmGetRepliesForObject.defaultExpectation.params) {
+			mmGetRepliesForObject.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetRepliesForObject.defaultExpectation.params)
+		}
+	}
+
+	return mmGetRepliesForObject
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetRepliesForObject
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StorageAndGraphWriterMockGetRepliesForObjectExpectation{}
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.params != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Expect")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetRepliesForObject.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetRepliesForObjectParamPtrs{}
+	}
+	mmGetRepliesForObject.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetRepliesForObject.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetRepliesForObject
+}
+
+// ExpectObjectIRIParam2 sets up expected param objectIRI for StorageAndGraphWriter.GetRepliesForObject
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) ExpectObjectIRIParam2(objectIRI string) *mStorageAndGraphWriterMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StorageAndGraphWriterMockGetRepliesForObjectExpectation{}
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.params != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Expect")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetRepliesForObject.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetRepliesForObjectParamPtrs{}
+	}
+	mmGetRepliesForObject.defaultExpectation.paramPtrs.objectIRI = &objectIRI
+	mmGetRepliesForObject.defaultExpectation.expectationOrigins.originObjectIRI = minimock.CallerInfo(1)
+
+	return mmGetRepliesForObject
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetRepliesForObject
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Inspect(f func(ctx context.Context, objectIRI string)) *mStorageAndGraphWriterMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.inspectFuncGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetRepliesForObject")
+	}
+
+	mmGetRepliesForObject.mock.inspectFuncGetRepliesForObject = f
+
+	return mmGetRepliesForObject
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetRepliesForObject
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Return(sa1 []string, err error) *StorageAndGraphWriterMock {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StorageAndGraphWriterMockGetRepliesForObjectExpectation{mock: mmGetRepliesForObject.mock}
+	}
+	mmGetRepliesForObject.defaultExpectation.results = &StorageAndGraphWriterMockGetRepliesForObjectResults{sa1, err}
+	mmGetRepliesForObject.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetRepliesForObject.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetRepliesForObject method
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Set(f func(ctx context.Context, objectIRI string) (sa1 []string, err error)) *StorageAndGraphWriterMock {
+	if mmGetRepliesForObject.defaultExpectation != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetRepliesForObject method")
+	}
+
+	if len(mmGetRepliesForObject.expectations) > 0 {
+		mmGetRepliesForObject.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetRepliesForObject method")
+	}
+
+	mmGetRepliesForObject.mock.funcGetRepliesForObject = f
+	mmGetRepliesForObject.mock.funcGetRepliesForObjectOrigin = minimock.CallerInfo(1)
+	return mmGetRepliesForObject.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetRepliesForObject which will trigger the result defined by the following
+// Then helper
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) When(ctx context.Context, objectIRI string) *StorageAndGraphWriterMockGetRepliesForObjectExpectation {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetRepliesForObjectExpectation{
+		mock:               mmGetRepliesForObject.mock,
+		params:             &StorageAndGraphWriterMockGetRepliesForObjectParams{ctx, objectIRI},
+		expectationOrigins: StorageAndGraphWriterMockGetRepliesForObjectExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetRepliesForObject.expectations = append(mmGetRepliesForObject.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetRepliesForObject return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetRepliesForObjectExpectation) Then(sa1 []string, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetRepliesForObjectResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetRepliesForObject should be invoked
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Times(n uint64) *mStorageAndGraphWriterMockGetRepliesForObject {
+	if n == 0 {
+		mmGetRepliesForObject.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetRepliesForObject mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetRepliesForObject.expectedInvocations, n)
+	mmGetRepliesForObject.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetRepliesForObject
+}
+
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) invocationsDone() bool {
+	if len(mmGetRepliesForObject.expectations) == 0 && mmGetRepliesForObject.defaultExpectation == nil && mmGetRepliesForObject.mock.funcGetRepliesForObject == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetRepliesForObject.mock.afterGetRepliesForObjectCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetRepliesForObject.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetRepliesForObject implements mm_port.StorageAndGraphWriter
+func (mmGetRepliesForObject *StorageAndGraphWriterMock) GetRepliesForObject(ctx context.Context, objectIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetRepliesForObject.beforeGetRepliesForObjectCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetRepliesForObject.afterGetRepliesForObjectCounter, 1)
+
+	mmGetRepliesForObject.t.Helper()
+
+	if mmGetRepliesForObject.inspectFuncGetRepliesForObject != nil {
+		mmGetRepliesForObject.inspectFuncGetRepliesForObject(ctx, objectIRI)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetRepliesForObjectParams{ctx, objectIRI}
+
+	// Record call args
+	mmGetRepliesForObject.GetRepliesForObjectMock.mutex.Lock()
+	mmGetRepliesForObject.GetRepliesForObjectMock.callArgs = append(mmGetRepliesForObject.GetRepliesForObjectMock.callArgs, &mm_params)
+	mmGetRepliesForObject.GetRepliesForObjectMock.mutex.Unlock()
+
+	for _, e := range mmGetRepliesForObject.GetRepliesForObjectMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.params
+		mm_want_ptrs := mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetRepliesForObjectParams{ctx, objectIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetRepliesForObject.t.Errorf("StorageAndGraphWriterMock.GetRepliesForObject got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectIRI != nil && !minimock.Equal(*mm_want_ptrs.objectIRI, mm_got.objectIRI) {
+				mmGetRepliesForObject.t.Errorf("StorageAndGraphWriterMock.GetRepliesForObject got unexpected parameter objectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetRepliesForObject.t.Errorf("StorageAndGraphWriterMock.GetRepliesForObject got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetRepliesForObject.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetRepliesForObject")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetRepliesForObject.funcGetRepliesForObject != nil {
+		return mmGetRepliesForObject.funcGetRepliesForObject(ctx, objectIRI)
+	}
+	mmGetRepliesForObject.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetRepliesForObject. %v %v", ctx, objectIRI)
+	return
+}
+
+// GetRepliesForObjectAfterCounter returns a count of finished StorageAndGraphWriterMock.GetRepliesForObject invocations
+func (mmGetRepliesForObject *StorageAndGraphWriterMock) GetRepliesForObjectAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetRepliesForObject.afterGetRepliesForObjectCounter)
+}
+
+// GetRepliesForObjectBeforeCounter returns a count of StorageAndGraphWriterMock.GetRepliesForObject invocations
+func (mmGetRepliesForObject *StorageAndGraphWriterMock) GetRepliesForObjectBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetRepliesForObject.beforeGetRepliesForObjectCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetRepliesForObject.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetRepliesForObject *mStorageAndGraphWriterMockGetRepliesForObject) Calls() []*StorageAndGraphWriterMockGetRepliesForObjectParams {
+	mmGetRepliesForObject.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetRepliesForObjectParams, len(mmGetRepliesForObject.callArgs))
+	copy(argCopy, mmGetRepliesForObject.callArgs)
+
+	mmGetRepliesForObject.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetRepliesForObjectDone returns true if the count of the GetRepliesForObject invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetRepliesForObjectDone() bool {
+	if m.GetRepliesForObjectMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetRepliesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetRepliesForObjectMock.invocationsDone()
+}
+
+// MinimockGetRepliesForObjectInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetRepliesForObjectInspect() {
+	for _, e := range m.GetRepliesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetRepliesForObject at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetRepliesForObjectCounter := mm_atomic.LoadUint64(&m.afterGetRepliesForObjectCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetRepliesForObjectMock.defaultExpectation != nil && afterGetRepliesForObjectCounter < 1 {
+		if m.GetRepliesForObjectMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetRepliesForObject at\n%s", m.GetRepliesForObjectMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetRepliesForObject at\n%s with params: %#v", m.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.origin, *m.GetRepliesForObjectMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetRepliesForObject != nil && afterGetRepliesForObjectCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetRepliesForObject at\n%s", m.funcGetRepliesForObjectOrigin)
+	}
+
+	if !m.GetRepliesForObjectMock.invocationsDone() && afterGetRepliesForObjectCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetRepliesForObject at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetRepliesForObjectMock.expectedInvocations), m.GetRepliesForObjectMock.expectedInvocationsOrigin, afterGetRepliesForObjectCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockGetSharesForObject struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetSharesForObjectExpectation
+	expectations       []*StorageAndGraphWriterMockGetSharesForObjectExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetSharesForObjectParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetSharesForObjectExpectation specifies expectation struct of the StorageAndGraphWriter.GetSharesForObject
+type StorageAndGraphWriterMockGetSharesForObjectExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetSharesForObjectParams
+	paramPtrs          *StorageAndGraphWriterMockGetSharesForObjectParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetSharesForObjectExpectationOrigins
+	results            *StorageAndGraphWriterMockGetSharesForObjectResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetSharesForObjectParams contains parameters of the StorageAndGraphWriter.GetSharesForObject
+type StorageAndGraphWriterMockGetSharesForObjectParams struct {
+	ctx       context.Context
+	objectIRI string
+}
+
+// StorageAndGraphWriterMockGetSharesForObjectParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetSharesForObject
+type StorageAndGraphWriterMockGetSharesForObjectParamPtrs struct {
+	ctx       *context.Context
+	objectIRI *string
+}
+
+// StorageAndGraphWriterMockGetSharesForObjectResults contains results of the StorageAndGraphWriter.GetSharesForObject
+type StorageAndGraphWriterMockGetSharesForObjectResults struct {
+	sa1 []string
+	err error
+}
+
+// StorageAndGraphWriterMockGetSharesForObjectOrigins contains origins of expectations of the StorageAndGraphWriter.GetSharesForObject
+type StorageAndGraphWriterMockGetSharesForObjectExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originObjectIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Optional() *mStorageAndGraphWriterMockGetSharesForObject {
+	mmGetSharesForObject.optional = true
+	return mmGetSharesForObject
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetSharesForObject
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Expect(ctx context.Context, objectIRI string) *mStorageAndGraphWriterMockGetSharesForObject {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StorageAndGraphWriterMockGetSharesForObjectExpectation{}
+	}
+
+	if mmGetSharesForObject.defaultExpectation.paramPtrs != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by ExpectParams functions")
+	}
+
+	mmGetSharesForObject.defaultExpectation.params = &StorageAndGraphWriterMockGetSharesForObjectParams{ctx, objectIRI}
+	mmGetSharesForObject.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetSharesForObject.expectations {
+		if minimock.Equal(e.params, mmGetSharesForObject.defaultExpectation.params) {
+			mmGetSharesForObject.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetSharesForObject.defaultExpectation.params)
+		}
+	}
+
+	return mmGetSharesForObject
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetSharesForObject
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetSharesForObject {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StorageAndGraphWriterMockGetSharesForObjectExpectation{}
+	}
+
+	if mmGetSharesForObject.defaultExpectation.params != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Expect")
+	}
+
+	if mmGetSharesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetSharesForObject.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetSharesForObjectParamPtrs{}
+	}
+	mmGetSharesForObject.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetSharesForObject.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetSharesForObject
+}
+
+// ExpectObjectIRIParam2 sets up expected param objectIRI for StorageAndGraphWriter.GetSharesForObject
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) ExpectObjectIRIParam2(objectIRI string) *mStorageAndGraphWriterMockGetSharesForObject {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StorageAndGraphWriterMockGetSharesForObjectExpectation{}
+	}
+
+	if mmGetSharesForObject.defaultExpectation.params != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Expect")
+	}
+
+	if mmGetSharesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetSharesForObject.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetSharesForObjectParamPtrs{}
+	}
+	mmGetSharesForObject.defaultExpectation.paramPtrs.objectIRI = &objectIRI
+	mmGetSharesForObject.defaultExpectation.expectationOrigins.originObjectIRI = minimock.CallerInfo(1)
+
+	return mmGetSharesForObject
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetSharesForObject
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Inspect(f func(ctx context.Context, objectIRI string)) *mStorageAndGraphWriterMockGetSharesForObject {
+	if mmGetSharesForObject.mock.inspectFuncGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetSharesForObject")
+	}
+
+	mmGetSharesForObject.mock.inspectFuncGetSharesForObject = f
+
+	return mmGetSharesForObject
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetSharesForObject
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Return(sa1 []string, err error) *StorageAndGraphWriterMock {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StorageAndGraphWriterMockGetSharesForObjectExpectation{mock: mmGetSharesForObject.mock}
+	}
+	mmGetSharesForObject.defaultExpectation.results = &StorageAndGraphWriterMockGetSharesForObjectResults{sa1, err}
+	mmGetSharesForObject.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetSharesForObject.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetSharesForObject method
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Set(f func(ctx context.Context, objectIRI string) (sa1 []string, err error)) *StorageAndGraphWriterMock {
+	if mmGetSharesForObject.defaultExpectation != nil {
+		mmGetSharesForObject.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetSharesForObject method")
+	}
+
+	if len(mmGetSharesForObject.expectations) > 0 {
+		mmGetSharesForObject.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetSharesForObject method")
+	}
+
+	mmGetSharesForObject.mock.funcGetSharesForObject = f
+	mmGetSharesForObject.mock.funcGetSharesForObjectOrigin = minimock.CallerInfo(1)
+	return mmGetSharesForObject.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetSharesForObject which will trigger the result defined by the following
+// Then helper
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) When(ctx context.Context, objectIRI string) *StorageAndGraphWriterMockGetSharesForObjectExpectation {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StorageAndGraphWriterMock.GetSharesForObject mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetSharesForObjectExpectation{
+		mock:               mmGetSharesForObject.mock,
+		params:             &StorageAndGraphWriterMockGetSharesForObjectParams{ctx, objectIRI},
+		expectationOrigins: StorageAndGraphWriterMockGetSharesForObjectExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetSharesForObject.expectations = append(mmGetSharesForObject.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetSharesForObject return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetSharesForObjectExpectation) Then(sa1 []string, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetSharesForObjectResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetSharesForObject should be invoked
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Times(n uint64) *mStorageAndGraphWriterMockGetSharesForObject {
+	if n == 0 {
+		mmGetSharesForObject.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetSharesForObject mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetSharesForObject.expectedInvocations, n)
+	mmGetSharesForObject.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetSharesForObject
+}
+
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) invocationsDone() bool {
+	if len(mmGetSharesForObject.expectations) == 0 && mmGetSharesForObject.defaultExpectation == nil && mmGetSharesForObject.mock.funcGetSharesForObject == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetSharesForObject.mock.afterGetSharesForObjectCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetSharesForObject.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetSharesForObject implements mm_port.StorageAndGraphWriter
+func (mmGetSharesForObject *StorageAndGraphWriterMock) GetSharesForObject(ctx context.Context, objectIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetSharesForObject.beforeGetSharesForObjectCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetSharesForObject.afterGetSharesForObjectCounter, 1)
+
+	mmGetSharesForObject.t.Helper()
+
+	if mmGetSharesForObject.inspectFuncGetSharesForObject != nil {
+		mmGetSharesForObject.inspectFuncGetSharesForObject(ctx, objectIRI)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetSharesForObjectParams{ctx, objectIRI}
+
+	// Record call args
+	mmGetSharesForObject.GetSharesForObjectMock.mutex.Lock()
+	mmGetSharesForObject.GetSharesForObjectMock.callArgs = append(mmGetSharesForObject.GetSharesForObjectMock.callArgs, &mm_params)
+	mmGetSharesForObject.GetSharesForObjectMock.mutex.Unlock()
+
+	for _, e := range mmGetSharesForObject.GetSharesForObjectMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.params
+		mm_want_ptrs := mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetSharesForObjectParams{ctx, objectIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetSharesForObject.t.Errorf("StorageAndGraphWriterMock.GetSharesForObject got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectIRI != nil && !minimock.Equal(*mm_want_ptrs.objectIRI, mm_got.objectIRI) {
+				mmGetSharesForObject.t.Errorf("StorageAndGraphWriterMock.GetSharesForObject got unexpected parameter objectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetSharesForObject.t.Errorf("StorageAndGraphWriterMock.GetSharesForObject got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetSharesForObject.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetSharesForObject")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetSharesForObject.funcGetSharesForObject != nil {
+		return mmGetSharesForObject.funcGetSharesForObject(ctx, objectIRI)
+	}
+	mmGetSharesForObject.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetSharesForObject. %v %v", ctx, objectIRI)
+	return
+}
+
+// GetSharesForObjectAfterCounter returns a count of finished StorageAndGraphWriterMock.GetSharesForObject invocations
+func (mmGetSharesForObject *StorageAndGraphWriterMock) GetSharesForObjectAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetSharesForObject.afterGetSharesForObjectCounter)
+}
+
+// GetSharesForObjectBeforeCounter returns a count of StorageAndGraphWriterMock.GetSharesForObject invocations
+func (mmGetSharesForObject *StorageAndGraphWriterMock) GetSharesForObjectBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetSharesForObject.beforeGetSharesForObjectCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetSharesForObject.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetSharesForObject *mStorageAndGraphWriterMockGetSharesForObject) Calls() []*StorageAndGraphWriterMockGetSharesForObjectParams {
+	mmGetSharesForObject.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetSharesForObjectParams, len(mmGetSharesForObject.callArgs))
+	copy(argCopy, mmGetSharesForObject.callArgs)
+
+	mmGetSharesForObject.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetSharesForObjectDone returns true if the count of the GetSharesForObject invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetSharesForObjectDone() bool {
+	if m.GetSharesForObjectMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetSharesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetSharesForObjectMock.invocationsDone()
+}
+
+// MinimockGetSharesForObjectInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetSharesForObjectInspect() {
+	for _, e := range m.GetSharesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetSharesForObject at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetSharesForObjectCounter := mm_atomic.LoadUint64(&m.afterGetSharesForObjectCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetSharesForObjectMock.defaultExpectation != nil && afterGetSharesForObjectCounter < 1 {
+		if m.GetSharesForObjectMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetSharesForObject at\n%s", m.GetSharesForObjectMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetSharesForObject at\n%s with params: %#v", m.GetSharesForObjectMock.defaultExpectation.expectationOrigins.origin, *m.GetSharesForObjectMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetSharesForObject != nil && afterGetSharesForObjectCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetSharesForObject at\n%s", m.funcGetSharesForObjectOrigin)
+	}
+
+	if !m.GetSharesForObjectMock.invocationsDone() && afterGetSharesForObjectCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetSharesForObject at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetSharesForObjectMock.expectedInvocations), m.GetSharesForObjectMock.expectedInvocationsOrigin, afterGetSharesForObjectCounter)
 	}
 }
 
@@ -13878,9 +14937,15 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockGetLatestPayloadInspect()
 
+			m.MinimockGetLikesForObjectInspect()
+
 			m.MinimockGetNomadicIdentityInspect()
 
 			m.MinimockGetOrCreateTenantByDomainInspect()
+
+			m.MinimockGetRepliesForObjectInspect()
+
+			m.MinimockGetSharesForObjectInspect()
 
 			m.MinimockGetStatementsBySubjectIsolatedInspect()
 
@@ -13957,8 +15022,11 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockGetCollectionPayloadsDone() &&
 		m.MinimockGetHistoricalKeyDone() &&
 		m.MinimockGetLatestPayloadDone() &&
+		m.MinimockGetLikesForObjectDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
 		m.MinimockGetOrCreateTenantByDomainDone() &&
+		m.MinimockGetRepliesForObjectDone() &&
+		m.MinimockGetSharesForObjectDone() &&
 		m.MinimockGetStatementsBySubjectIsolatedDone() &&
 		m.MinimockGetTenantIDByActivityIRIDone() &&
 		m.MinimockHasActorCredentialDone() &&

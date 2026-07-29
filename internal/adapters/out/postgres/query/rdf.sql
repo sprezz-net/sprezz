@@ -55,3 +55,26 @@ FROM rdf_statements r
 JOIN rdf_dictionary p_dict ON r.predicate_id = p_dict.id
 LEFT JOIN rdf_dictionary o_dict ON r.object_id = o_dict.id
 WHERE r.subject_id = $1 AND r.tenant_id = $2;
+
+-- name: GetEngagementActivities :many
+SELECT DISTINCT d_sub.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
+JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
+JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+JOIN rdf_quads q_type ON q.graph_id = q_type.graph_id AND q.subject_id = q_type.subject_id
+JOIN rdf_dictionary d_type_pred ON q_type.predicate_id = d_type_pred.id
+JOIN rdf_dictionary d_type_obj ON q_type.object_id = d_type_obj.id
+WHERE d_obj.value = $1
+  AND d_pred.value = 'https://www.w3.org/ns/activitystreams#object'
+  AND d_type_pred.value = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+  AND d_type_obj.value = $2;
+
+-- name: GetRepliesByObject :many
+SELECT DISTINCT d_sub.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
+JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
+JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+WHERE d_obj.value = $1
+  AND d_pred.value = 'https://www.w3.org/ns/activitystreams#inReplyTo';

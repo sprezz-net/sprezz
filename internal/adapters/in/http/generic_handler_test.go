@@ -72,6 +72,47 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 	}
 }
 
+func TestGenericHandler_GetLikes_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	storage := portmock.NewStoragePortMock(mc)
+	// Return a dummy object payload first so the object exists
+	storage.GetLatestPayloadMock.Expect(context.Background(), "https://local.example/object/note-1").Return([]byte(`{"id":"https://local.example/object/note-1","type":"Note"}`), nil)
+
+	// Mock GetLikesForObject to return some like activity IRIs
+	storage.GetLikesForObjectMock.Expect(context.Background(), "https://local.example/object/note-1").Return([]string{
+		"https://remote.com/activity/like-1",
+		"https://remote2.com/activity/like-2",
+	}, nil)
+
+	handler := inhttp.NewGenericHandler(storage)
+
+	req := httptest.NewRequest(http.MethodGet, "/object/note-1/likes", nil)
+	req.Host = "local.example"
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d", rec.Code)
+	}
+
+	contentType := rec.Header().Get("Content-Type")
+	if !strings.Contains(contentType, "application/ld+json") {
+		t.Errorf("expected Content-Type to contain application/ld+json, got %s", contentType)
+	}
+
+	expectedBody := `{"id":"/object/note-1/likes","orderedItems":["https://remote.com/activity/like-1","https://remote2.com/activity/like-2"],"totalItems":2,"type":"OrderedCollection"}`
+	bodyStr := strings.TrimSpace(rec.Body.String())
+	// Strip newline if any
+	bodyStr = strings.ReplaceAll(bodyStr, "\n", "")
+	bodyStr = strings.ReplaceAll(bodyStr, " ", "")
+	cleanExpected := strings.ReplaceAll(expectedBody, " ", "")
+	if bodyStr != cleanExpected {
+		t.Errorf("expected body: %s, got: %s", cleanExpected, bodyStr)
+	}
+}
+
 func TestGenericHandler_PostDirectInbox_Success(t *testing.T) {
 	mc := minimock.NewController(t)
 

@@ -39,6 +39,46 @@ func (q *Queries) GetDictionaryID(ctx context.Context, value string) (int64, err
 	return id, err
 }
 
+const getEngagementActivities = `-- name: GetEngagementActivities :many
+SELECT DISTINCT d_sub.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
+JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
+JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+JOIN rdf_quads q_type ON q.graph_id = q_type.graph_id AND q.subject_id = q_type.subject_id
+JOIN rdf_dictionary d_type_pred ON q_type.predicate_id = d_type_pred.id
+JOIN rdf_dictionary d_type_obj ON q_type.object_id = d_type_obj.id
+WHERE d_obj.value = $1
+  AND d_pred.value = 'https://www.w3.org/ns/activitystreams#object'
+  AND d_type_pred.value = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type'
+  AND d_type_obj.value = $2
+`
+
+type GetEngagementActivitiesParams struct {
+	Value   string `json:"value"`
+	Value_2 string `json:"value_2"`
+}
+
+func (q *Queries) GetEngagementActivities(ctx context.Context, arg GetEngagementActivitiesParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, getEngagementActivities, arg.Value, arg.Value_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var subject string
+		if err := rows.Scan(&subject); err != nil {
+			return nil, err
+		}
+		items = append(items, subject)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestPayload = `-- name: GetLatestPayload :one
 SELECT payload
 FROM rdf_graphs
@@ -52,6 +92,36 @@ func (q *Queries) GetLatestPayload(ctx context.Context, objectIri string) ([]byt
 	var payload []byte
 	err := row.Scan(&payload)
 	return payload, err
+}
+
+const getRepliesByObject = `-- name: GetRepliesByObject :many
+SELECT DISTINCT d_sub.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
+JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
+JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+WHERE d_obj.value = $1
+  AND d_pred.value = 'https://www.w3.org/ns/activitystreams#inReplyTo'
+`
+
+func (q *Queries) GetRepliesByObject(ctx context.Context, value string) ([]string, error) {
+	rows, err := q.db.Query(ctx, getRepliesByObject, value)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var subject string
+		if err := rows.Scan(&subject); err != nil {
+			return nil, err
+		}
+		items = append(items, subject)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getStatementsBySubjectExpanded = `-- name: GetStatementsBySubjectExpanded :many

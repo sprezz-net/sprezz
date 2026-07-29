@@ -53,6 +53,10 @@ type StoragePort interface {
 	GetTenantIDByActivityIRI(ctx context.Context, activityIRI string) (int32, error)
 	GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error)
 
+	GetLikesForObject(ctx context.Context, objectIRI string) ([]string, error)
+	GetSharesForObject(ctx context.Context, objectIRI string) ([]string, error)
+	GetRepliesForObject(ctx context.Context, objectIRI string) ([]string, error)
+
 	GetActorIRIByUsername(ctx context.Context, tenantID int32, username string) (string, error)
 	// GetActorProfileFromGraph searches the quad store matching the tenant ID and username handle,
 	// returning a unified profile structure parsed directly out of the RDF edges.

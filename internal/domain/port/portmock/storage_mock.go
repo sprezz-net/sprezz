@@ -125,6 +125,13 @@ type StoragePortMock struct {
 	beforeGetLatestPayloadCounter uint64
 	GetLatestPayloadMock          mStoragePortMockGetLatestPayload
 
+	funcGetLikesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
+	funcGetLikesForObjectOrigin    string
+	inspectFuncGetLikesForObject   func(ctx context.Context, objectIRI string)
+	afterGetLikesForObjectCounter  uint64
+	beforeGetLikesForObjectCounter uint64
+	GetLikesForObjectMock          mStoragePortMockGetLikesForObject
+
 	funcGetNomadicIdentity          func(ctx context.Context, guid string) (np1 *model.NomadicIdentity, err error)
 	funcGetNomadicIdentityOrigin    string
 	inspectFuncGetNomadicIdentity   func(ctx context.Context, guid string)
@@ -138,6 +145,20 @@ type StoragePortMock struct {
 	afterGetOrCreateTenantByDomainCounter  uint64
 	beforeGetOrCreateTenantByDomainCounter uint64
 	GetOrCreateTenantByDomainMock          mStoragePortMockGetOrCreateTenantByDomain
+
+	funcGetRepliesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
+	funcGetRepliesForObjectOrigin    string
+	inspectFuncGetRepliesForObject   func(ctx context.Context, objectIRI string)
+	afterGetRepliesForObjectCounter  uint64
+	beforeGetRepliesForObjectCounter uint64
+	GetRepliesForObjectMock          mStoragePortMockGetRepliesForObject
+
+	funcGetSharesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
+	funcGetSharesForObjectOrigin    string
+	inspectFuncGetSharesForObject   func(ctx context.Context, objectIRI string)
+	afterGetSharesForObjectCounter  uint64
+	beforeGetSharesForObjectCounter uint64
+	GetSharesForObjectMock          mStoragePortMockGetSharesForObject
 
 	funcGetStatementsBySubjectIsolated          func(ctx context.Context, subjectIRI string, tenantID int32) (qa1 []model.Quad, err error)
 	funcGetStatementsBySubjectIsolatedOrigin    string
@@ -312,11 +333,20 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 	m.GetLatestPayloadMock = mStoragePortMockGetLatestPayload{mock: m}
 	m.GetLatestPayloadMock.callArgs = []*StoragePortMockGetLatestPayloadParams{}
 
+	m.GetLikesForObjectMock = mStoragePortMockGetLikesForObject{mock: m}
+	m.GetLikesForObjectMock.callArgs = []*StoragePortMockGetLikesForObjectParams{}
+
 	m.GetNomadicIdentityMock = mStoragePortMockGetNomadicIdentity{mock: m}
 	m.GetNomadicIdentityMock.callArgs = []*StoragePortMockGetNomadicIdentityParams{}
 
 	m.GetOrCreateTenantByDomainMock = mStoragePortMockGetOrCreateTenantByDomain{mock: m}
 	m.GetOrCreateTenantByDomainMock.callArgs = []*StoragePortMockGetOrCreateTenantByDomainParams{}
+
+	m.GetRepliesForObjectMock = mStoragePortMockGetRepliesForObject{mock: m}
+	m.GetRepliesForObjectMock.callArgs = []*StoragePortMockGetRepliesForObjectParams{}
+
+	m.GetSharesForObjectMock = mStoragePortMockGetSharesForObject{mock: m}
+	m.GetSharesForObjectMock.callArgs = []*StoragePortMockGetSharesForObjectParams{}
 
 	m.GetStatementsBySubjectIsolatedMock = mStoragePortMockGetStatementsBySubjectIsolated{mock: m}
 	m.GetStatementsBySubjectIsolatedMock.callArgs = []*StoragePortMockGetStatementsBySubjectIsolatedParams{}
@@ -6230,6 +6260,349 @@ func (m *StoragePortMock) MinimockGetLatestPayloadInspect() {
 	}
 }
 
+type mStoragePortMockGetLikesForObject struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetLikesForObjectExpectation
+	expectations       []*StoragePortMockGetLikesForObjectExpectation
+
+	callArgs []*StoragePortMockGetLikesForObjectParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetLikesForObjectExpectation specifies expectation struct of the StoragePort.GetLikesForObject
+type StoragePortMockGetLikesForObjectExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetLikesForObjectParams
+	paramPtrs          *StoragePortMockGetLikesForObjectParamPtrs
+	expectationOrigins StoragePortMockGetLikesForObjectExpectationOrigins
+	results            *StoragePortMockGetLikesForObjectResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetLikesForObjectParams contains parameters of the StoragePort.GetLikesForObject
+type StoragePortMockGetLikesForObjectParams struct {
+	ctx       context.Context
+	objectIRI string
+}
+
+// StoragePortMockGetLikesForObjectParamPtrs contains pointers to parameters of the StoragePort.GetLikesForObject
+type StoragePortMockGetLikesForObjectParamPtrs struct {
+	ctx       *context.Context
+	objectIRI *string
+}
+
+// StoragePortMockGetLikesForObjectResults contains results of the StoragePort.GetLikesForObject
+type StoragePortMockGetLikesForObjectResults struct {
+	sa1 []string
+	err error
+}
+
+// StoragePortMockGetLikesForObjectOrigins contains origins of expectations of the StoragePort.GetLikesForObject
+type StoragePortMockGetLikesForObjectExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originObjectIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Optional() *mStoragePortMockGetLikesForObject {
+	mmGetLikesForObject.optional = true
+	return mmGetLikesForObject
+}
+
+// Expect sets up expected params for StoragePort.GetLikesForObject
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Expect(ctx context.Context, objectIRI string) *mStoragePortMockGetLikesForObject {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StoragePortMockGetLikesForObjectExpectation{}
+	}
+
+	if mmGetLikesForObject.defaultExpectation.paramPtrs != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by ExpectParams functions")
+	}
+
+	mmGetLikesForObject.defaultExpectation.params = &StoragePortMockGetLikesForObjectParams{ctx, objectIRI}
+	mmGetLikesForObject.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetLikesForObject.expectations {
+		if minimock.Equal(e.params, mmGetLikesForObject.defaultExpectation.params) {
+			mmGetLikesForObject.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetLikesForObject.defaultExpectation.params)
+		}
+	}
+
+	return mmGetLikesForObject
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetLikesForObject
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetLikesForObject {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StoragePortMockGetLikesForObjectExpectation{}
+	}
+
+	if mmGetLikesForObject.defaultExpectation.params != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Expect")
+	}
+
+	if mmGetLikesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetLikesForObject.defaultExpectation.paramPtrs = &StoragePortMockGetLikesForObjectParamPtrs{}
+	}
+	mmGetLikesForObject.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetLikesForObject.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetLikesForObject
+}
+
+// ExpectObjectIRIParam2 sets up expected param objectIRI for StoragePort.GetLikesForObject
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) ExpectObjectIRIParam2(objectIRI string) *mStoragePortMockGetLikesForObject {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StoragePortMockGetLikesForObjectExpectation{}
+	}
+
+	if mmGetLikesForObject.defaultExpectation.params != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Expect")
+	}
+
+	if mmGetLikesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetLikesForObject.defaultExpectation.paramPtrs = &StoragePortMockGetLikesForObjectParamPtrs{}
+	}
+	mmGetLikesForObject.defaultExpectation.paramPtrs.objectIRI = &objectIRI
+	mmGetLikesForObject.defaultExpectation.expectationOrigins.originObjectIRI = minimock.CallerInfo(1)
+
+	return mmGetLikesForObject
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetLikesForObject
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Inspect(f func(ctx context.Context, objectIRI string)) *mStoragePortMockGetLikesForObject {
+	if mmGetLikesForObject.mock.inspectFuncGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetLikesForObject")
+	}
+
+	mmGetLikesForObject.mock.inspectFuncGetLikesForObject = f
+
+	return mmGetLikesForObject
+}
+
+// Return sets up results that will be returned by StoragePort.GetLikesForObject
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Return(sa1 []string, err error) *StoragePortMock {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Set")
+	}
+
+	if mmGetLikesForObject.defaultExpectation == nil {
+		mmGetLikesForObject.defaultExpectation = &StoragePortMockGetLikesForObjectExpectation{mock: mmGetLikesForObject.mock}
+	}
+	mmGetLikesForObject.defaultExpectation.results = &StoragePortMockGetLikesForObjectResults{sa1, err}
+	mmGetLikesForObject.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetLikesForObject.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetLikesForObject method
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Set(f func(ctx context.Context, objectIRI string) (sa1 []string, err error)) *StoragePortMock {
+	if mmGetLikesForObject.defaultExpectation != nil {
+		mmGetLikesForObject.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetLikesForObject method")
+	}
+
+	if len(mmGetLikesForObject.expectations) > 0 {
+		mmGetLikesForObject.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetLikesForObject method")
+	}
+
+	mmGetLikesForObject.mock.funcGetLikesForObject = f
+	mmGetLikesForObject.mock.funcGetLikesForObjectOrigin = minimock.CallerInfo(1)
+	return mmGetLikesForObject.mock
+}
+
+// When sets expectation for the StoragePort.GetLikesForObject which will trigger the result defined by the following
+// Then helper
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) When(ctx context.Context, objectIRI string) *StoragePortMockGetLikesForObjectExpectation {
+	if mmGetLikesForObject.mock.funcGetLikesForObject != nil {
+		mmGetLikesForObject.mock.t.Fatalf("StoragePortMock.GetLikesForObject mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetLikesForObjectExpectation{
+		mock:               mmGetLikesForObject.mock,
+		params:             &StoragePortMockGetLikesForObjectParams{ctx, objectIRI},
+		expectationOrigins: StoragePortMockGetLikesForObjectExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetLikesForObject.expectations = append(mmGetLikesForObject.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetLikesForObject return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetLikesForObjectExpectation) Then(sa1 []string, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetLikesForObjectResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetLikesForObject should be invoked
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Times(n uint64) *mStoragePortMockGetLikesForObject {
+	if n == 0 {
+		mmGetLikesForObject.mock.t.Fatalf("Times of StoragePortMock.GetLikesForObject mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetLikesForObject.expectedInvocations, n)
+	mmGetLikesForObject.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetLikesForObject
+}
+
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) invocationsDone() bool {
+	if len(mmGetLikesForObject.expectations) == 0 && mmGetLikesForObject.defaultExpectation == nil && mmGetLikesForObject.mock.funcGetLikesForObject == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetLikesForObject.mock.afterGetLikesForObjectCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetLikesForObject.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetLikesForObject implements mm_port.StoragePort
+func (mmGetLikesForObject *StoragePortMock) GetLikesForObject(ctx context.Context, objectIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetLikesForObject.beforeGetLikesForObjectCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetLikesForObject.afterGetLikesForObjectCounter, 1)
+
+	mmGetLikesForObject.t.Helper()
+
+	if mmGetLikesForObject.inspectFuncGetLikesForObject != nil {
+		mmGetLikesForObject.inspectFuncGetLikesForObject(ctx, objectIRI)
+	}
+
+	mm_params := StoragePortMockGetLikesForObjectParams{ctx, objectIRI}
+
+	// Record call args
+	mmGetLikesForObject.GetLikesForObjectMock.mutex.Lock()
+	mmGetLikesForObject.GetLikesForObjectMock.callArgs = append(mmGetLikesForObject.GetLikesForObjectMock.callArgs, &mm_params)
+	mmGetLikesForObject.GetLikesForObjectMock.mutex.Unlock()
+
+	for _, e := range mmGetLikesForObject.GetLikesForObjectMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.params
+		mm_want_ptrs := mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetLikesForObjectParams{ctx, objectIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetLikesForObject.t.Errorf("StoragePortMock.GetLikesForObject got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectIRI != nil && !minimock.Equal(*mm_want_ptrs.objectIRI, mm_got.objectIRI) {
+				mmGetLikesForObject.t.Errorf("StoragePortMock.GetLikesForObject got unexpected parameter objectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetLikesForObject.t.Errorf("StoragePortMock.GetLikesForObject got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetLikesForObject.GetLikesForObjectMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetLikesForObject.t.Fatal("No results are set for the StoragePortMock.GetLikesForObject")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetLikesForObject.funcGetLikesForObject != nil {
+		return mmGetLikesForObject.funcGetLikesForObject(ctx, objectIRI)
+	}
+	mmGetLikesForObject.t.Fatalf("Unexpected call to StoragePortMock.GetLikesForObject. %v %v", ctx, objectIRI)
+	return
+}
+
+// GetLikesForObjectAfterCounter returns a count of finished StoragePortMock.GetLikesForObject invocations
+func (mmGetLikesForObject *StoragePortMock) GetLikesForObjectAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetLikesForObject.afterGetLikesForObjectCounter)
+}
+
+// GetLikesForObjectBeforeCounter returns a count of StoragePortMock.GetLikesForObject invocations
+func (mmGetLikesForObject *StoragePortMock) GetLikesForObjectBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetLikesForObject.beforeGetLikesForObjectCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetLikesForObject.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetLikesForObject *mStoragePortMockGetLikesForObject) Calls() []*StoragePortMockGetLikesForObjectParams {
+	mmGetLikesForObject.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetLikesForObjectParams, len(mmGetLikesForObject.callArgs))
+	copy(argCopy, mmGetLikesForObject.callArgs)
+
+	mmGetLikesForObject.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetLikesForObjectDone returns true if the count of the GetLikesForObject invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetLikesForObjectDone() bool {
+	if m.GetLikesForObjectMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetLikesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetLikesForObjectMock.invocationsDone()
+}
+
+// MinimockGetLikesForObjectInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetLikesForObjectInspect() {
+	for _, e := range m.GetLikesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetLikesForObject at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetLikesForObjectCounter := mm_atomic.LoadUint64(&m.afterGetLikesForObjectCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetLikesForObjectMock.defaultExpectation != nil && afterGetLikesForObjectCounter < 1 {
+		if m.GetLikesForObjectMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetLikesForObject at\n%s", m.GetLikesForObjectMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetLikesForObject at\n%s with params: %#v", m.GetLikesForObjectMock.defaultExpectation.expectationOrigins.origin, *m.GetLikesForObjectMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetLikesForObject != nil && afterGetLikesForObjectCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetLikesForObject at\n%s", m.funcGetLikesForObjectOrigin)
+	}
+
+	if !m.GetLikesForObjectMock.invocationsDone() && afterGetLikesForObjectCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetLikesForObject at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetLikesForObjectMock.expectedInvocations), m.GetLikesForObjectMock.expectedInvocationsOrigin, afterGetLikesForObjectCounter)
+	}
+}
+
 type mStoragePortMockGetNomadicIdentity struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -6913,6 +7286,692 @@ func (m *StoragePortMock) MinimockGetOrCreateTenantByDomainInspect() {
 	if !m.GetOrCreateTenantByDomainMock.invocationsDone() && afterGetOrCreateTenantByDomainCounter > 0 {
 		m.t.Errorf("Expected %d calls to StoragePortMock.GetOrCreateTenantByDomain at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetOrCreateTenantByDomainMock.expectedInvocations), m.GetOrCreateTenantByDomainMock.expectedInvocationsOrigin, afterGetOrCreateTenantByDomainCounter)
+	}
+}
+
+type mStoragePortMockGetRepliesForObject struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetRepliesForObjectExpectation
+	expectations       []*StoragePortMockGetRepliesForObjectExpectation
+
+	callArgs []*StoragePortMockGetRepliesForObjectParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetRepliesForObjectExpectation specifies expectation struct of the StoragePort.GetRepliesForObject
+type StoragePortMockGetRepliesForObjectExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetRepliesForObjectParams
+	paramPtrs          *StoragePortMockGetRepliesForObjectParamPtrs
+	expectationOrigins StoragePortMockGetRepliesForObjectExpectationOrigins
+	results            *StoragePortMockGetRepliesForObjectResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetRepliesForObjectParams contains parameters of the StoragePort.GetRepliesForObject
+type StoragePortMockGetRepliesForObjectParams struct {
+	ctx       context.Context
+	objectIRI string
+}
+
+// StoragePortMockGetRepliesForObjectParamPtrs contains pointers to parameters of the StoragePort.GetRepliesForObject
+type StoragePortMockGetRepliesForObjectParamPtrs struct {
+	ctx       *context.Context
+	objectIRI *string
+}
+
+// StoragePortMockGetRepliesForObjectResults contains results of the StoragePort.GetRepliesForObject
+type StoragePortMockGetRepliesForObjectResults struct {
+	sa1 []string
+	err error
+}
+
+// StoragePortMockGetRepliesForObjectOrigins contains origins of expectations of the StoragePort.GetRepliesForObject
+type StoragePortMockGetRepliesForObjectExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originObjectIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Optional() *mStoragePortMockGetRepliesForObject {
+	mmGetRepliesForObject.optional = true
+	return mmGetRepliesForObject
+}
+
+// Expect sets up expected params for StoragePort.GetRepliesForObject
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Expect(ctx context.Context, objectIRI string) *mStoragePortMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StoragePortMockGetRepliesForObjectExpectation{}
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.paramPtrs != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by ExpectParams functions")
+	}
+
+	mmGetRepliesForObject.defaultExpectation.params = &StoragePortMockGetRepliesForObjectParams{ctx, objectIRI}
+	mmGetRepliesForObject.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetRepliesForObject.expectations {
+		if minimock.Equal(e.params, mmGetRepliesForObject.defaultExpectation.params) {
+			mmGetRepliesForObject.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetRepliesForObject.defaultExpectation.params)
+		}
+	}
+
+	return mmGetRepliesForObject
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetRepliesForObject
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StoragePortMockGetRepliesForObjectExpectation{}
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.params != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Expect")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetRepliesForObject.defaultExpectation.paramPtrs = &StoragePortMockGetRepliesForObjectParamPtrs{}
+	}
+	mmGetRepliesForObject.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetRepliesForObject.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetRepliesForObject
+}
+
+// ExpectObjectIRIParam2 sets up expected param objectIRI for StoragePort.GetRepliesForObject
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) ExpectObjectIRIParam2(objectIRI string) *mStoragePortMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StoragePortMockGetRepliesForObjectExpectation{}
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.params != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Expect")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetRepliesForObject.defaultExpectation.paramPtrs = &StoragePortMockGetRepliesForObjectParamPtrs{}
+	}
+	mmGetRepliesForObject.defaultExpectation.paramPtrs.objectIRI = &objectIRI
+	mmGetRepliesForObject.defaultExpectation.expectationOrigins.originObjectIRI = minimock.CallerInfo(1)
+
+	return mmGetRepliesForObject
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetRepliesForObject
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Inspect(f func(ctx context.Context, objectIRI string)) *mStoragePortMockGetRepliesForObject {
+	if mmGetRepliesForObject.mock.inspectFuncGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetRepliesForObject")
+	}
+
+	mmGetRepliesForObject.mock.inspectFuncGetRepliesForObject = f
+
+	return mmGetRepliesForObject
+}
+
+// Return sets up results that will be returned by StoragePort.GetRepliesForObject
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Return(sa1 []string, err error) *StoragePortMock {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	if mmGetRepliesForObject.defaultExpectation == nil {
+		mmGetRepliesForObject.defaultExpectation = &StoragePortMockGetRepliesForObjectExpectation{mock: mmGetRepliesForObject.mock}
+	}
+	mmGetRepliesForObject.defaultExpectation.results = &StoragePortMockGetRepliesForObjectResults{sa1, err}
+	mmGetRepliesForObject.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetRepliesForObject.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetRepliesForObject method
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Set(f func(ctx context.Context, objectIRI string) (sa1 []string, err error)) *StoragePortMock {
+	if mmGetRepliesForObject.defaultExpectation != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetRepliesForObject method")
+	}
+
+	if len(mmGetRepliesForObject.expectations) > 0 {
+		mmGetRepliesForObject.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetRepliesForObject method")
+	}
+
+	mmGetRepliesForObject.mock.funcGetRepliesForObject = f
+	mmGetRepliesForObject.mock.funcGetRepliesForObjectOrigin = minimock.CallerInfo(1)
+	return mmGetRepliesForObject.mock
+}
+
+// When sets expectation for the StoragePort.GetRepliesForObject which will trigger the result defined by the following
+// Then helper
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) When(ctx context.Context, objectIRI string) *StoragePortMockGetRepliesForObjectExpectation {
+	if mmGetRepliesForObject.mock.funcGetRepliesForObject != nil {
+		mmGetRepliesForObject.mock.t.Fatalf("StoragePortMock.GetRepliesForObject mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetRepliesForObjectExpectation{
+		mock:               mmGetRepliesForObject.mock,
+		params:             &StoragePortMockGetRepliesForObjectParams{ctx, objectIRI},
+		expectationOrigins: StoragePortMockGetRepliesForObjectExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetRepliesForObject.expectations = append(mmGetRepliesForObject.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetRepliesForObject return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetRepliesForObjectExpectation) Then(sa1 []string, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetRepliesForObjectResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetRepliesForObject should be invoked
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Times(n uint64) *mStoragePortMockGetRepliesForObject {
+	if n == 0 {
+		mmGetRepliesForObject.mock.t.Fatalf("Times of StoragePortMock.GetRepliesForObject mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetRepliesForObject.expectedInvocations, n)
+	mmGetRepliesForObject.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetRepliesForObject
+}
+
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) invocationsDone() bool {
+	if len(mmGetRepliesForObject.expectations) == 0 && mmGetRepliesForObject.defaultExpectation == nil && mmGetRepliesForObject.mock.funcGetRepliesForObject == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetRepliesForObject.mock.afterGetRepliesForObjectCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetRepliesForObject.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetRepliesForObject implements mm_port.StoragePort
+func (mmGetRepliesForObject *StoragePortMock) GetRepliesForObject(ctx context.Context, objectIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetRepliesForObject.beforeGetRepliesForObjectCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetRepliesForObject.afterGetRepliesForObjectCounter, 1)
+
+	mmGetRepliesForObject.t.Helper()
+
+	if mmGetRepliesForObject.inspectFuncGetRepliesForObject != nil {
+		mmGetRepliesForObject.inspectFuncGetRepliesForObject(ctx, objectIRI)
+	}
+
+	mm_params := StoragePortMockGetRepliesForObjectParams{ctx, objectIRI}
+
+	// Record call args
+	mmGetRepliesForObject.GetRepliesForObjectMock.mutex.Lock()
+	mmGetRepliesForObject.GetRepliesForObjectMock.callArgs = append(mmGetRepliesForObject.GetRepliesForObjectMock.callArgs, &mm_params)
+	mmGetRepliesForObject.GetRepliesForObjectMock.mutex.Unlock()
+
+	for _, e := range mmGetRepliesForObject.GetRepliesForObjectMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.params
+		mm_want_ptrs := mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetRepliesForObjectParams{ctx, objectIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetRepliesForObject.t.Errorf("StoragePortMock.GetRepliesForObject got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectIRI != nil && !minimock.Equal(*mm_want_ptrs.objectIRI, mm_got.objectIRI) {
+				mmGetRepliesForObject.t.Errorf("StoragePortMock.GetRepliesForObject got unexpected parameter objectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetRepliesForObject.t.Errorf("StoragePortMock.GetRepliesForObject got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetRepliesForObject.GetRepliesForObjectMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetRepliesForObject.t.Fatal("No results are set for the StoragePortMock.GetRepliesForObject")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetRepliesForObject.funcGetRepliesForObject != nil {
+		return mmGetRepliesForObject.funcGetRepliesForObject(ctx, objectIRI)
+	}
+	mmGetRepliesForObject.t.Fatalf("Unexpected call to StoragePortMock.GetRepliesForObject. %v %v", ctx, objectIRI)
+	return
+}
+
+// GetRepliesForObjectAfterCounter returns a count of finished StoragePortMock.GetRepliesForObject invocations
+func (mmGetRepliesForObject *StoragePortMock) GetRepliesForObjectAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetRepliesForObject.afterGetRepliesForObjectCounter)
+}
+
+// GetRepliesForObjectBeforeCounter returns a count of StoragePortMock.GetRepliesForObject invocations
+func (mmGetRepliesForObject *StoragePortMock) GetRepliesForObjectBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetRepliesForObject.beforeGetRepliesForObjectCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetRepliesForObject.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetRepliesForObject *mStoragePortMockGetRepliesForObject) Calls() []*StoragePortMockGetRepliesForObjectParams {
+	mmGetRepliesForObject.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetRepliesForObjectParams, len(mmGetRepliesForObject.callArgs))
+	copy(argCopy, mmGetRepliesForObject.callArgs)
+
+	mmGetRepliesForObject.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetRepliesForObjectDone returns true if the count of the GetRepliesForObject invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetRepliesForObjectDone() bool {
+	if m.GetRepliesForObjectMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetRepliesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetRepliesForObjectMock.invocationsDone()
+}
+
+// MinimockGetRepliesForObjectInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetRepliesForObjectInspect() {
+	for _, e := range m.GetRepliesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetRepliesForObject at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetRepliesForObjectCounter := mm_atomic.LoadUint64(&m.afterGetRepliesForObjectCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetRepliesForObjectMock.defaultExpectation != nil && afterGetRepliesForObjectCounter < 1 {
+		if m.GetRepliesForObjectMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetRepliesForObject at\n%s", m.GetRepliesForObjectMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetRepliesForObject at\n%s with params: %#v", m.GetRepliesForObjectMock.defaultExpectation.expectationOrigins.origin, *m.GetRepliesForObjectMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetRepliesForObject != nil && afterGetRepliesForObjectCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetRepliesForObject at\n%s", m.funcGetRepliesForObjectOrigin)
+	}
+
+	if !m.GetRepliesForObjectMock.invocationsDone() && afterGetRepliesForObjectCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetRepliesForObject at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetRepliesForObjectMock.expectedInvocations), m.GetRepliesForObjectMock.expectedInvocationsOrigin, afterGetRepliesForObjectCounter)
+	}
+}
+
+type mStoragePortMockGetSharesForObject struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetSharesForObjectExpectation
+	expectations       []*StoragePortMockGetSharesForObjectExpectation
+
+	callArgs []*StoragePortMockGetSharesForObjectParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetSharesForObjectExpectation specifies expectation struct of the StoragePort.GetSharesForObject
+type StoragePortMockGetSharesForObjectExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetSharesForObjectParams
+	paramPtrs          *StoragePortMockGetSharesForObjectParamPtrs
+	expectationOrigins StoragePortMockGetSharesForObjectExpectationOrigins
+	results            *StoragePortMockGetSharesForObjectResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetSharesForObjectParams contains parameters of the StoragePort.GetSharesForObject
+type StoragePortMockGetSharesForObjectParams struct {
+	ctx       context.Context
+	objectIRI string
+}
+
+// StoragePortMockGetSharesForObjectParamPtrs contains pointers to parameters of the StoragePort.GetSharesForObject
+type StoragePortMockGetSharesForObjectParamPtrs struct {
+	ctx       *context.Context
+	objectIRI *string
+}
+
+// StoragePortMockGetSharesForObjectResults contains results of the StoragePort.GetSharesForObject
+type StoragePortMockGetSharesForObjectResults struct {
+	sa1 []string
+	err error
+}
+
+// StoragePortMockGetSharesForObjectOrigins contains origins of expectations of the StoragePort.GetSharesForObject
+type StoragePortMockGetSharesForObjectExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originObjectIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Optional() *mStoragePortMockGetSharesForObject {
+	mmGetSharesForObject.optional = true
+	return mmGetSharesForObject
+}
+
+// Expect sets up expected params for StoragePort.GetSharesForObject
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Expect(ctx context.Context, objectIRI string) *mStoragePortMockGetSharesForObject {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StoragePortMockGetSharesForObjectExpectation{}
+	}
+
+	if mmGetSharesForObject.defaultExpectation.paramPtrs != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by ExpectParams functions")
+	}
+
+	mmGetSharesForObject.defaultExpectation.params = &StoragePortMockGetSharesForObjectParams{ctx, objectIRI}
+	mmGetSharesForObject.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetSharesForObject.expectations {
+		if minimock.Equal(e.params, mmGetSharesForObject.defaultExpectation.params) {
+			mmGetSharesForObject.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetSharesForObject.defaultExpectation.params)
+		}
+	}
+
+	return mmGetSharesForObject
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetSharesForObject
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetSharesForObject {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StoragePortMockGetSharesForObjectExpectation{}
+	}
+
+	if mmGetSharesForObject.defaultExpectation.params != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Expect")
+	}
+
+	if mmGetSharesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetSharesForObject.defaultExpectation.paramPtrs = &StoragePortMockGetSharesForObjectParamPtrs{}
+	}
+	mmGetSharesForObject.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetSharesForObject.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetSharesForObject
+}
+
+// ExpectObjectIRIParam2 sets up expected param objectIRI for StoragePort.GetSharesForObject
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) ExpectObjectIRIParam2(objectIRI string) *mStoragePortMockGetSharesForObject {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StoragePortMockGetSharesForObjectExpectation{}
+	}
+
+	if mmGetSharesForObject.defaultExpectation.params != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Expect")
+	}
+
+	if mmGetSharesForObject.defaultExpectation.paramPtrs == nil {
+		mmGetSharesForObject.defaultExpectation.paramPtrs = &StoragePortMockGetSharesForObjectParamPtrs{}
+	}
+	mmGetSharesForObject.defaultExpectation.paramPtrs.objectIRI = &objectIRI
+	mmGetSharesForObject.defaultExpectation.expectationOrigins.originObjectIRI = minimock.CallerInfo(1)
+
+	return mmGetSharesForObject
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetSharesForObject
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Inspect(f func(ctx context.Context, objectIRI string)) *mStoragePortMockGetSharesForObject {
+	if mmGetSharesForObject.mock.inspectFuncGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetSharesForObject")
+	}
+
+	mmGetSharesForObject.mock.inspectFuncGetSharesForObject = f
+
+	return mmGetSharesForObject
+}
+
+// Return sets up results that will be returned by StoragePort.GetSharesForObject
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Return(sa1 []string, err error) *StoragePortMock {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Set")
+	}
+
+	if mmGetSharesForObject.defaultExpectation == nil {
+		mmGetSharesForObject.defaultExpectation = &StoragePortMockGetSharesForObjectExpectation{mock: mmGetSharesForObject.mock}
+	}
+	mmGetSharesForObject.defaultExpectation.results = &StoragePortMockGetSharesForObjectResults{sa1, err}
+	mmGetSharesForObject.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetSharesForObject.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetSharesForObject method
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Set(f func(ctx context.Context, objectIRI string) (sa1 []string, err error)) *StoragePortMock {
+	if mmGetSharesForObject.defaultExpectation != nil {
+		mmGetSharesForObject.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetSharesForObject method")
+	}
+
+	if len(mmGetSharesForObject.expectations) > 0 {
+		mmGetSharesForObject.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetSharesForObject method")
+	}
+
+	mmGetSharesForObject.mock.funcGetSharesForObject = f
+	mmGetSharesForObject.mock.funcGetSharesForObjectOrigin = minimock.CallerInfo(1)
+	return mmGetSharesForObject.mock
+}
+
+// When sets expectation for the StoragePort.GetSharesForObject which will trigger the result defined by the following
+// Then helper
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) When(ctx context.Context, objectIRI string) *StoragePortMockGetSharesForObjectExpectation {
+	if mmGetSharesForObject.mock.funcGetSharesForObject != nil {
+		mmGetSharesForObject.mock.t.Fatalf("StoragePortMock.GetSharesForObject mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetSharesForObjectExpectation{
+		mock:               mmGetSharesForObject.mock,
+		params:             &StoragePortMockGetSharesForObjectParams{ctx, objectIRI},
+		expectationOrigins: StoragePortMockGetSharesForObjectExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetSharesForObject.expectations = append(mmGetSharesForObject.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetSharesForObject return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetSharesForObjectExpectation) Then(sa1 []string, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetSharesForObjectResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetSharesForObject should be invoked
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Times(n uint64) *mStoragePortMockGetSharesForObject {
+	if n == 0 {
+		mmGetSharesForObject.mock.t.Fatalf("Times of StoragePortMock.GetSharesForObject mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetSharesForObject.expectedInvocations, n)
+	mmGetSharesForObject.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetSharesForObject
+}
+
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) invocationsDone() bool {
+	if len(mmGetSharesForObject.expectations) == 0 && mmGetSharesForObject.defaultExpectation == nil && mmGetSharesForObject.mock.funcGetSharesForObject == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetSharesForObject.mock.afterGetSharesForObjectCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetSharesForObject.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetSharesForObject implements mm_port.StoragePort
+func (mmGetSharesForObject *StoragePortMock) GetSharesForObject(ctx context.Context, objectIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetSharesForObject.beforeGetSharesForObjectCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetSharesForObject.afterGetSharesForObjectCounter, 1)
+
+	mmGetSharesForObject.t.Helper()
+
+	if mmGetSharesForObject.inspectFuncGetSharesForObject != nil {
+		mmGetSharesForObject.inspectFuncGetSharesForObject(ctx, objectIRI)
+	}
+
+	mm_params := StoragePortMockGetSharesForObjectParams{ctx, objectIRI}
+
+	// Record call args
+	mmGetSharesForObject.GetSharesForObjectMock.mutex.Lock()
+	mmGetSharesForObject.GetSharesForObjectMock.callArgs = append(mmGetSharesForObject.GetSharesForObjectMock.callArgs, &mm_params)
+	mmGetSharesForObject.GetSharesForObjectMock.mutex.Unlock()
+
+	for _, e := range mmGetSharesForObject.GetSharesForObjectMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.params
+		mm_want_ptrs := mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetSharesForObjectParams{ctx, objectIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetSharesForObject.t.Errorf("StoragePortMock.GetSharesForObject got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.objectIRI != nil && !minimock.Equal(*mm_want_ptrs.objectIRI, mm_got.objectIRI) {
+				mmGetSharesForObject.t.Errorf("StoragePortMock.GetSharesForObject got unexpected parameter objectIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetSharesForObject.t.Errorf("StoragePortMock.GetSharesForObject got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetSharesForObject.GetSharesForObjectMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetSharesForObject.t.Fatal("No results are set for the StoragePortMock.GetSharesForObject")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetSharesForObject.funcGetSharesForObject != nil {
+		return mmGetSharesForObject.funcGetSharesForObject(ctx, objectIRI)
+	}
+	mmGetSharesForObject.t.Fatalf("Unexpected call to StoragePortMock.GetSharesForObject. %v %v", ctx, objectIRI)
+	return
+}
+
+// GetSharesForObjectAfterCounter returns a count of finished StoragePortMock.GetSharesForObject invocations
+func (mmGetSharesForObject *StoragePortMock) GetSharesForObjectAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetSharesForObject.afterGetSharesForObjectCounter)
+}
+
+// GetSharesForObjectBeforeCounter returns a count of StoragePortMock.GetSharesForObject invocations
+func (mmGetSharesForObject *StoragePortMock) GetSharesForObjectBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetSharesForObject.beforeGetSharesForObjectCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetSharesForObject.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetSharesForObject *mStoragePortMockGetSharesForObject) Calls() []*StoragePortMockGetSharesForObjectParams {
+	mmGetSharesForObject.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetSharesForObjectParams, len(mmGetSharesForObject.callArgs))
+	copy(argCopy, mmGetSharesForObject.callArgs)
+
+	mmGetSharesForObject.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetSharesForObjectDone returns true if the count of the GetSharesForObject invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetSharesForObjectDone() bool {
+	if m.GetSharesForObjectMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetSharesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetSharesForObjectMock.invocationsDone()
+}
+
+// MinimockGetSharesForObjectInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetSharesForObjectInspect() {
+	for _, e := range m.GetSharesForObjectMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetSharesForObject at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetSharesForObjectCounter := mm_atomic.LoadUint64(&m.afterGetSharesForObjectCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetSharesForObjectMock.defaultExpectation != nil && afterGetSharesForObjectCounter < 1 {
+		if m.GetSharesForObjectMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetSharesForObject at\n%s", m.GetSharesForObjectMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetSharesForObject at\n%s with params: %#v", m.GetSharesForObjectMock.defaultExpectation.expectationOrigins.origin, *m.GetSharesForObjectMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetSharesForObject != nil && afterGetSharesForObjectCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetSharesForObject at\n%s", m.funcGetSharesForObjectOrigin)
+	}
+
+	if !m.GetSharesForObjectMock.invocationsDone() && afterGetSharesForObjectCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetSharesForObject at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetSharesForObjectMock.expectedInvocations), m.GetSharesForObjectMock.expectedInvocationsOrigin, afterGetSharesForObjectCounter)
 	}
 }
 
@@ -13080,9 +14139,15 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockGetLatestPayloadInspect()
 
+			m.MinimockGetLikesForObjectInspect()
+
 			m.MinimockGetNomadicIdentityInspect()
 
 			m.MinimockGetOrCreateTenantByDomainInspect()
+
+			m.MinimockGetRepliesForObjectInspect()
+
+			m.MinimockGetSharesForObjectInspect()
 
 			m.MinimockGetStatementsBySubjectIsolatedInspect()
 
@@ -13155,8 +14220,11 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockGetCollectionPayloadsDone() &&
 		m.MinimockGetHistoricalKeyDone() &&
 		m.MinimockGetLatestPayloadDone() &&
+		m.MinimockGetLikesForObjectDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
 		m.MinimockGetOrCreateTenantByDomainDone() &&
+		m.MinimockGetRepliesForObjectDone() &&
+		m.MinimockGetSharesForObjectDone() &&
 		m.MinimockGetStatementsBySubjectIsolatedDone() &&
 		m.MinimockGetTenantIDByActivityIRIDone() &&
 		m.MinimockHasActorCredentialDone() &&

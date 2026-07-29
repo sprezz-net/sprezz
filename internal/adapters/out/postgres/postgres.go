@@ -667,6 +667,24 @@ func (s *PostgresStorage) GetLatestPayload(ctx context.Context, objectIRI string
 	return payload, err
 }
 
+func (s *PostgresStorage) GetLikesForObject(ctx context.Context, objectIRI string) ([]string, error) {
+	return s.queries().GetEngagementActivities(ctx, db.GetEngagementActivitiesParams{
+		Value:   objectIRI,
+		Value_2: "https://www.w3.org/ns/activitystreams#Like",
+	})
+}
+
+func (s *PostgresStorage) GetSharesForObject(ctx context.Context, objectIRI string) ([]string, error) {
+	return s.queries().GetEngagementActivities(ctx, db.GetEngagementActivitiesParams{
+		Value:   objectIRI,
+		Value_2: "https://www.w3.org/ns/activitystreams#Announce",
+	})
+}
+
+func (s *PostgresStorage) GetRepliesForObject(ctx context.Context, objectIRI string) ([]string, error) {
+	return s.queries().GetRepliesByObject(ctx, objectIRI)
+}
+
 func (s *PostgresStorage) StreamQuadsBySubject(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
 	subjectID, found := s.cache.GetID(subjectIRI)
 	if !found {
