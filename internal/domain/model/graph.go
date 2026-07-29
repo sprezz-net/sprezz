@@ -46,3 +46,10 @@ type InboundTask struct {
 	ObjectIRI   string
 	Payload     []byte
 }
+
+type OutboundTask struct {
+	ID          string // UUIDv7
+	ActivityIRI string
+	ActorIRI    string
+	Payload     []byte
+}

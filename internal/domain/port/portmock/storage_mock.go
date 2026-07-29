@@ -34,6 +34,13 @@ type StoragePortMock struct {
 	beforeClaimInboundBatchCounter uint64
 	ClaimInboundBatchMock          mStoragePortMockClaimInboundBatch
 
+	funcClaimOutboundBatch          func(ctx context.Context, batchSize int) (oa1 []model.OutboundTask, err error)
+	funcClaimOutboundBatchOrigin    string
+	inspectFuncClaimOutboundBatch   func(ctx context.Context, batchSize int)
+	afterClaimOutboundBatchCounter  uint64
+	beforeClaimOutboundBatchCounter uint64
+	ClaimOutboundBatchMock          mStoragePortMockClaimOutboundBatch
+
 	funcCreateActorCredential          func(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) (err error)
 	funcCreateActorCredentialOrigin    string
 	inspectFuncCreateActorCredential   func(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string)
@@ -174,6 +181,20 @@ type StoragePortMock struct {
 	beforeMarkInboundFailedCounter uint64
 	MarkInboundFailedMock          mStoragePortMockMarkInboundFailed
 
+	funcMarkOutboundComplete          func(ctx context.Context, id string) (err error)
+	funcMarkOutboundCompleteOrigin    string
+	inspectFuncMarkOutboundComplete   func(ctx context.Context, id string)
+	afterMarkOutboundCompleteCounter  uint64
+	beforeMarkOutboundCompleteCounter uint64
+	MarkOutboundCompleteMock          mStoragePortMockMarkOutboundComplete
+
+	funcMarkOutboundFailed          func(ctx context.Context, id string, reason string) (err error)
+	funcMarkOutboundFailedOrigin    string
+	inspectFuncMarkOutboundFailed   func(ctx context.Context, id string, reason string)
+	afterMarkOutboundFailedCounter  uint64
+	beforeMarkOutboundFailedCounter uint64
+	MarkOutboundFailedMock          mStoragePortMockMarkOutboundFailed
+
 	funcRecordActorInboxDelivery          func(ctx context.Context, actorIRI string, activityIRI string) (err error)
 	funcRecordActorInboxDeliveryOrigin    string
 	inspectFuncRecordActorInboxDelivery   func(ctx context.Context, actorIRI string, activityIRI string)
@@ -252,6 +273,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 	m.ClaimInboundBatchMock = mStoragePortMockClaimInboundBatch{mock: m}
 	m.ClaimInboundBatchMock.callArgs = []*StoragePortMockClaimInboundBatchParams{}
 
+	m.ClaimOutboundBatchMock = mStoragePortMockClaimOutboundBatch{mock: m}
+	m.ClaimOutboundBatchMock.callArgs = []*StoragePortMockClaimOutboundBatchParams{}
+
 	m.CreateActorCredentialMock = mStoragePortMockCreateActorCredential{mock: m}
 	m.CreateActorCredentialMock.callArgs = []*StoragePortMockCreateActorCredentialParams{}
 
@@ -311,6 +335,12 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.MarkInboundFailedMock = mStoragePortMockMarkInboundFailed{mock: m}
 	m.MarkInboundFailedMock.callArgs = []*StoragePortMockMarkInboundFailedParams{}
+
+	m.MarkOutboundCompleteMock = mStoragePortMockMarkOutboundComplete{mock: m}
+	m.MarkOutboundCompleteMock.callArgs = []*StoragePortMockMarkOutboundCompleteParams{}
+
+	m.MarkOutboundFailedMock = mStoragePortMockMarkOutboundFailed{mock: m}
+	m.MarkOutboundFailedMock.callArgs = []*StoragePortMockMarkOutboundFailedParams{}
 
 	m.RecordActorInboxDeliveryMock = mStoragePortMockRecordActorInboxDelivery{mock: m}
 	m.RecordActorInboxDeliveryMock.callArgs = []*StoragePortMockRecordActorInboxDeliveryParams{}
@@ -1150,6 +1180,349 @@ func (m *StoragePortMock) MinimockClaimInboundBatchInspect() {
 	if !m.ClaimInboundBatchMock.invocationsDone() && afterClaimInboundBatchCounter > 0 {
 		m.t.Errorf("Expected %d calls to StoragePortMock.ClaimInboundBatch at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ClaimInboundBatchMock.expectedInvocations), m.ClaimInboundBatchMock.expectedInvocationsOrigin, afterClaimInboundBatchCounter)
+	}
+}
+
+type mStoragePortMockClaimOutboundBatch struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockClaimOutboundBatchExpectation
+	expectations       []*StoragePortMockClaimOutboundBatchExpectation
+
+	callArgs []*StoragePortMockClaimOutboundBatchParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockClaimOutboundBatchExpectation specifies expectation struct of the StoragePort.ClaimOutboundBatch
+type StoragePortMockClaimOutboundBatchExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockClaimOutboundBatchParams
+	paramPtrs          *StoragePortMockClaimOutboundBatchParamPtrs
+	expectationOrigins StoragePortMockClaimOutboundBatchExpectationOrigins
+	results            *StoragePortMockClaimOutboundBatchResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockClaimOutboundBatchParams contains parameters of the StoragePort.ClaimOutboundBatch
+type StoragePortMockClaimOutboundBatchParams struct {
+	ctx       context.Context
+	batchSize int
+}
+
+// StoragePortMockClaimOutboundBatchParamPtrs contains pointers to parameters of the StoragePort.ClaimOutboundBatch
+type StoragePortMockClaimOutboundBatchParamPtrs struct {
+	ctx       *context.Context
+	batchSize *int
+}
+
+// StoragePortMockClaimOutboundBatchResults contains results of the StoragePort.ClaimOutboundBatch
+type StoragePortMockClaimOutboundBatchResults struct {
+	oa1 []model.OutboundTask
+	err error
+}
+
+// StoragePortMockClaimOutboundBatchOrigins contains origins of expectations of the StoragePort.ClaimOutboundBatch
+type StoragePortMockClaimOutboundBatchExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originBatchSize string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Optional() *mStoragePortMockClaimOutboundBatch {
+	mmClaimOutboundBatch.optional = true
+	return mmClaimOutboundBatch
+}
+
+// Expect sets up expected params for StoragePort.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Expect(ctx context.Context, batchSize int) *mStoragePortMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StoragePortMockClaimOutboundBatchExpectation{}
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.paramPtrs != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by ExpectParams functions")
+	}
+
+	mmClaimOutboundBatch.defaultExpectation.params = &StoragePortMockClaimOutboundBatchParams{ctx, batchSize}
+	mmClaimOutboundBatch.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmClaimOutboundBatch.expectations {
+		if minimock.Equal(e.params, mmClaimOutboundBatch.defaultExpectation.params) {
+			mmClaimOutboundBatch.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmClaimOutboundBatch.defaultExpectation.params)
+		}
+	}
+
+	return mmClaimOutboundBatch
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) ExpectCtxParam1(ctx context.Context) *mStoragePortMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StoragePortMockClaimOutboundBatchExpectation{}
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.params != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Expect")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.paramPtrs == nil {
+		mmClaimOutboundBatch.defaultExpectation.paramPtrs = &StoragePortMockClaimOutboundBatchParamPtrs{}
+	}
+	mmClaimOutboundBatch.defaultExpectation.paramPtrs.ctx = &ctx
+	mmClaimOutboundBatch.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmClaimOutboundBatch
+}
+
+// ExpectBatchSizeParam2 sets up expected param batchSize for StoragePort.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) ExpectBatchSizeParam2(batchSize int) *mStoragePortMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StoragePortMockClaimOutboundBatchExpectation{}
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.params != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Expect")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.paramPtrs == nil {
+		mmClaimOutboundBatch.defaultExpectation.paramPtrs = &StoragePortMockClaimOutboundBatchParamPtrs{}
+	}
+	mmClaimOutboundBatch.defaultExpectation.paramPtrs.batchSize = &batchSize
+	mmClaimOutboundBatch.defaultExpectation.expectationOrigins.originBatchSize = minimock.CallerInfo(1)
+
+	return mmClaimOutboundBatch
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Inspect(f func(ctx context.Context, batchSize int)) *mStoragePortMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.inspectFuncClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("Inspect function is already set for StoragePortMock.ClaimOutboundBatch")
+	}
+
+	mmClaimOutboundBatch.mock.inspectFuncClaimOutboundBatch = f
+
+	return mmClaimOutboundBatch
+}
+
+// Return sets up results that will be returned by StoragePort.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Return(oa1 []model.OutboundTask, err error) *StoragePortMock {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StoragePortMockClaimOutboundBatchExpectation{mock: mmClaimOutboundBatch.mock}
+	}
+	mmClaimOutboundBatch.defaultExpectation.results = &StoragePortMockClaimOutboundBatchResults{oa1, err}
+	mmClaimOutboundBatch.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmClaimOutboundBatch.mock
+}
+
+// Set uses given function f to mock the StoragePort.ClaimOutboundBatch method
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Set(f func(ctx context.Context, batchSize int) (oa1 []model.OutboundTask, err error)) *StoragePortMock {
+	if mmClaimOutboundBatch.defaultExpectation != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("Default expectation is already set for the StoragePort.ClaimOutboundBatch method")
+	}
+
+	if len(mmClaimOutboundBatch.expectations) > 0 {
+		mmClaimOutboundBatch.mock.t.Fatalf("Some expectations are already set for the StoragePort.ClaimOutboundBatch method")
+	}
+
+	mmClaimOutboundBatch.mock.funcClaimOutboundBatch = f
+	mmClaimOutboundBatch.mock.funcClaimOutboundBatchOrigin = minimock.CallerInfo(1)
+	return mmClaimOutboundBatch.mock
+}
+
+// When sets expectation for the StoragePort.ClaimOutboundBatch which will trigger the result defined by the following
+// Then helper
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) When(ctx context.Context, batchSize int) *StoragePortMockClaimOutboundBatchExpectation {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StoragePortMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockClaimOutboundBatchExpectation{
+		mock:               mmClaimOutboundBatch.mock,
+		params:             &StoragePortMockClaimOutboundBatchParams{ctx, batchSize},
+		expectationOrigins: StoragePortMockClaimOutboundBatchExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmClaimOutboundBatch.expectations = append(mmClaimOutboundBatch.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.ClaimOutboundBatch return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockClaimOutboundBatchExpectation) Then(oa1 []model.OutboundTask, err error) *StoragePortMock {
+	e.results = &StoragePortMockClaimOutboundBatchResults{oa1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.ClaimOutboundBatch should be invoked
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Times(n uint64) *mStoragePortMockClaimOutboundBatch {
+	if n == 0 {
+		mmClaimOutboundBatch.mock.t.Fatalf("Times of StoragePortMock.ClaimOutboundBatch mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmClaimOutboundBatch.expectedInvocations, n)
+	mmClaimOutboundBatch.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmClaimOutboundBatch
+}
+
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) invocationsDone() bool {
+	if len(mmClaimOutboundBatch.expectations) == 0 && mmClaimOutboundBatch.defaultExpectation == nil && mmClaimOutboundBatch.mock.funcClaimOutboundBatch == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmClaimOutboundBatch.mock.afterClaimOutboundBatchCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmClaimOutboundBatch.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ClaimOutboundBatch implements mm_port.StoragePort
+func (mmClaimOutboundBatch *StoragePortMock) ClaimOutboundBatch(ctx context.Context, batchSize int) (oa1 []model.OutboundTask, err error) {
+	mm_atomic.AddUint64(&mmClaimOutboundBatch.beforeClaimOutboundBatchCounter, 1)
+	defer mm_atomic.AddUint64(&mmClaimOutboundBatch.afterClaimOutboundBatchCounter, 1)
+
+	mmClaimOutboundBatch.t.Helper()
+
+	if mmClaimOutboundBatch.inspectFuncClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.inspectFuncClaimOutboundBatch(ctx, batchSize)
+	}
+
+	mm_params := StoragePortMockClaimOutboundBatchParams{ctx, batchSize}
+
+	// Record call args
+	mmClaimOutboundBatch.ClaimOutboundBatchMock.mutex.Lock()
+	mmClaimOutboundBatch.ClaimOutboundBatchMock.callArgs = append(mmClaimOutboundBatch.ClaimOutboundBatchMock.callArgs, &mm_params)
+	mmClaimOutboundBatch.ClaimOutboundBatchMock.mutex.Unlock()
+
+	for _, e := range mmClaimOutboundBatch.ClaimOutboundBatchMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.oa1, e.results.err
+		}
+	}
+
+	if mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.Counter, 1)
+		mm_want := mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.params
+		mm_want_ptrs := mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockClaimOutboundBatchParams{ctx, batchSize}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmClaimOutboundBatch.t.Errorf("StoragePortMock.ClaimOutboundBatch got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.batchSize != nil && !minimock.Equal(*mm_want_ptrs.batchSize, mm_got.batchSize) {
+				mmClaimOutboundBatch.t.Errorf("StoragePortMock.ClaimOutboundBatch got unexpected parameter batchSize, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.originBatchSize, *mm_want_ptrs.batchSize, mm_got.batchSize, minimock.Diff(*mm_want_ptrs.batchSize, mm_got.batchSize))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmClaimOutboundBatch.t.Errorf("StoragePortMock.ClaimOutboundBatch got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.results
+		if mm_results == nil {
+			mmClaimOutboundBatch.t.Fatal("No results are set for the StoragePortMock.ClaimOutboundBatch")
+		}
+		return (*mm_results).oa1, (*mm_results).err
+	}
+	if mmClaimOutboundBatch.funcClaimOutboundBatch != nil {
+		return mmClaimOutboundBatch.funcClaimOutboundBatch(ctx, batchSize)
+	}
+	mmClaimOutboundBatch.t.Fatalf("Unexpected call to StoragePortMock.ClaimOutboundBatch. %v %v", ctx, batchSize)
+	return
+}
+
+// ClaimOutboundBatchAfterCounter returns a count of finished StoragePortMock.ClaimOutboundBatch invocations
+func (mmClaimOutboundBatch *StoragePortMock) ClaimOutboundBatchAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmClaimOutboundBatch.afterClaimOutboundBatchCounter)
+}
+
+// ClaimOutboundBatchBeforeCounter returns a count of StoragePortMock.ClaimOutboundBatch invocations
+func (mmClaimOutboundBatch *StoragePortMock) ClaimOutboundBatchBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmClaimOutboundBatch.beforeClaimOutboundBatchCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.ClaimOutboundBatch.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmClaimOutboundBatch *mStoragePortMockClaimOutboundBatch) Calls() []*StoragePortMockClaimOutboundBatchParams {
+	mmClaimOutboundBatch.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockClaimOutboundBatchParams, len(mmClaimOutboundBatch.callArgs))
+	copy(argCopy, mmClaimOutboundBatch.callArgs)
+
+	mmClaimOutboundBatch.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockClaimOutboundBatchDone returns true if the count of the ClaimOutboundBatch invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockClaimOutboundBatchDone() bool {
+	if m.ClaimOutboundBatchMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ClaimOutboundBatchMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ClaimOutboundBatchMock.invocationsDone()
+}
+
+// MinimockClaimOutboundBatchInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockClaimOutboundBatchInspect() {
+	for _, e := range m.ClaimOutboundBatchMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.ClaimOutboundBatch at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterClaimOutboundBatchCounter := mm_atomic.LoadUint64(&m.afterClaimOutboundBatchCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ClaimOutboundBatchMock.defaultExpectation != nil && afterClaimOutboundBatchCounter < 1 {
+		if m.ClaimOutboundBatchMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.ClaimOutboundBatch at\n%s", m.ClaimOutboundBatchMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.ClaimOutboundBatch at\n%s with params: %#v", m.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.origin, *m.ClaimOutboundBatchMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcClaimOutboundBatch != nil && afterClaimOutboundBatchCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.ClaimOutboundBatch at\n%s", m.funcClaimOutboundBatchOrigin)
+	}
+
+	if !m.ClaimOutboundBatchMock.invocationsDone() && afterClaimOutboundBatchCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.ClaimOutboundBatch at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ClaimOutboundBatchMock.expectedInvocations), m.ClaimOutboundBatchMock.expectedInvocationsOrigin, afterClaimOutboundBatchCounter)
 	}
 }
 
@@ -8692,6 +9065,721 @@ func (m *StoragePortMock) MinimockMarkInboundFailedInspect() {
 	}
 }
 
+type mStoragePortMockMarkOutboundComplete struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockMarkOutboundCompleteExpectation
+	expectations       []*StoragePortMockMarkOutboundCompleteExpectation
+
+	callArgs []*StoragePortMockMarkOutboundCompleteParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockMarkOutboundCompleteExpectation specifies expectation struct of the StoragePort.MarkOutboundComplete
+type StoragePortMockMarkOutboundCompleteExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockMarkOutboundCompleteParams
+	paramPtrs          *StoragePortMockMarkOutboundCompleteParamPtrs
+	expectationOrigins StoragePortMockMarkOutboundCompleteExpectationOrigins
+	results            *StoragePortMockMarkOutboundCompleteResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockMarkOutboundCompleteParams contains parameters of the StoragePort.MarkOutboundComplete
+type StoragePortMockMarkOutboundCompleteParams struct {
+	ctx context.Context
+	id  string
+}
+
+// StoragePortMockMarkOutboundCompleteParamPtrs contains pointers to parameters of the StoragePort.MarkOutboundComplete
+type StoragePortMockMarkOutboundCompleteParamPtrs struct {
+	ctx *context.Context
+	id  *string
+}
+
+// StoragePortMockMarkOutboundCompleteResults contains results of the StoragePort.MarkOutboundComplete
+type StoragePortMockMarkOutboundCompleteResults struct {
+	err error
+}
+
+// StoragePortMockMarkOutboundCompleteOrigins contains origins of expectations of the StoragePort.MarkOutboundComplete
+type StoragePortMockMarkOutboundCompleteExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originId  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Optional() *mStoragePortMockMarkOutboundComplete {
+	mmMarkOutboundComplete.optional = true
+	return mmMarkOutboundComplete
+}
+
+// Expect sets up expected params for StoragePort.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Expect(ctx context.Context, id string) *mStoragePortMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StoragePortMockMarkOutboundCompleteExpectation{}
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.paramPtrs != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by ExpectParams functions")
+	}
+
+	mmMarkOutboundComplete.defaultExpectation.params = &StoragePortMockMarkOutboundCompleteParams{ctx, id}
+	mmMarkOutboundComplete.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmMarkOutboundComplete.expectations {
+		if minimock.Equal(e.params, mmMarkOutboundComplete.defaultExpectation.params) {
+			mmMarkOutboundComplete.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmMarkOutboundComplete.defaultExpectation.params)
+		}
+	}
+
+	return mmMarkOutboundComplete
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) ExpectCtxParam1(ctx context.Context) *mStoragePortMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StoragePortMockMarkOutboundCompleteExpectation{}
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.params != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Expect")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundComplete.defaultExpectation.paramPtrs = &StoragePortMockMarkOutboundCompleteParamPtrs{}
+	}
+	mmMarkOutboundComplete.defaultExpectation.paramPtrs.ctx = &ctx
+	mmMarkOutboundComplete.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmMarkOutboundComplete
+}
+
+// ExpectIdParam2 sets up expected param id for StoragePort.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) ExpectIdParam2(id string) *mStoragePortMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StoragePortMockMarkOutboundCompleteExpectation{}
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.params != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Expect")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundComplete.defaultExpectation.paramPtrs = &StoragePortMockMarkOutboundCompleteParamPtrs{}
+	}
+	mmMarkOutboundComplete.defaultExpectation.paramPtrs.id = &id
+	mmMarkOutboundComplete.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmMarkOutboundComplete
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Inspect(f func(ctx context.Context, id string)) *mStoragePortMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.inspectFuncMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("Inspect function is already set for StoragePortMock.MarkOutboundComplete")
+	}
+
+	mmMarkOutboundComplete.mock.inspectFuncMarkOutboundComplete = f
+
+	return mmMarkOutboundComplete
+}
+
+// Return sets up results that will be returned by StoragePort.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Return(err error) *StoragePortMock {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StoragePortMockMarkOutboundCompleteExpectation{mock: mmMarkOutboundComplete.mock}
+	}
+	mmMarkOutboundComplete.defaultExpectation.results = &StoragePortMockMarkOutboundCompleteResults{err}
+	mmMarkOutboundComplete.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundComplete.mock
+}
+
+// Set uses given function f to mock the StoragePort.MarkOutboundComplete method
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Set(f func(ctx context.Context, id string) (err error)) *StoragePortMock {
+	if mmMarkOutboundComplete.defaultExpectation != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("Default expectation is already set for the StoragePort.MarkOutboundComplete method")
+	}
+
+	if len(mmMarkOutboundComplete.expectations) > 0 {
+		mmMarkOutboundComplete.mock.t.Fatalf("Some expectations are already set for the StoragePort.MarkOutboundComplete method")
+	}
+
+	mmMarkOutboundComplete.mock.funcMarkOutboundComplete = f
+	mmMarkOutboundComplete.mock.funcMarkOutboundCompleteOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundComplete.mock
+}
+
+// When sets expectation for the StoragePort.MarkOutboundComplete which will trigger the result defined by the following
+// Then helper
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) When(ctx context.Context, id string) *StoragePortMockMarkOutboundCompleteExpectation {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StoragePortMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockMarkOutboundCompleteExpectation{
+		mock:               mmMarkOutboundComplete.mock,
+		params:             &StoragePortMockMarkOutboundCompleteParams{ctx, id},
+		expectationOrigins: StoragePortMockMarkOutboundCompleteExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmMarkOutboundComplete.expectations = append(mmMarkOutboundComplete.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.MarkOutboundComplete return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockMarkOutboundCompleteExpectation) Then(err error) *StoragePortMock {
+	e.results = &StoragePortMockMarkOutboundCompleteResults{err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.MarkOutboundComplete should be invoked
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Times(n uint64) *mStoragePortMockMarkOutboundComplete {
+	if n == 0 {
+		mmMarkOutboundComplete.mock.t.Fatalf("Times of StoragePortMock.MarkOutboundComplete mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmMarkOutboundComplete.expectedInvocations, n)
+	mmMarkOutboundComplete.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundComplete
+}
+
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) invocationsDone() bool {
+	if len(mmMarkOutboundComplete.expectations) == 0 && mmMarkOutboundComplete.defaultExpectation == nil && mmMarkOutboundComplete.mock.funcMarkOutboundComplete == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmMarkOutboundComplete.mock.afterMarkOutboundCompleteCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmMarkOutboundComplete.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// MarkOutboundComplete implements mm_port.StoragePort
+func (mmMarkOutboundComplete *StoragePortMock) MarkOutboundComplete(ctx context.Context, id string) (err error) {
+	mm_atomic.AddUint64(&mmMarkOutboundComplete.beforeMarkOutboundCompleteCounter, 1)
+	defer mm_atomic.AddUint64(&mmMarkOutboundComplete.afterMarkOutboundCompleteCounter, 1)
+
+	mmMarkOutboundComplete.t.Helper()
+
+	if mmMarkOutboundComplete.inspectFuncMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.inspectFuncMarkOutboundComplete(ctx, id)
+	}
+
+	mm_params := StoragePortMockMarkOutboundCompleteParams{ctx, id}
+
+	// Record call args
+	mmMarkOutboundComplete.MarkOutboundCompleteMock.mutex.Lock()
+	mmMarkOutboundComplete.MarkOutboundCompleteMock.callArgs = append(mmMarkOutboundComplete.MarkOutboundCompleteMock.callArgs, &mm_params)
+	mmMarkOutboundComplete.MarkOutboundCompleteMock.mutex.Unlock()
+
+	for _, e := range mmMarkOutboundComplete.MarkOutboundCompleteMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.Counter, 1)
+		mm_want := mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.params
+		mm_want_ptrs := mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockMarkOutboundCompleteParams{ctx, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmMarkOutboundComplete.t.Errorf("StoragePortMock.MarkOutboundComplete got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmMarkOutboundComplete.t.Errorf("StoragePortMock.MarkOutboundComplete got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmMarkOutboundComplete.t.Errorf("StoragePortMock.MarkOutboundComplete got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.results
+		if mm_results == nil {
+			mmMarkOutboundComplete.t.Fatal("No results are set for the StoragePortMock.MarkOutboundComplete")
+		}
+		return (*mm_results).err
+	}
+	if mmMarkOutboundComplete.funcMarkOutboundComplete != nil {
+		return mmMarkOutboundComplete.funcMarkOutboundComplete(ctx, id)
+	}
+	mmMarkOutboundComplete.t.Fatalf("Unexpected call to StoragePortMock.MarkOutboundComplete. %v %v", ctx, id)
+	return
+}
+
+// MarkOutboundCompleteAfterCounter returns a count of finished StoragePortMock.MarkOutboundComplete invocations
+func (mmMarkOutboundComplete *StoragePortMock) MarkOutboundCompleteAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundComplete.afterMarkOutboundCompleteCounter)
+}
+
+// MarkOutboundCompleteBeforeCounter returns a count of StoragePortMock.MarkOutboundComplete invocations
+func (mmMarkOutboundComplete *StoragePortMock) MarkOutboundCompleteBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundComplete.beforeMarkOutboundCompleteCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.MarkOutboundComplete.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmMarkOutboundComplete *mStoragePortMockMarkOutboundComplete) Calls() []*StoragePortMockMarkOutboundCompleteParams {
+	mmMarkOutboundComplete.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockMarkOutboundCompleteParams, len(mmMarkOutboundComplete.callArgs))
+	copy(argCopy, mmMarkOutboundComplete.callArgs)
+
+	mmMarkOutboundComplete.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockMarkOutboundCompleteDone returns true if the count of the MarkOutboundComplete invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockMarkOutboundCompleteDone() bool {
+	if m.MarkOutboundCompleteMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.MarkOutboundCompleteMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.MarkOutboundCompleteMock.invocationsDone()
+}
+
+// MinimockMarkOutboundCompleteInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockMarkOutboundCompleteInspect() {
+	for _, e := range m.MarkOutboundCompleteMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.MarkOutboundComplete at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterMarkOutboundCompleteCounter := mm_atomic.LoadUint64(&m.afterMarkOutboundCompleteCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.MarkOutboundCompleteMock.defaultExpectation != nil && afterMarkOutboundCompleteCounter < 1 {
+		if m.MarkOutboundCompleteMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.MarkOutboundComplete at\n%s", m.MarkOutboundCompleteMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.MarkOutboundComplete at\n%s with params: %#v", m.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.origin, *m.MarkOutboundCompleteMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcMarkOutboundComplete != nil && afterMarkOutboundCompleteCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.MarkOutboundComplete at\n%s", m.funcMarkOutboundCompleteOrigin)
+	}
+
+	if !m.MarkOutboundCompleteMock.invocationsDone() && afterMarkOutboundCompleteCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.MarkOutboundComplete at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.MarkOutboundCompleteMock.expectedInvocations), m.MarkOutboundCompleteMock.expectedInvocationsOrigin, afterMarkOutboundCompleteCounter)
+	}
+}
+
+type mStoragePortMockMarkOutboundFailed struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockMarkOutboundFailedExpectation
+	expectations       []*StoragePortMockMarkOutboundFailedExpectation
+
+	callArgs []*StoragePortMockMarkOutboundFailedParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockMarkOutboundFailedExpectation specifies expectation struct of the StoragePort.MarkOutboundFailed
+type StoragePortMockMarkOutboundFailedExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockMarkOutboundFailedParams
+	paramPtrs          *StoragePortMockMarkOutboundFailedParamPtrs
+	expectationOrigins StoragePortMockMarkOutboundFailedExpectationOrigins
+	results            *StoragePortMockMarkOutboundFailedResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockMarkOutboundFailedParams contains parameters of the StoragePort.MarkOutboundFailed
+type StoragePortMockMarkOutboundFailedParams struct {
+	ctx    context.Context
+	id     string
+	reason string
+}
+
+// StoragePortMockMarkOutboundFailedParamPtrs contains pointers to parameters of the StoragePort.MarkOutboundFailed
+type StoragePortMockMarkOutboundFailedParamPtrs struct {
+	ctx    *context.Context
+	id     *string
+	reason *string
+}
+
+// StoragePortMockMarkOutboundFailedResults contains results of the StoragePort.MarkOutboundFailed
+type StoragePortMockMarkOutboundFailedResults struct {
+	err error
+}
+
+// StoragePortMockMarkOutboundFailedOrigins contains origins of expectations of the StoragePort.MarkOutboundFailed
+type StoragePortMockMarkOutboundFailedExpectationOrigins struct {
+	origin       string
+	originCtx    string
+	originId     string
+	originReason string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Optional() *mStoragePortMockMarkOutboundFailed {
+	mmMarkOutboundFailed.optional = true
+	return mmMarkOutboundFailed
+}
+
+// Expect sets up expected params for StoragePort.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Expect(ctx context.Context, id string, reason string) *mStoragePortMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StoragePortMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by ExpectParams functions")
+	}
+
+	mmMarkOutboundFailed.defaultExpectation.params = &StoragePortMockMarkOutboundFailedParams{ctx, id, reason}
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmMarkOutboundFailed.expectations {
+		if minimock.Equal(e.params, mmMarkOutboundFailed.defaultExpectation.params) {
+			mmMarkOutboundFailed.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmMarkOutboundFailed.defaultExpectation.params)
+		}
+	}
+
+	return mmMarkOutboundFailed
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) ExpectCtxParam1(ctx context.Context) *mStoragePortMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StoragePortMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.params != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Expect")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundFailed.defaultExpectation.paramPtrs = &StoragePortMockMarkOutboundFailedParamPtrs{}
+	}
+	mmMarkOutboundFailed.defaultExpectation.paramPtrs.ctx = &ctx
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmMarkOutboundFailed
+}
+
+// ExpectIdParam2 sets up expected param id for StoragePort.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) ExpectIdParam2(id string) *mStoragePortMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StoragePortMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.params != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Expect")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundFailed.defaultExpectation.paramPtrs = &StoragePortMockMarkOutboundFailedParamPtrs{}
+	}
+	mmMarkOutboundFailed.defaultExpectation.paramPtrs.id = &id
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmMarkOutboundFailed
+}
+
+// ExpectReasonParam3 sets up expected param reason for StoragePort.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) ExpectReasonParam3(reason string) *mStoragePortMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StoragePortMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.params != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Expect")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundFailed.defaultExpectation.paramPtrs = &StoragePortMockMarkOutboundFailedParamPtrs{}
+	}
+	mmMarkOutboundFailed.defaultExpectation.paramPtrs.reason = &reason
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.originReason = minimock.CallerInfo(1)
+
+	return mmMarkOutboundFailed
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Inspect(f func(ctx context.Context, id string, reason string)) *mStoragePortMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.inspectFuncMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("Inspect function is already set for StoragePortMock.MarkOutboundFailed")
+	}
+
+	mmMarkOutboundFailed.mock.inspectFuncMarkOutboundFailed = f
+
+	return mmMarkOutboundFailed
+}
+
+// Return sets up results that will be returned by StoragePort.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Return(err error) *StoragePortMock {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StoragePortMockMarkOutboundFailedExpectation{mock: mmMarkOutboundFailed.mock}
+	}
+	mmMarkOutboundFailed.defaultExpectation.results = &StoragePortMockMarkOutboundFailedResults{err}
+	mmMarkOutboundFailed.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundFailed.mock
+}
+
+// Set uses given function f to mock the StoragePort.MarkOutboundFailed method
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Set(f func(ctx context.Context, id string, reason string) (err error)) *StoragePortMock {
+	if mmMarkOutboundFailed.defaultExpectation != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("Default expectation is already set for the StoragePort.MarkOutboundFailed method")
+	}
+
+	if len(mmMarkOutboundFailed.expectations) > 0 {
+		mmMarkOutboundFailed.mock.t.Fatalf("Some expectations are already set for the StoragePort.MarkOutboundFailed method")
+	}
+
+	mmMarkOutboundFailed.mock.funcMarkOutboundFailed = f
+	mmMarkOutboundFailed.mock.funcMarkOutboundFailedOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundFailed.mock
+}
+
+// When sets expectation for the StoragePort.MarkOutboundFailed which will trigger the result defined by the following
+// Then helper
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) When(ctx context.Context, id string, reason string) *StoragePortMockMarkOutboundFailedExpectation {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StoragePortMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockMarkOutboundFailedExpectation{
+		mock:               mmMarkOutboundFailed.mock,
+		params:             &StoragePortMockMarkOutboundFailedParams{ctx, id, reason},
+		expectationOrigins: StoragePortMockMarkOutboundFailedExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmMarkOutboundFailed.expectations = append(mmMarkOutboundFailed.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.MarkOutboundFailed return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockMarkOutboundFailedExpectation) Then(err error) *StoragePortMock {
+	e.results = &StoragePortMockMarkOutboundFailedResults{err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.MarkOutboundFailed should be invoked
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Times(n uint64) *mStoragePortMockMarkOutboundFailed {
+	if n == 0 {
+		mmMarkOutboundFailed.mock.t.Fatalf("Times of StoragePortMock.MarkOutboundFailed mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmMarkOutboundFailed.expectedInvocations, n)
+	mmMarkOutboundFailed.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundFailed
+}
+
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) invocationsDone() bool {
+	if len(mmMarkOutboundFailed.expectations) == 0 && mmMarkOutboundFailed.defaultExpectation == nil && mmMarkOutboundFailed.mock.funcMarkOutboundFailed == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmMarkOutboundFailed.mock.afterMarkOutboundFailedCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmMarkOutboundFailed.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// MarkOutboundFailed implements mm_port.StoragePort
+func (mmMarkOutboundFailed *StoragePortMock) MarkOutboundFailed(ctx context.Context, id string, reason string) (err error) {
+	mm_atomic.AddUint64(&mmMarkOutboundFailed.beforeMarkOutboundFailedCounter, 1)
+	defer mm_atomic.AddUint64(&mmMarkOutboundFailed.afterMarkOutboundFailedCounter, 1)
+
+	mmMarkOutboundFailed.t.Helper()
+
+	if mmMarkOutboundFailed.inspectFuncMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.inspectFuncMarkOutboundFailed(ctx, id, reason)
+	}
+
+	mm_params := StoragePortMockMarkOutboundFailedParams{ctx, id, reason}
+
+	// Record call args
+	mmMarkOutboundFailed.MarkOutboundFailedMock.mutex.Lock()
+	mmMarkOutboundFailed.MarkOutboundFailedMock.callArgs = append(mmMarkOutboundFailed.MarkOutboundFailedMock.callArgs, &mm_params)
+	mmMarkOutboundFailed.MarkOutboundFailedMock.mutex.Unlock()
+
+	for _, e := range mmMarkOutboundFailed.MarkOutboundFailedMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.Counter, 1)
+		mm_want := mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.params
+		mm_want_ptrs := mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockMarkOutboundFailedParams{ctx, id, reason}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmMarkOutboundFailed.t.Errorf("StoragePortMock.MarkOutboundFailed got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmMarkOutboundFailed.t.Errorf("StoragePortMock.MarkOutboundFailed got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+			if mm_want_ptrs.reason != nil && !minimock.Equal(*mm_want_ptrs.reason, mm_got.reason) {
+				mmMarkOutboundFailed.t.Errorf("StoragePortMock.MarkOutboundFailed got unexpected parameter reason, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.originReason, *mm_want_ptrs.reason, mm_got.reason, minimock.Diff(*mm_want_ptrs.reason, mm_got.reason))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmMarkOutboundFailed.t.Errorf("StoragePortMock.MarkOutboundFailed got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.results
+		if mm_results == nil {
+			mmMarkOutboundFailed.t.Fatal("No results are set for the StoragePortMock.MarkOutboundFailed")
+		}
+		return (*mm_results).err
+	}
+	if mmMarkOutboundFailed.funcMarkOutboundFailed != nil {
+		return mmMarkOutboundFailed.funcMarkOutboundFailed(ctx, id, reason)
+	}
+	mmMarkOutboundFailed.t.Fatalf("Unexpected call to StoragePortMock.MarkOutboundFailed. %v %v %v", ctx, id, reason)
+	return
+}
+
+// MarkOutboundFailedAfterCounter returns a count of finished StoragePortMock.MarkOutboundFailed invocations
+func (mmMarkOutboundFailed *StoragePortMock) MarkOutboundFailedAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundFailed.afterMarkOutboundFailedCounter)
+}
+
+// MarkOutboundFailedBeforeCounter returns a count of StoragePortMock.MarkOutboundFailed invocations
+func (mmMarkOutboundFailed *StoragePortMock) MarkOutboundFailedBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundFailed.beforeMarkOutboundFailedCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.MarkOutboundFailed.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmMarkOutboundFailed *mStoragePortMockMarkOutboundFailed) Calls() []*StoragePortMockMarkOutboundFailedParams {
+	mmMarkOutboundFailed.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockMarkOutboundFailedParams, len(mmMarkOutboundFailed.callArgs))
+	copy(argCopy, mmMarkOutboundFailed.callArgs)
+
+	mmMarkOutboundFailed.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockMarkOutboundFailedDone returns true if the count of the MarkOutboundFailed invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockMarkOutboundFailedDone() bool {
+	if m.MarkOutboundFailedMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.MarkOutboundFailedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.MarkOutboundFailedMock.invocationsDone()
+}
+
+// MinimockMarkOutboundFailedInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockMarkOutboundFailedInspect() {
+	for _, e := range m.MarkOutboundFailedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.MarkOutboundFailed at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterMarkOutboundFailedCounter := mm_atomic.LoadUint64(&m.afterMarkOutboundFailedCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.MarkOutboundFailedMock.defaultExpectation != nil && afterMarkOutboundFailedCounter < 1 {
+		if m.MarkOutboundFailedMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.MarkOutboundFailed at\n%s", m.MarkOutboundFailedMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.MarkOutboundFailed at\n%s with params: %#v", m.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.origin, *m.MarkOutboundFailedMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcMarkOutboundFailed != nil && afterMarkOutboundFailedCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.MarkOutboundFailed at\n%s", m.funcMarkOutboundFailedOrigin)
+	}
+
+	if !m.MarkOutboundFailedMock.invocationsDone() && afterMarkOutboundFailedCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.MarkOutboundFailed at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.MarkOutboundFailedMock.expectedInvocations), m.MarkOutboundFailedMock.expectedInvocationsOrigin, afterMarkOutboundFailedCounter)
+	}
+}
+
 type mStoragePortMockRecordActorInboxDelivery struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -11966,6 +13054,8 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockClaimInboundBatchInspect()
 
+			m.MinimockClaimOutboundBatchInspect()
+
 			m.MinimockCreateActorCredentialInspect()
 
 			m.MinimockCreateGraphVersionInspect()
@@ -12005,6 +13095,10 @@ func (m *StoragePortMock) MinimockFinish() {
 			m.MinimockMarkInboundCompleteInspect()
 
 			m.MinimockMarkInboundFailedInspect()
+
+			m.MinimockMarkOutboundCompleteInspect()
+
+			m.MinimockMarkOutboundFailedInspect()
 
 			m.MinimockRecordActorInboxDeliveryInspect()
 
@@ -12048,6 +13142,7 @@ func (m *StoragePortMock) minimockDone() bool {
 	return done &&
 		m.MinimockArchiveKeyHistoryDone() &&
 		m.MinimockClaimInboundBatchDone() &&
+		m.MinimockClaimOutboundBatchDone() &&
 		m.MinimockCreateActorCredentialDone() &&
 		m.MinimockCreateGraphVersionDone() &&
 		m.MinimockEnqueueInboundDone() &&
@@ -12068,6 +13163,8 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockIsDomainBlockedDone() &&
 		m.MinimockMarkInboundCompleteDone() &&
 		m.MinimockMarkInboundFailedDone() &&
+		m.MinimockMarkOutboundCompleteDone() &&
+		m.MinimockMarkOutboundFailedDone() &&
 		m.MinimockRecordActorInboxDeliveryDone() &&
 		m.MinimockRegisterIdentityCloneDone() &&
 		m.MinimockRemoveMediaRecordDone() &&

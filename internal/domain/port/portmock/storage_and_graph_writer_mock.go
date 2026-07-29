@@ -35,6 +35,13 @@ type StorageAndGraphWriterMock struct {
 	beforeClaimInboundBatchCounter uint64
 	ClaimInboundBatchMock          mStorageAndGraphWriterMockClaimInboundBatch
 
+	funcClaimOutboundBatch          func(ctx context.Context, batchSize int) (oa1 []model.OutboundTask, err error)
+	funcClaimOutboundBatchOrigin    string
+	inspectFuncClaimOutboundBatch   func(ctx context.Context, batchSize int)
+	afterClaimOutboundBatchCounter  uint64
+	beforeClaimOutboundBatchCounter uint64
+	ClaimOutboundBatchMock          mStorageAndGraphWriterMockClaimOutboundBatch
+
 	funcCreateActorCredential          func(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) (err error)
 	funcCreateActorCredentialOrigin    string
 	inspectFuncCreateActorCredential   func(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string)
@@ -175,6 +182,20 @@ type StorageAndGraphWriterMock struct {
 	beforeMarkInboundFailedCounter uint64
 	MarkInboundFailedMock          mStorageAndGraphWriterMockMarkInboundFailed
 
+	funcMarkOutboundComplete          func(ctx context.Context, id string) (err error)
+	funcMarkOutboundCompleteOrigin    string
+	inspectFuncMarkOutboundComplete   func(ctx context.Context, id string)
+	afterMarkOutboundCompleteCounter  uint64
+	beforeMarkOutboundCompleteCounter uint64
+	MarkOutboundCompleteMock          mStorageAndGraphWriterMockMarkOutboundComplete
+
+	funcMarkOutboundFailed          func(ctx context.Context, id string, reason string) (err error)
+	funcMarkOutboundFailedOrigin    string
+	inspectFuncMarkOutboundFailed   func(ctx context.Context, id string, reason string)
+	afterMarkOutboundFailedCounter  uint64
+	beforeMarkOutboundFailedCounter uint64
+	MarkOutboundFailedMock          mStorageAndGraphWriterMockMarkOutboundFailed
+
 	funcRecordActorInboxDelivery          func(ctx context.Context, actorIRI string, activityIRI string) (err error)
 	funcRecordActorInboxDeliveryOrigin    string
 	inspectFuncRecordActorInboxDelivery   func(ctx context.Context, actorIRI string, activityIRI string)
@@ -267,6 +288,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 	m.ClaimInboundBatchMock = mStorageAndGraphWriterMockClaimInboundBatch{mock: m}
 	m.ClaimInboundBatchMock.callArgs = []*StorageAndGraphWriterMockClaimInboundBatchParams{}
 
+	m.ClaimOutboundBatchMock = mStorageAndGraphWriterMockClaimOutboundBatch{mock: m}
+	m.ClaimOutboundBatchMock.callArgs = []*StorageAndGraphWriterMockClaimOutboundBatchParams{}
+
 	m.CreateActorCredentialMock = mStorageAndGraphWriterMockCreateActorCredential{mock: m}
 	m.CreateActorCredentialMock.callArgs = []*StorageAndGraphWriterMockCreateActorCredentialParams{}
 
@@ -326,6 +350,12 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.MarkInboundFailedMock = mStorageAndGraphWriterMockMarkInboundFailed{mock: m}
 	m.MarkInboundFailedMock.callArgs = []*StorageAndGraphWriterMockMarkInboundFailedParams{}
+
+	m.MarkOutboundCompleteMock = mStorageAndGraphWriterMockMarkOutboundComplete{mock: m}
+	m.MarkOutboundCompleteMock.callArgs = []*StorageAndGraphWriterMockMarkOutboundCompleteParams{}
+
+	m.MarkOutboundFailedMock = mStorageAndGraphWriterMockMarkOutboundFailed{mock: m}
+	m.MarkOutboundFailedMock.callArgs = []*StorageAndGraphWriterMockMarkOutboundFailedParams{}
 
 	m.RecordActorInboxDeliveryMock = mStorageAndGraphWriterMockRecordActorInboxDelivery{mock: m}
 	m.RecordActorInboxDeliveryMock.callArgs = []*StorageAndGraphWriterMockRecordActorInboxDeliveryParams{}
@@ -1171,6 +1201,349 @@ func (m *StorageAndGraphWriterMock) MinimockClaimInboundBatchInspect() {
 	if !m.ClaimInboundBatchMock.invocationsDone() && afterClaimInboundBatchCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.ClaimInboundBatch at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.ClaimInboundBatchMock.expectedInvocations), m.ClaimInboundBatchMock.expectedInvocationsOrigin, afterClaimInboundBatchCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockClaimOutboundBatch struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockClaimOutboundBatchExpectation
+	expectations       []*StorageAndGraphWriterMockClaimOutboundBatchExpectation
+
+	callArgs []*StorageAndGraphWriterMockClaimOutboundBatchParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockClaimOutboundBatchExpectation specifies expectation struct of the StorageAndGraphWriter.ClaimOutboundBatch
+type StorageAndGraphWriterMockClaimOutboundBatchExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockClaimOutboundBatchParams
+	paramPtrs          *StorageAndGraphWriterMockClaimOutboundBatchParamPtrs
+	expectationOrigins StorageAndGraphWriterMockClaimOutboundBatchExpectationOrigins
+	results            *StorageAndGraphWriterMockClaimOutboundBatchResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockClaimOutboundBatchParams contains parameters of the StorageAndGraphWriter.ClaimOutboundBatch
+type StorageAndGraphWriterMockClaimOutboundBatchParams struct {
+	ctx       context.Context
+	batchSize int
+}
+
+// StorageAndGraphWriterMockClaimOutboundBatchParamPtrs contains pointers to parameters of the StorageAndGraphWriter.ClaimOutboundBatch
+type StorageAndGraphWriterMockClaimOutboundBatchParamPtrs struct {
+	ctx       *context.Context
+	batchSize *int
+}
+
+// StorageAndGraphWriterMockClaimOutboundBatchResults contains results of the StorageAndGraphWriter.ClaimOutboundBatch
+type StorageAndGraphWriterMockClaimOutboundBatchResults struct {
+	oa1 []model.OutboundTask
+	err error
+}
+
+// StorageAndGraphWriterMockClaimOutboundBatchOrigins contains origins of expectations of the StorageAndGraphWriter.ClaimOutboundBatch
+type StorageAndGraphWriterMockClaimOutboundBatchExpectationOrigins struct {
+	origin          string
+	originCtx       string
+	originBatchSize string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Optional() *mStorageAndGraphWriterMockClaimOutboundBatch {
+	mmClaimOutboundBatch.optional = true
+	return mmClaimOutboundBatch
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Expect(ctx context.Context, batchSize int) *mStorageAndGraphWriterMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StorageAndGraphWriterMockClaimOutboundBatchExpectation{}
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.paramPtrs != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by ExpectParams functions")
+	}
+
+	mmClaimOutboundBatch.defaultExpectation.params = &StorageAndGraphWriterMockClaimOutboundBatchParams{ctx, batchSize}
+	mmClaimOutboundBatch.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmClaimOutboundBatch.expectations {
+		if minimock.Equal(e.params, mmClaimOutboundBatch.defaultExpectation.params) {
+			mmClaimOutboundBatch.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmClaimOutboundBatch.defaultExpectation.params)
+		}
+	}
+
+	return mmClaimOutboundBatch
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StorageAndGraphWriterMockClaimOutboundBatchExpectation{}
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.params != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Expect")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.paramPtrs == nil {
+		mmClaimOutboundBatch.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockClaimOutboundBatchParamPtrs{}
+	}
+	mmClaimOutboundBatch.defaultExpectation.paramPtrs.ctx = &ctx
+	mmClaimOutboundBatch.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmClaimOutboundBatch
+}
+
+// ExpectBatchSizeParam2 sets up expected param batchSize for StorageAndGraphWriter.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) ExpectBatchSizeParam2(batchSize int) *mStorageAndGraphWriterMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StorageAndGraphWriterMockClaimOutboundBatchExpectation{}
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.params != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Expect")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation.paramPtrs == nil {
+		mmClaimOutboundBatch.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockClaimOutboundBatchParamPtrs{}
+	}
+	mmClaimOutboundBatch.defaultExpectation.paramPtrs.batchSize = &batchSize
+	mmClaimOutboundBatch.defaultExpectation.expectationOrigins.originBatchSize = minimock.CallerInfo(1)
+
+	return mmClaimOutboundBatch
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Inspect(f func(ctx context.Context, batchSize int)) *mStorageAndGraphWriterMockClaimOutboundBatch {
+	if mmClaimOutboundBatch.mock.inspectFuncClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.ClaimOutboundBatch")
+	}
+
+	mmClaimOutboundBatch.mock.inspectFuncClaimOutboundBatch = f
+
+	return mmClaimOutboundBatch
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.ClaimOutboundBatch
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Return(oa1 []model.OutboundTask, err error) *StorageAndGraphWriterMock {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	if mmClaimOutboundBatch.defaultExpectation == nil {
+		mmClaimOutboundBatch.defaultExpectation = &StorageAndGraphWriterMockClaimOutboundBatchExpectation{mock: mmClaimOutboundBatch.mock}
+	}
+	mmClaimOutboundBatch.defaultExpectation.results = &StorageAndGraphWriterMockClaimOutboundBatchResults{oa1, err}
+	mmClaimOutboundBatch.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmClaimOutboundBatch.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.ClaimOutboundBatch method
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Set(f func(ctx context.Context, batchSize int) (oa1 []model.OutboundTask, err error)) *StorageAndGraphWriterMock {
+	if mmClaimOutboundBatch.defaultExpectation != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.ClaimOutboundBatch method")
+	}
+
+	if len(mmClaimOutboundBatch.expectations) > 0 {
+		mmClaimOutboundBatch.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.ClaimOutboundBatch method")
+	}
+
+	mmClaimOutboundBatch.mock.funcClaimOutboundBatch = f
+	mmClaimOutboundBatch.mock.funcClaimOutboundBatchOrigin = minimock.CallerInfo(1)
+	return mmClaimOutboundBatch.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.ClaimOutboundBatch which will trigger the result defined by the following
+// Then helper
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) When(ctx context.Context, batchSize int) *StorageAndGraphWriterMockClaimOutboundBatchExpectation {
+	if mmClaimOutboundBatch.mock.funcClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.mock.t.Fatalf("StorageAndGraphWriterMock.ClaimOutboundBatch mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockClaimOutboundBatchExpectation{
+		mock:               mmClaimOutboundBatch.mock,
+		params:             &StorageAndGraphWriterMockClaimOutboundBatchParams{ctx, batchSize},
+		expectationOrigins: StorageAndGraphWriterMockClaimOutboundBatchExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmClaimOutboundBatch.expectations = append(mmClaimOutboundBatch.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.ClaimOutboundBatch return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockClaimOutboundBatchExpectation) Then(oa1 []model.OutboundTask, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockClaimOutboundBatchResults{oa1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.ClaimOutboundBatch should be invoked
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Times(n uint64) *mStorageAndGraphWriterMockClaimOutboundBatch {
+	if n == 0 {
+		mmClaimOutboundBatch.mock.t.Fatalf("Times of StorageAndGraphWriterMock.ClaimOutboundBatch mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmClaimOutboundBatch.expectedInvocations, n)
+	mmClaimOutboundBatch.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmClaimOutboundBatch
+}
+
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) invocationsDone() bool {
+	if len(mmClaimOutboundBatch.expectations) == 0 && mmClaimOutboundBatch.defaultExpectation == nil && mmClaimOutboundBatch.mock.funcClaimOutboundBatch == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmClaimOutboundBatch.mock.afterClaimOutboundBatchCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmClaimOutboundBatch.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// ClaimOutboundBatch implements mm_port.StorageAndGraphWriter
+func (mmClaimOutboundBatch *StorageAndGraphWriterMock) ClaimOutboundBatch(ctx context.Context, batchSize int) (oa1 []model.OutboundTask, err error) {
+	mm_atomic.AddUint64(&mmClaimOutboundBatch.beforeClaimOutboundBatchCounter, 1)
+	defer mm_atomic.AddUint64(&mmClaimOutboundBatch.afterClaimOutboundBatchCounter, 1)
+
+	mmClaimOutboundBatch.t.Helper()
+
+	if mmClaimOutboundBatch.inspectFuncClaimOutboundBatch != nil {
+		mmClaimOutboundBatch.inspectFuncClaimOutboundBatch(ctx, batchSize)
+	}
+
+	mm_params := StorageAndGraphWriterMockClaimOutboundBatchParams{ctx, batchSize}
+
+	// Record call args
+	mmClaimOutboundBatch.ClaimOutboundBatchMock.mutex.Lock()
+	mmClaimOutboundBatch.ClaimOutboundBatchMock.callArgs = append(mmClaimOutboundBatch.ClaimOutboundBatchMock.callArgs, &mm_params)
+	mmClaimOutboundBatch.ClaimOutboundBatchMock.mutex.Unlock()
+
+	for _, e := range mmClaimOutboundBatch.ClaimOutboundBatchMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.oa1, e.results.err
+		}
+	}
+
+	if mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.Counter, 1)
+		mm_want := mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.params
+		mm_want_ptrs := mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockClaimOutboundBatchParams{ctx, batchSize}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmClaimOutboundBatch.t.Errorf("StorageAndGraphWriterMock.ClaimOutboundBatch got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.batchSize != nil && !minimock.Equal(*mm_want_ptrs.batchSize, mm_got.batchSize) {
+				mmClaimOutboundBatch.t.Errorf("StorageAndGraphWriterMock.ClaimOutboundBatch got unexpected parameter batchSize, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.originBatchSize, *mm_want_ptrs.batchSize, mm_got.batchSize, minimock.Diff(*mm_want_ptrs.batchSize, mm_got.batchSize))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmClaimOutboundBatch.t.Errorf("StorageAndGraphWriterMock.ClaimOutboundBatch got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmClaimOutboundBatch.ClaimOutboundBatchMock.defaultExpectation.results
+		if mm_results == nil {
+			mmClaimOutboundBatch.t.Fatal("No results are set for the StorageAndGraphWriterMock.ClaimOutboundBatch")
+		}
+		return (*mm_results).oa1, (*mm_results).err
+	}
+	if mmClaimOutboundBatch.funcClaimOutboundBatch != nil {
+		return mmClaimOutboundBatch.funcClaimOutboundBatch(ctx, batchSize)
+	}
+	mmClaimOutboundBatch.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.ClaimOutboundBatch. %v %v", ctx, batchSize)
+	return
+}
+
+// ClaimOutboundBatchAfterCounter returns a count of finished StorageAndGraphWriterMock.ClaimOutboundBatch invocations
+func (mmClaimOutboundBatch *StorageAndGraphWriterMock) ClaimOutboundBatchAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmClaimOutboundBatch.afterClaimOutboundBatchCounter)
+}
+
+// ClaimOutboundBatchBeforeCounter returns a count of StorageAndGraphWriterMock.ClaimOutboundBatch invocations
+func (mmClaimOutboundBatch *StorageAndGraphWriterMock) ClaimOutboundBatchBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmClaimOutboundBatch.beforeClaimOutboundBatchCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.ClaimOutboundBatch.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmClaimOutboundBatch *mStorageAndGraphWriterMockClaimOutboundBatch) Calls() []*StorageAndGraphWriterMockClaimOutboundBatchParams {
+	mmClaimOutboundBatch.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockClaimOutboundBatchParams, len(mmClaimOutboundBatch.callArgs))
+	copy(argCopy, mmClaimOutboundBatch.callArgs)
+
+	mmClaimOutboundBatch.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockClaimOutboundBatchDone returns true if the count of the ClaimOutboundBatch invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockClaimOutboundBatchDone() bool {
+	if m.ClaimOutboundBatchMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.ClaimOutboundBatchMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.ClaimOutboundBatchMock.invocationsDone()
+}
+
+// MinimockClaimOutboundBatchInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockClaimOutboundBatchInspect() {
+	for _, e := range m.ClaimOutboundBatchMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.ClaimOutboundBatch at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterClaimOutboundBatchCounter := mm_atomic.LoadUint64(&m.afterClaimOutboundBatchCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.ClaimOutboundBatchMock.defaultExpectation != nil && afterClaimOutboundBatchCounter < 1 {
+		if m.ClaimOutboundBatchMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.ClaimOutboundBatch at\n%s", m.ClaimOutboundBatchMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.ClaimOutboundBatch at\n%s with params: %#v", m.ClaimOutboundBatchMock.defaultExpectation.expectationOrigins.origin, *m.ClaimOutboundBatchMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcClaimOutboundBatch != nil && afterClaimOutboundBatchCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.ClaimOutboundBatch at\n%s", m.funcClaimOutboundBatchOrigin)
+	}
+
+	if !m.ClaimOutboundBatchMock.invocationsDone() && afterClaimOutboundBatchCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.ClaimOutboundBatch at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.ClaimOutboundBatchMock.expectedInvocations), m.ClaimOutboundBatchMock.expectedInvocationsOrigin, afterClaimOutboundBatchCounter)
 	}
 }
 
@@ -8713,6 +9086,721 @@ func (m *StorageAndGraphWriterMock) MinimockMarkInboundFailedInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockMarkOutboundComplete struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockMarkOutboundCompleteExpectation
+	expectations       []*StorageAndGraphWriterMockMarkOutboundCompleteExpectation
+
+	callArgs []*StorageAndGraphWriterMockMarkOutboundCompleteParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockMarkOutboundCompleteExpectation specifies expectation struct of the StorageAndGraphWriter.MarkOutboundComplete
+type StorageAndGraphWriterMockMarkOutboundCompleteExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockMarkOutboundCompleteParams
+	paramPtrs          *StorageAndGraphWriterMockMarkOutboundCompleteParamPtrs
+	expectationOrigins StorageAndGraphWriterMockMarkOutboundCompleteExpectationOrigins
+	results            *StorageAndGraphWriterMockMarkOutboundCompleteResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockMarkOutboundCompleteParams contains parameters of the StorageAndGraphWriter.MarkOutboundComplete
+type StorageAndGraphWriterMockMarkOutboundCompleteParams struct {
+	ctx context.Context
+	id  string
+}
+
+// StorageAndGraphWriterMockMarkOutboundCompleteParamPtrs contains pointers to parameters of the StorageAndGraphWriter.MarkOutboundComplete
+type StorageAndGraphWriterMockMarkOutboundCompleteParamPtrs struct {
+	ctx *context.Context
+	id  *string
+}
+
+// StorageAndGraphWriterMockMarkOutboundCompleteResults contains results of the StorageAndGraphWriter.MarkOutboundComplete
+type StorageAndGraphWriterMockMarkOutboundCompleteResults struct {
+	err error
+}
+
+// StorageAndGraphWriterMockMarkOutboundCompleteOrigins contains origins of expectations of the StorageAndGraphWriter.MarkOutboundComplete
+type StorageAndGraphWriterMockMarkOutboundCompleteExpectationOrigins struct {
+	origin    string
+	originCtx string
+	originId  string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Optional() *mStorageAndGraphWriterMockMarkOutboundComplete {
+	mmMarkOutboundComplete.optional = true
+	return mmMarkOutboundComplete
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Expect(ctx context.Context, id string) *mStorageAndGraphWriterMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundCompleteExpectation{}
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.paramPtrs != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by ExpectParams functions")
+	}
+
+	mmMarkOutboundComplete.defaultExpectation.params = &StorageAndGraphWriterMockMarkOutboundCompleteParams{ctx, id}
+	mmMarkOutboundComplete.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmMarkOutboundComplete.expectations {
+		if minimock.Equal(e.params, mmMarkOutboundComplete.defaultExpectation.params) {
+			mmMarkOutboundComplete.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmMarkOutboundComplete.defaultExpectation.params)
+		}
+	}
+
+	return mmMarkOutboundComplete
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundCompleteExpectation{}
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.params != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Expect")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundComplete.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockMarkOutboundCompleteParamPtrs{}
+	}
+	mmMarkOutboundComplete.defaultExpectation.paramPtrs.ctx = &ctx
+	mmMarkOutboundComplete.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmMarkOutboundComplete
+}
+
+// ExpectIdParam2 sets up expected param id for StorageAndGraphWriter.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) ExpectIdParam2(id string) *mStorageAndGraphWriterMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundCompleteExpectation{}
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.params != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Expect")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundComplete.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockMarkOutboundCompleteParamPtrs{}
+	}
+	mmMarkOutboundComplete.defaultExpectation.paramPtrs.id = &id
+	mmMarkOutboundComplete.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmMarkOutboundComplete
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Inspect(f func(ctx context.Context, id string)) *mStorageAndGraphWriterMockMarkOutboundComplete {
+	if mmMarkOutboundComplete.mock.inspectFuncMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.MarkOutboundComplete")
+	}
+
+	mmMarkOutboundComplete.mock.inspectFuncMarkOutboundComplete = f
+
+	return mmMarkOutboundComplete
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.MarkOutboundComplete
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Return(err error) *StorageAndGraphWriterMock {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	if mmMarkOutboundComplete.defaultExpectation == nil {
+		mmMarkOutboundComplete.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundCompleteExpectation{mock: mmMarkOutboundComplete.mock}
+	}
+	mmMarkOutboundComplete.defaultExpectation.results = &StorageAndGraphWriterMockMarkOutboundCompleteResults{err}
+	mmMarkOutboundComplete.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundComplete.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.MarkOutboundComplete method
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Set(f func(ctx context.Context, id string) (err error)) *StorageAndGraphWriterMock {
+	if mmMarkOutboundComplete.defaultExpectation != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.MarkOutboundComplete method")
+	}
+
+	if len(mmMarkOutboundComplete.expectations) > 0 {
+		mmMarkOutboundComplete.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.MarkOutboundComplete method")
+	}
+
+	mmMarkOutboundComplete.mock.funcMarkOutboundComplete = f
+	mmMarkOutboundComplete.mock.funcMarkOutboundCompleteOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundComplete.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.MarkOutboundComplete which will trigger the result defined by the following
+// Then helper
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) When(ctx context.Context, id string) *StorageAndGraphWriterMockMarkOutboundCompleteExpectation {
+	if mmMarkOutboundComplete.mock.funcMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundComplete mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockMarkOutboundCompleteExpectation{
+		mock:               mmMarkOutboundComplete.mock,
+		params:             &StorageAndGraphWriterMockMarkOutboundCompleteParams{ctx, id},
+		expectationOrigins: StorageAndGraphWriterMockMarkOutboundCompleteExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmMarkOutboundComplete.expectations = append(mmMarkOutboundComplete.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.MarkOutboundComplete return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockMarkOutboundCompleteExpectation) Then(err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockMarkOutboundCompleteResults{err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.MarkOutboundComplete should be invoked
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Times(n uint64) *mStorageAndGraphWriterMockMarkOutboundComplete {
+	if n == 0 {
+		mmMarkOutboundComplete.mock.t.Fatalf("Times of StorageAndGraphWriterMock.MarkOutboundComplete mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmMarkOutboundComplete.expectedInvocations, n)
+	mmMarkOutboundComplete.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundComplete
+}
+
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) invocationsDone() bool {
+	if len(mmMarkOutboundComplete.expectations) == 0 && mmMarkOutboundComplete.defaultExpectation == nil && mmMarkOutboundComplete.mock.funcMarkOutboundComplete == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmMarkOutboundComplete.mock.afterMarkOutboundCompleteCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmMarkOutboundComplete.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// MarkOutboundComplete implements mm_port.StorageAndGraphWriter
+func (mmMarkOutboundComplete *StorageAndGraphWriterMock) MarkOutboundComplete(ctx context.Context, id string) (err error) {
+	mm_atomic.AddUint64(&mmMarkOutboundComplete.beforeMarkOutboundCompleteCounter, 1)
+	defer mm_atomic.AddUint64(&mmMarkOutboundComplete.afterMarkOutboundCompleteCounter, 1)
+
+	mmMarkOutboundComplete.t.Helper()
+
+	if mmMarkOutboundComplete.inspectFuncMarkOutboundComplete != nil {
+		mmMarkOutboundComplete.inspectFuncMarkOutboundComplete(ctx, id)
+	}
+
+	mm_params := StorageAndGraphWriterMockMarkOutboundCompleteParams{ctx, id}
+
+	// Record call args
+	mmMarkOutboundComplete.MarkOutboundCompleteMock.mutex.Lock()
+	mmMarkOutboundComplete.MarkOutboundCompleteMock.callArgs = append(mmMarkOutboundComplete.MarkOutboundCompleteMock.callArgs, &mm_params)
+	mmMarkOutboundComplete.MarkOutboundCompleteMock.mutex.Unlock()
+
+	for _, e := range mmMarkOutboundComplete.MarkOutboundCompleteMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.Counter, 1)
+		mm_want := mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.params
+		mm_want_ptrs := mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockMarkOutboundCompleteParams{ctx, id}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmMarkOutboundComplete.t.Errorf("StorageAndGraphWriterMock.MarkOutboundComplete got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmMarkOutboundComplete.t.Errorf("StorageAndGraphWriterMock.MarkOutboundComplete got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmMarkOutboundComplete.t.Errorf("StorageAndGraphWriterMock.MarkOutboundComplete got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmMarkOutboundComplete.MarkOutboundCompleteMock.defaultExpectation.results
+		if mm_results == nil {
+			mmMarkOutboundComplete.t.Fatal("No results are set for the StorageAndGraphWriterMock.MarkOutboundComplete")
+		}
+		return (*mm_results).err
+	}
+	if mmMarkOutboundComplete.funcMarkOutboundComplete != nil {
+		return mmMarkOutboundComplete.funcMarkOutboundComplete(ctx, id)
+	}
+	mmMarkOutboundComplete.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.MarkOutboundComplete. %v %v", ctx, id)
+	return
+}
+
+// MarkOutboundCompleteAfterCounter returns a count of finished StorageAndGraphWriterMock.MarkOutboundComplete invocations
+func (mmMarkOutboundComplete *StorageAndGraphWriterMock) MarkOutboundCompleteAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundComplete.afterMarkOutboundCompleteCounter)
+}
+
+// MarkOutboundCompleteBeforeCounter returns a count of StorageAndGraphWriterMock.MarkOutboundComplete invocations
+func (mmMarkOutboundComplete *StorageAndGraphWriterMock) MarkOutboundCompleteBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundComplete.beforeMarkOutboundCompleteCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.MarkOutboundComplete.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmMarkOutboundComplete *mStorageAndGraphWriterMockMarkOutboundComplete) Calls() []*StorageAndGraphWriterMockMarkOutboundCompleteParams {
+	mmMarkOutboundComplete.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockMarkOutboundCompleteParams, len(mmMarkOutboundComplete.callArgs))
+	copy(argCopy, mmMarkOutboundComplete.callArgs)
+
+	mmMarkOutboundComplete.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockMarkOutboundCompleteDone returns true if the count of the MarkOutboundComplete invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockMarkOutboundCompleteDone() bool {
+	if m.MarkOutboundCompleteMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.MarkOutboundCompleteMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.MarkOutboundCompleteMock.invocationsDone()
+}
+
+// MinimockMarkOutboundCompleteInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockMarkOutboundCompleteInspect() {
+	for _, e := range m.MarkOutboundCompleteMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundComplete at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterMarkOutboundCompleteCounter := mm_atomic.LoadUint64(&m.afterMarkOutboundCompleteCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.MarkOutboundCompleteMock.defaultExpectation != nil && afterMarkOutboundCompleteCounter < 1 {
+		if m.MarkOutboundCompleteMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundComplete at\n%s", m.MarkOutboundCompleteMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundComplete at\n%s with params: %#v", m.MarkOutboundCompleteMock.defaultExpectation.expectationOrigins.origin, *m.MarkOutboundCompleteMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcMarkOutboundComplete != nil && afterMarkOutboundCompleteCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundComplete at\n%s", m.funcMarkOutboundCompleteOrigin)
+	}
+
+	if !m.MarkOutboundCompleteMock.invocationsDone() && afterMarkOutboundCompleteCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.MarkOutboundComplete at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.MarkOutboundCompleteMock.expectedInvocations), m.MarkOutboundCompleteMock.expectedInvocationsOrigin, afterMarkOutboundCompleteCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockMarkOutboundFailed struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockMarkOutboundFailedExpectation
+	expectations       []*StorageAndGraphWriterMockMarkOutboundFailedExpectation
+
+	callArgs []*StorageAndGraphWriterMockMarkOutboundFailedParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockMarkOutboundFailedExpectation specifies expectation struct of the StorageAndGraphWriter.MarkOutboundFailed
+type StorageAndGraphWriterMockMarkOutboundFailedExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockMarkOutboundFailedParams
+	paramPtrs          *StorageAndGraphWriterMockMarkOutboundFailedParamPtrs
+	expectationOrigins StorageAndGraphWriterMockMarkOutboundFailedExpectationOrigins
+	results            *StorageAndGraphWriterMockMarkOutboundFailedResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockMarkOutboundFailedParams contains parameters of the StorageAndGraphWriter.MarkOutboundFailed
+type StorageAndGraphWriterMockMarkOutboundFailedParams struct {
+	ctx    context.Context
+	id     string
+	reason string
+}
+
+// StorageAndGraphWriterMockMarkOutboundFailedParamPtrs contains pointers to parameters of the StorageAndGraphWriter.MarkOutboundFailed
+type StorageAndGraphWriterMockMarkOutboundFailedParamPtrs struct {
+	ctx    *context.Context
+	id     *string
+	reason *string
+}
+
+// StorageAndGraphWriterMockMarkOutboundFailedResults contains results of the StorageAndGraphWriter.MarkOutboundFailed
+type StorageAndGraphWriterMockMarkOutboundFailedResults struct {
+	err error
+}
+
+// StorageAndGraphWriterMockMarkOutboundFailedOrigins contains origins of expectations of the StorageAndGraphWriter.MarkOutboundFailed
+type StorageAndGraphWriterMockMarkOutboundFailedExpectationOrigins struct {
+	origin       string
+	originCtx    string
+	originId     string
+	originReason string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Optional() *mStorageAndGraphWriterMockMarkOutboundFailed {
+	mmMarkOutboundFailed.optional = true
+	return mmMarkOutboundFailed
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Expect(ctx context.Context, id string, reason string) *mStorageAndGraphWriterMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by ExpectParams functions")
+	}
+
+	mmMarkOutboundFailed.defaultExpectation.params = &StorageAndGraphWriterMockMarkOutboundFailedParams{ctx, id, reason}
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmMarkOutboundFailed.expectations {
+		if minimock.Equal(e.params, mmMarkOutboundFailed.defaultExpectation.params) {
+			mmMarkOutboundFailed.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmMarkOutboundFailed.defaultExpectation.params)
+		}
+	}
+
+	return mmMarkOutboundFailed
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.params != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Expect")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundFailed.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockMarkOutboundFailedParamPtrs{}
+	}
+	mmMarkOutboundFailed.defaultExpectation.paramPtrs.ctx = &ctx
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmMarkOutboundFailed
+}
+
+// ExpectIdParam2 sets up expected param id for StorageAndGraphWriter.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) ExpectIdParam2(id string) *mStorageAndGraphWriterMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.params != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Expect")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundFailed.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockMarkOutboundFailedParamPtrs{}
+	}
+	mmMarkOutboundFailed.defaultExpectation.paramPtrs.id = &id
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.originId = minimock.CallerInfo(1)
+
+	return mmMarkOutboundFailed
+}
+
+// ExpectReasonParam3 sets up expected param reason for StorageAndGraphWriter.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) ExpectReasonParam3(reason string) *mStorageAndGraphWriterMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundFailedExpectation{}
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.params != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Expect")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation.paramPtrs == nil {
+		mmMarkOutboundFailed.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockMarkOutboundFailedParamPtrs{}
+	}
+	mmMarkOutboundFailed.defaultExpectation.paramPtrs.reason = &reason
+	mmMarkOutboundFailed.defaultExpectation.expectationOrigins.originReason = minimock.CallerInfo(1)
+
+	return mmMarkOutboundFailed
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Inspect(f func(ctx context.Context, id string, reason string)) *mStorageAndGraphWriterMockMarkOutboundFailed {
+	if mmMarkOutboundFailed.mock.inspectFuncMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.MarkOutboundFailed")
+	}
+
+	mmMarkOutboundFailed.mock.inspectFuncMarkOutboundFailed = f
+
+	return mmMarkOutboundFailed
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.MarkOutboundFailed
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Return(err error) *StorageAndGraphWriterMock {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	if mmMarkOutboundFailed.defaultExpectation == nil {
+		mmMarkOutboundFailed.defaultExpectation = &StorageAndGraphWriterMockMarkOutboundFailedExpectation{mock: mmMarkOutboundFailed.mock}
+	}
+	mmMarkOutboundFailed.defaultExpectation.results = &StorageAndGraphWriterMockMarkOutboundFailedResults{err}
+	mmMarkOutboundFailed.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundFailed.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.MarkOutboundFailed method
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Set(f func(ctx context.Context, id string, reason string) (err error)) *StorageAndGraphWriterMock {
+	if mmMarkOutboundFailed.defaultExpectation != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.MarkOutboundFailed method")
+	}
+
+	if len(mmMarkOutboundFailed.expectations) > 0 {
+		mmMarkOutboundFailed.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.MarkOutboundFailed method")
+	}
+
+	mmMarkOutboundFailed.mock.funcMarkOutboundFailed = f
+	mmMarkOutboundFailed.mock.funcMarkOutboundFailedOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundFailed.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.MarkOutboundFailed which will trigger the result defined by the following
+// Then helper
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) When(ctx context.Context, id string, reason string) *StorageAndGraphWriterMockMarkOutboundFailedExpectation {
+	if mmMarkOutboundFailed.mock.funcMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.mock.t.Fatalf("StorageAndGraphWriterMock.MarkOutboundFailed mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockMarkOutboundFailedExpectation{
+		mock:               mmMarkOutboundFailed.mock,
+		params:             &StorageAndGraphWriterMockMarkOutboundFailedParams{ctx, id, reason},
+		expectationOrigins: StorageAndGraphWriterMockMarkOutboundFailedExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmMarkOutboundFailed.expectations = append(mmMarkOutboundFailed.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.MarkOutboundFailed return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockMarkOutboundFailedExpectation) Then(err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockMarkOutboundFailedResults{err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.MarkOutboundFailed should be invoked
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Times(n uint64) *mStorageAndGraphWriterMockMarkOutboundFailed {
+	if n == 0 {
+		mmMarkOutboundFailed.mock.t.Fatalf("Times of StorageAndGraphWriterMock.MarkOutboundFailed mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmMarkOutboundFailed.expectedInvocations, n)
+	mmMarkOutboundFailed.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmMarkOutboundFailed
+}
+
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) invocationsDone() bool {
+	if len(mmMarkOutboundFailed.expectations) == 0 && mmMarkOutboundFailed.defaultExpectation == nil && mmMarkOutboundFailed.mock.funcMarkOutboundFailed == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmMarkOutboundFailed.mock.afterMarkOutboundFailedCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmMarkOutboundFailed.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// MarkOutboundFailed implements mm_port.StorageAndGraphWriter
+func (mmMarkOutboundFailed *StorageAndGraphWriterMock) MarkOutboundFailed(ctx context.Context, id string, reason string) (err error) {
+	mm_atomic.AddUint64(&mmMarkOutboundFailed.beforeMarkOutboundFailedCounter, 1)
+	defer mm_atomic.AddUint64(&mmMarkOutboundFailed.afterMarkOutboundFailedCounter, 1)
+
+	mmMarkOutboundFailed.t.Helper()
+
+	if mmMarkOutboundFailed.inspectFuncMarkOutboundFailed != nil {
+		mmMarkOutboundFailed.inspectFuncMarkOutboundFailed(ctx, id, reason)
+	}
+
+	mm_params := StorageAndGraphWriterMockMarkOutboundFailedParams{ctx, id, reason}
+
+	// Record call args
+	mmMarkOutboundFailed.MarkOutboundFailedMock.mutex.Lock()
+	mmMarkOutboundFailed.MarkOutboundFailedMock.callArgs = append(mmMarkOutboundFailed.MarkOutboundFailedMock.callArgs, &mm_params)
+	mmMarkOutboundFailed.MarkOutboundFailedMock.mutex.Unlock()
+
+	for _, e := range mmMarkOutboundFailed.MarkOutboundFailedMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.Counter, 1)
+		mm_want := mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.params
+		mm_want_ptrs := mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockMarkOutboundFailedParams{ctx, id, reason}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmMarkOutboundFailed.t.Errorf("StorageAndGraphWriterMock.MarkOutboundFailed got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.id != nil && !minimock.Equal(*mm_want_ptrs.id, mm_got.id) {
+				mmMarkOutboundFailed.t.Errorf("StorageAndGraphWriterMock.MarkOutboundFailed got unexpected parameter id, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.originId, *mm_want_ptrs.id, mm_got.id, minimock.Diff(*mm_want_ptrs.id, mm_got.id))
+			}
+
+			if mm_want_ptrs.reason != nil && !minimock.Equal(*mm_want_ptrs.reason, mm_got.reason) {
+				mmMarkOutboundFailed.t.Errorf("StorageAndGraphWriterMock.MarkOutboundFailed got unexpected parameter reason, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.originReason, *mm_want_ptrs.reason, mm_got.reason, minimock.Diff(*mm_want_ptrs.reason, mm_got.reason))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmMarkOutboundFailed.t.Errorf("StorageAndGraphWriterMock.MarkOutboundFailed got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmMarkOutboundFailed.MarkOutboundFailedMock.defaultExpectation.results
+		if mm_results == nil {
+			mmMarkOutboundFailed.t.Fatal("No results are set for the StorageAndGraphWriterMock.MarkOutboundFailed")
+		}
+		return (*mm_results).err
+	}
+	if mmMarkOutboundFailed.funcMarkOutboundFailed != nil {
+		return mmMarkOutboundFailed.funcMarkOutboundFailed(ctx, id, reason)
+	}
+	mmMarkOutboundFailed.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.MarkOutboundFailed. %v %v %v", ctx, id, reason)
+	return
+}
+
+// MarkOutboundFailedAfterCounter returns a count of finished StorageAndGraphWriterMock.MarkOutboundFailed invocations
+func (mmMarkOutboundFailed *StorageAndGraphWriterMock) MarkOutboundFailedAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundFailed.afterMarkOutboundFailedCounter)
+}
+
+// MarkOutboundFailedBeforeCounter returns a count of StorageAndGraphWriterMock.MarkOutboundFailed invocations
+func (mmMarkOutboundFailed *StorageAndGraphWriterMock) MarkOutboundFailedBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmMarkOutboundFailed.beforeMarkOutboundFailedCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.MarkOutboundFailed.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmMarkOutboundFailed *mStorageAndGraphWriterMockMarkOutboundFailed) Calls() []*StorageAndGraphWriterMockMarkOutboundFailedParams {
+	mmMarkOutboundFailed.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockMarkOutboundFailedParams, len(mmMarkOutboundFailed.callArgs))
+	copy(argCopy, mmMarkOutboundFailed.callArgs)
+
+	mmMarkOutboundFailed.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockMarkOutboundFailedDone returns true if the count of the MarkOutboundFailed invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockMarkOutboundFailedDone() bool {
+	if m.MarkOutboundFailedMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.MarkOutboundFailedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.MarkOutboundFailedMock.invocationsDone()
+}
+
+// MinimockMarkOutboundFailedInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockMarkOutboundFailedInspect() {
+	for _, e := range m.MarkOutboundFailedMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundFailed at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterMarkOutboundFailedCounter := mm_atomic.LoadUint64(&m.afterMarkOutboundFailedCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.MarkOutboundFailedMock.defaultExpectation != nil && afterMarkOutboundFailedCounter < 1 {
+		if m.MarkOutboundFailedMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundFailed at\n%s", m.MarkOutboundFailedMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundFailed at\n%s with params: %#v", m.MarkOutboundFailedMock.defaultExpectation.expectationOrigins.origin, *m.MarkOutboundFailedMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcMarkOutboundFailed != nil && afterMarkOutboundFailedCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.MarkOutboundFailed at\n%s", m.funcMarkOutboundFailedOrigin)
+	}
+
+	if !m.MarkOutboundFailedMock.invocationsDone() && afterMarkOutboundFailedCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.MarkOutboundFailed at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.MarkOutboundFailedMock.expectedInvocations), m.MarkOutboundFailedMock.expectedInvocationsOrigin, afterMarkOutboundFailedCounter)
+	}
+}
+
 type mStorageAndGraphWriterMockRecordActorInboxDelivery struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -12764,6 +13852,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockClaimInboundBatchInspect()
 
+			m.MinimockClaimOutboundBatchInspect()
+
 			m.MinimockCreateActorCredentialInspect()
 
 			m.MinimockCreateGraphVersionInspect()
@@ -12803,6 +13893,10 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 			m.MinimockMarkInboundCompleteInspect()
 
 			m.MinimockMarkInboundFailedInspect()
+
+			m.MinimockMarkOutboundCompleteInspect()
+
+			m.MinimockMarkOutboundFailedInspect()
 
 			m.MinimockRecordActorInboxDeliveryInspect()
 
@@ -12850,6 +13944,7 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 	return done &&
 		m.MinimockArchiveKeyHistoryDone() &&
 		m.MinimockClaimInboundBatchDone() &&
+		m.MinimockClaimOutboundBatchDone() &&
 		m.MinimockCreateActorCredentialDone() &&
 		m.MinimockCreateGraphVersionDone() &&
 		m.MinimockEnqueueInboundDone() &&
@@ -12870,6 +13965,8 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockIsDomainBlockedDone() &&
 		m.MinimockMarkInboundCompleteDone() &&
 		m.MinimockMarkInboundFailedDone() &&
+		m.MinimockMarkOutboundCompleteDone() &&
+		m.MinimockMarkOutboundFailedDone() &&
 		m.MinimockRecordActorInboxDeliveryDone() &&
 		m.MinimockRegisterIdentityCloneDone() &&
 		m.MinimockRemoveMediaRecordDone() &&

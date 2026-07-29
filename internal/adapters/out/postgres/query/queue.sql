@@ -41,3 +41,26 @@ SELECT tenant_id
 FROM activity_tenant_deliveries
 WHERE activity_iri = $1
 LIMIT 1;
+
+-- name: ClaimOutboundTasks :many
+SELECT id, activity_iri, actor_iri, payload
+FROM outbound_activity_queue
+WHERE status = 'pending' OR status = 'failed'
+ORDER BY created_at ASC
+LIMIT $1
+FOR UPDATE SKIP LOCKED;
+
+-- name: MarkOutboundProcessing :exec
+UPDATE outbound_activity_queue
+SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
+WHERE id = ANY($1::uuid[]);
+
+-- name: MarkOutboundComplete :exec
+UPDATE outbound_activity_queue
+SET status = 'completed', updated_at = NOW()
+WHERE id = $1;
+
+-- name: MarkOutboundFailed :exec
+UPDATE outbound_activity_queue
+SET status = 'failed', updated_at = NOW()
+WHERE id = $1;

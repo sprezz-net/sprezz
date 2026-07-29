@@ -52,6 +52,47 @@ func (q *Queries) ClaimInboundTasks(ctx context.Context, limit int32) ([]ClaimIn
 	return items, nil
 }
 
+const claimOutboundTasks = `-- name: ClaimOutboundTasks :many
+SELECT id, activity_iri, actor_iri, payload
+FROM outbound_activity_queue
+WHERE status = 'pending' OR status = 'failed'
+ORDER BY created_at ASC
+LIMIT $1
+FOR UPDATE SKIP LOCKED
+`
+
+type ClaimOutboundTasksRow struct {
+	ID          pgtype.UUID `json:"id"`
+	ActivityIri string      `json:"activity_iri"`
+	ActorIri    string      `json:"actor_iri"`
+	Payload     []byte      `json:"payload"`
+}
+
+func (q *Queries) ClaimOutboundTasks(ctx context.Context, limit int32) ([]ClaimOutboundTasksRow, error) {
+	rows, err := q.db.Query(ctx, claimOutboundTasks, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClaimOutboundTasksRow{}
+	for rows.Next() {
+		var i ClaimOutboundTasksRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActivityIri,
+			&i.ActorIri,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const enqueueInboundActivity = `-- name: EnqueueInboundActivity :exec
 INSERT INTO inbound_activity_queue (id, activity_iri, object_iri, payload, status, created_at, updated_at)
 VALUES ($1, $2, $3, $4, 'pending', NOW(), NOW())
@@ -124,6 +165,39 @@ WHERE id = ANY($1::uuid[])
 
 func (q *Queries) MarkInboundProcessing(ctx context.Context, dollar_1 []pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, markInboundProcessing, dollar_1)
+	return err
+}
+
+const markOutboundComplete = `-- name: MarkOutboundComplete :exec
+UPDATE outbound_activity_queue
+SET status = 'completed', updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkOutboundComplete(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markOutboundComplete, id)
+	return err
+}
+
+const markOutboundFailed = `-- name: MarkOutboundFailed :exec
+UPDATE outbound_activity_queue
+SET status = 'failed', updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkOutboundFailed(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markOutboundFailed, id)
+	return err
+}
+
+const markOutboundProcessing = `-- name: MarkOutboundProcessing :exec
+UPDATE outbound_activity_queue
+SET status = 'processing', attempts = attempts + 1, updated_at = NOW()
+WHERE id = ANY($1::uuid[])
+`
+
+func (q *Queries) MarkOutboundProcessing(ctx context.Context, dollar_1 []pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, markOutboundProcessing, dollar_1)
 	return err
 }
 

@@ -18,28 +18,28 @@ func TestOutboundWorkerEngine_Lifecycle(t *testing.T) {
 	mc := minimock.NewController(t)
 
 	var mu sync.Mutex
-	tasks := []model.InboundTask{
-		{ID: "outbound-success-1", ActivityIRI: "https://remote.com", ObjectIRI: "https://sprezz.net", Payload: []byte(`{}`)},
-		{ID: "outbound-failure-2", ActivityIRI: "https://blocked.com", ObjectIRI: "https://sprezz.net", Payload: []byte(`{}`)},
+	tasks := []model.OutboundTask{
+		{ID: "outbound-success-1", ActivityIRI: "https://remote.com", ActorIRI: "https://sprezz.net", Payload: []byte(`{}`)},
+		{ID: "outbound-failure-2", ActivityIRI: "https://blocked.com", ActorIRI: "https://sprezz.net", Payload: []byte(`{}`)},
 	}
 	completedIDs := make(map[string]struct{})
 	failedTasks := make(map[string]string)
 
 	storage := portmock.NewStoragePortMock(mc)
-	storage.ClaimInboundBatchMock.Set(func(ctx context.Context, b int) ([]model.InboundTask, error) {
+	storage.ClaimOutboundBatchMock.Set(func(ctx context.Context, b int) ([]model.OutboundTask, error) {
 		mu.Lock()
 		defer mu.Unlock()
 		res := tasks
 		tasks = nil
 		return res, nil
 	})
-	storage.MarkInboundCompleteMock.Set(func(ctx context.Context, id string) error {
+	storage.MarkOutboundCompleteMock.Set(func(ctx context.Context, id string) error {
 		mu.Lock()
 		defer mu.Unlock()
 		completedIDs[id] = struct{}{}
 		return nil
 	})
-	storage.MarkInboundFailedMock.Set(func(ctx context.Context, id, r string) error {
+	storage.MarkOutboundFailedMock.Set(func(ctx context.Context, id, r string) error {
 		mu.Lock()
 		defer mu.Unlock()
 		failedTasks[id] = r
@@ -78,5 +78,46 @@ func TestOutboundWorkerEngine_Lifecycle(t *testing.T) {
 	}
 	if _, ok := failedTasks["outbound-failure-2"]; !ok {
 		t.Error("Expected outbound-failure-2 to report error tracking telemetry")
+	}
+}
+
+func TestIsTransientError(t *testing.T) {
+	tests := []struct {
+		err      error
+		expected bool
+	}{
+		{err: nil, expected: false},
+		{err: errors.New("remote network endpoint refused activity delivery: status code 500"), expected: true},
+		{err: errors.New("remote network endpoint refused activity delivery: status code 404"), expected: false},
+		{err: errors.New("remote network endpoint refused activity delivery: status code 408"), expected: true},
+		{err: errors.New("remote network endpoint refused activity delivery: status code 410"), expected: false},
+		{err: errors.New("connection timeout"), expected: true},
+	}
+
+	for i, tc := range tests {
+		res := federation.ExportIsTransientError(tc.err)
+		if res != tc.expected {
+			t.Errorf("test %d: expected %v, got %v", i, tc.expected, res)
+		}
+	}
+}
+
+func TestGetRetryDelay(t *testing.T) {
+	tests := []struct {
+		attempts int
+		expected time.Duration
+	}{
+		{attempts: 0, expected: 1 * time.Second},
+		{attempts: 1, expected: 2 * time.Second},
+		{attempts: 2, expected: 4 * time.Second},
+		{attempts: 5, expected: 32 * time.Second},
+		{attempts: 20, expected: 2 * time.Hour}, // Max delay capped
+	}
+
+	for i, tc := range tests {
+		res := federation.ExportGetRetryDelay(tc.attempts)
+		if res != tc.expected {
+			t.Errorf("test %d: expected %v, got %v", i, tc.expected, res)
+		}
 	}
 }

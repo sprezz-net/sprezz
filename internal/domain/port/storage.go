@@ -27,6 +27,10 @@ type StoragePort interface {
 	MarkInboundComplete(ctx context.Context, id string) error
 	MarkInboundFailed(ctx context.Context, id string, reason string) error
 
+	ClaimOutboundBatch(ctx context.Context, batchSize int) ([]model.OutboundTask, error)
+	MarkOutboundComplete(ctx context.Context, id string) error
+	MarkOutboundFailed(ctx context.Context, id string, reason string) error
+
 	// Delivery tracking metric
 	RecordActorInboxDelivery(ctx context.Context, actorIRI, activityIRI string) error
 

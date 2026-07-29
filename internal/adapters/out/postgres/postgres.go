@@ -215,6 +215,54 @@ func (s *PostgresStorage) MarkInboundFailed(ctx context.Context, id string, reas
 	return s.queries().MarkInboundFailed(ctx, db.MarkInboundFailedParams{ID: queueID, ErrorMessage: errMsg})
 }
 
+func (s *PostgresStorage) ClaimOutboundBatch(ctx context.Context, batchSize int) ([]model.OutboundTask, error) {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer s.safeRollback(ctx, tx)
+	queries := db.New(tx)
+	rows, err := queries.ClaimOutboundTasks(ctx, int32(batchSize))
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]pgtype.UUID, 0, len(rows))
+	tasks := make([]model.OutboundTask, 0, len(rows))
+	for _, row := range rows {
+		id, err := uuidFromPG(row.ID)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, row.ID)
+		tasks = append(tasks, model.OutboundTask{ID: id.String(), ActivityIRI: row.ActivityIri, ActorIRI: row.ActorIri, Payload: row.Payload})
+	}
+	if len(ids) > 0 {
+		if err := queries.MarkOutboundProcessing(ctx, ids); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return tasks, nil
+}
+
+func (s *PostgresStorage) MarkOutboundComplete(ctx context.Context, id string) error {
+	queueID, err := parseUUID(id)
+	if err != nil {
+		return err
+	}
+	return s.queries().MarkOutboundComplete(ctx, queueID)
+}
+
+func (s *PostgresStorage) MarkOutboundFailed(ctx context.Context, id string, reason string) error {
+	queueID, err := parseUUID(id)
+	if err != nil {
+		return err
+	}
+	return s.queries().MarkOutboundFailed(ctx, queueID)
+}
+
 func (s *PostgresStorage) GetNomadicIdentity(ctx context.Context, guid string) (*model.NomadicIdentity, error) {
 	identity, err := s.queries().GetNomadicIdentity(ctx, guid)
 	if errors.Is(err, pgx.ErrNoRows) {
