@@ -326,6 +326,32 @@ To support spec-compliant activity lifecycle transitions, follows operate as an 
    - For `Accept`, write a state transition quad (`<followActivityIRI> <as:accepted> "true"`) and establish the active follow relationship edge (`<followedActorIRI> <activitystreams#follower> <followerActorIRI>`) in the RDF graph.
    - For `Reject`, write a state transition quad (`<followActivityIRI> <as:rejected> "true"`) and do not write any relationship edge.
 
+### 7.3.2 Fediverse Enhancement Proposals (FEP) Symmetries
+
+Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum security, protocol parity, and forward compatibility:
+
+#### I. Fully Implemented (100% active in the codebase)
+
+1. **`FEP-d556` (Multi-Engine / Server-Controlled Actor Discovery)**: Standardizes discovering remote shared inboxes via a signed 2-step process (WebFinger -> Actor Profile). Fully implemented inside our signed FEP-d556 discovery flow to prevent egress delivery contamination.
+2. **`FEP-8fcf` (Federated Moderation & Instance Blocklists)**: Standardizes domain-level defederation blocks. Fully implemented via the `blocked_domains` early-exit index check on incoming and outbound deliveries.
+3. **`FEP-67ff` (Server-Controlled Shared Inbox Routing)**: Standardizes decoupled, instance-wide shared inbox collection routing. Fully implemented inside `generic_handler.go` catch-all routes mapping POST /inbox to async queues and GET /inbox to the server actor's inbox collection.
+
+#### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
+
+1. **`FEP-c0e0` (Actor-to-Actor Trust Relationship States)**: Standardizes follow state transitions. Partially implemented via our `"pending_follows"` collection and manual state machine (`AcceptFollow` and `RejectFollow`) writing state quads on follow activity subjects. Advanced trust-mesh cryptography is not implemented.
+2. **`FEP-1b12` (Group Federation)**: Outlines standard handle matching and group subscription behavior (`Join`/`Leave` operations). Partially implemented. We support validating that requested side-effects only run on types verified to be Group or Collection, but the full group-feed auto-announcement loop is not implemented.
+3. **`FEP-8a03` (Followers-only visibility)**: Enforced inside the domain layer via context-aware audience target pruning to keep private notes from leaking into unauthorized collection responses. Real-time followers collection synchronization is not implemented.
+4. **`FEP-2c59` (Decoupled Actor Profile and Migration Aliases)**: Standardizes alias mapping and verification (`alsoKnownAs`). Partially implemented. GenericHandler checks custom aliases dynamically and performs redirects with an HTTP 303 Status, but account-migration key verification is not present.
+5. **`FEP-e232` (Object Links and Inline Context References)**: Standardizes inline attachment, hashtag, and skolemized blank-node references. Partially implemented. Fully supported in parsing contexts and blank-node rewriting, but explicit parsing of FEP-e232 tag properties is not present.
+6. **`FEP-0151` (Nomadic Identity and Cross-Hub Synchronization)**: Standardizes multi-hub Nomadic persona clone tracking. Partially implemented. Sprezz provides the relational storage schema (`nomadic_identities` and `identity_clones`) and `PredicateNomadGUID` graph mapping to represent nomadic identifiers, but the background synchronization engine is not implemented.
+7. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Partially implemented via our side-channel `/replies` OrderedCollection. Conversation context ID routing is not present.
+
+#### III. Possible Future Enhancements (Not implemented)
+
+1. **`FEP-521a` (Representing Actors with Ed25519 Signatures)**: Outlines native cryptographic key generation, storage, and verification workflow over Ed25519 signatures. Scaffolding present. Sprezz mints and stores local Ed25519 private keys alongside RSA-2048 keys collectively, and our `SignatureVerifier` natively validates incoming FEP-521a HTTP signatures directly over `ed25519.Verify` on raw signing string bytes without hashing. Outbound signing is currently locked to RSA.
+2. **`FEP-2243` (Signaling Following State)**: Recommends exposing a standard `following` property on Actor Profiles pointing to their following collection page. Marked as a potential future enhancement.
+3. **`FEP-f1d5` (NodeInfo Metadata Discovery)**: Recommends standardizing capability discovery and user metrics. Marked as a potential future enhancement.
+
 ### 7.4 Privacy and Audience Rules
 
 Timeline and thread views MUST evaluate the ActivityStreams public audience explicitly. Public activities are eligible for general display. Private activities are eligible only when the requesting actor is present in the addressed audience or has an authorized relationship in the local graph.
