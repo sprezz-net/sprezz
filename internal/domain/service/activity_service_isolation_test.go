@@ -39,6 +39,9 @@ func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 	}
 
 	t.Run("Graceful early exit (nil code exit) when target is isolated or missing", func(t *testing.T) {
+		// Mock GetLatestPayload returns nil/error (first delete, no target payload exists or error lookup)
+		mockStorage.GetLatestPayloadMock.Expect(ctx, "https://tenant-a.com/note/123").Return(nil, errors.New("not found"))
+
 		// Mock Actor quads containing their active public key graph entry
 		mockStorage.StreamQuadsBySubjectMock.Expect(ctx, "https://tenant-a.com/actor/alice").Return([]model.Quad{
 			{Subject: "https://tenant-a.com/actor/alice", Predicate: model.PredicatePublicKeyPem, Object: "RSA-KEY-PEM"},
@@ -54,6 +57,9 @@ func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 	})
 
 	t.Run("Security violation when target exists but owned by different actor", func(t *testing.T) {
+		// Mock GetLatestPayload returns raw Note payload
+		mockStorage.GetLatestPayloadMock.Expect(ctx, "https://tenant-a.com/note/123").Return([]byte(`{"type": "Note"}`), nil)
+
 		// Mock Actor quads containing their active public key graph entry
 		mockStorage.StreamQuadsBySubjectMock.Expect(ctx, "https://tenant-a.com/actor/alice").Return([]model.Quad{
 			{Subject: "https://tenant-a.com/actor/alice", Predicate: model.PredicatePublicKeyPem, Object: "RSA-KEY-PEM"},
@@ -71,6 +77,9 @@ func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 	})
 
 	t.Run("Successful processing when target exists and owned by the same actor", func(t *testing.T) {
+		// Mock GetLatestPayload returns raw Note payload
+		mockStorage.GetLatestPayloadMock.Expect(ctx, "https://tenant-a.com/note/123").Return([]byte(`{"type": "Note"}`), nil)
+
 		// Mock Actor quads containing their active public key graph entry
 		mockStorage.StreamQuadsBySubjectMock.Expect(ctx, "https://tenant-a.com/actor/alice").Return([]model.Quad{
 			{Subject: "https://tenant-a.com/actor/alice", Predicate: model.PredicatePublicKeyPem, Object: "RSA-KEY-PEM"},
@@ -81,12 +90,12 @@ func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 			{Subject: "https://tenant-a.com/note/123", Predicate: "https://www.w3.org/ns/activitystreams#attributedTo", Object: "https://tenant-a.com/actor/alice"},
 		}, nil)
 
-		// Save/parse quads expectations
-		parsedQuads := []model.Quad{
-			{Subject: "https://tenant-a.com/activity/delete-1", Predicate: "type", Object: "Delete"},
+		// Save/parse quads expectations for Tombstone saving
+		tombstoneQuads := []model.Quad{
+			{Subject: "https://tenant-a.com/note/123", Predicate: "type", Object: "Tombstone"},
 		}
 		mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, jsonPayload []byte) ([]model.Quad, error) {
-			return parsedQuads, nil
+			return tombstoneQuads, nil
 		})
 		mockStorage.SaveGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
 			return nil
@@ -98,6 +107,16 @@ func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 		err := svc.ProcessInboundTask(ctx, task)
 		if err != nil {
 			t.Fatalf("expected successful delete processing, got error: %v", err)
+		}
+	})
+
+	t.Run("Idempotent delete when target is already a Tombstone", func(t *testing.T) {
+		// Mock GetLatestPayload returns already Tombstone payload
+		mockStorage.GetLatestPayloadMock.Expect(ctx, "https://tenant-a.com/note/123").Return([]byte(`{"type": "Tombstone"}`), nil)
+
+		err := svc.ProcessInboundTask(ctx, task)
+		if err != nil {
+			t.Fatalf("expected successful idempotent no-op delete processing, got error: %v", err)
 		}
 	})
 }

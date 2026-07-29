@@ -571,6 +571,29 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
+	var activity struct {
+		Type   string      `json:"type"`
+		Actor  interface{} `json:"actor"`
+		Object interface{} `json:"object"`
+	}
+	_ = json.Unmarshal(task.Payload, &activity)
+	actType := strings.ToLower(activity.Type)
+
+	if actType == "delete" {
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI != "" {
+			latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
+			if err == nil && len(latest) > 0 {
+				var latestMap map[string]interface{}
+				if json.Unmarshal(latest, &latestMap) == nil {
+					if latestMap["type"] == "Tombstone" {
+						return nil // successful idempotent no-op!
+					}
+				}
+			}
+		}
+	}
+
 	// Execute programmatic identity constraint checks on side-effect mutations before any updates
 	if err := s.validateInboundActivity(ctx, task.ActivityIRI, task.Payload); err != nil {
 		if errors.Is(err, ErrDropAction) {
@@ -581,6 +604,73 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 
 	var quads []model.Quad
 	var err error
+
+	if actType == "delete" {
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI != "" {
+			latest, err := s.storage.GetLatestPayload(ctx, targetIRI)
+			formerType := "Note"
+			if err == nil && len(latest) > 0 {
+				var latestMap map[string]interface{}
+				if json.Unmarshal(latest, &latestMap) == nil {
+					if t, ok := latestMap["type"].(string); ok && t != "" {
+						formerType = t
+					}
+				}
+			}
+
+			tombstone := map[string]interface{}{
+				"id":         targetIRI,
+				"type":       "Tombstone",
+				"formerType": formerType,
+				"deleted":    time.Now().UTC().Format(time.RFC3339),
+			}
+			tombstonePayload, _ := json.Marshal(tombstone)
+
+			if writer, ok := s.storage.(port.GraphVersionWriter); ok {
+				tombstoneQuads, err := s.parser.ToQuads(ctx, 0, targetIRI, tombstonePayload)
+				if err != nil {
+					return fmt.Errorf("failed to parse tombstone payload: %w", err)
+				}
+				if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, targetIRI, tombstonePayload, tombstoneQuads); err != nil {
+					return fmt.Errorf("failed to save tombstone graph version: %w", err)
+				}
+			} else {
+				graphID, err := s.storage.CreateGraphVersion(ctx, task.ActivityIRI, targetIRI, tombstonePayload)
+				if err != nil {
+					return fmt.Errorf("failed to create tombstone graph version: %w", err)
+				}
+				tombstoneQuads, err := s.parser.ToQuads(ctx, graphID, targetIRI, tombstonePayload)
+				if err != nil {
+					return fmt.Errorf("failed to parse tombstone payload: %w", err)
+				}
+				if err := s.storage.SaveQuads(ctx, tombstoneQuads); err != nil {
+					return fmt.Errorf("failed to save tombstone quads: %w", err)
+				}
+			}
+
+			// Perform standard inbox delivery mapping for the Delete activity
+			targetsMap, err := extractAddressingTargets(task.Payload)
+			if err != nil {
+				return err
+			}
+			if task.ObjectIRI != "" {
+				targetsMap[task.ObjectIRI] = struct{}{}
+			}
+			s.expandFollowers(ctx, targetsMap)
+			for target := range targetsMap {
+				target = strings.TrimSpace(target)
+				if target == "" {
+					continue
+				}
+				_, err := s.storage.GetActorDualKeys(ctx, target)
+				if err == nil {
+					_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
+				}
+			}
+			return nil
+		}
+	}
 
 	// 1. Parse activity payload into RDF quads
 	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
