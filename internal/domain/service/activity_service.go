@@ -110,8 +110,341 @@ func (s *ActivityService) resolveActorInbox(ctx context.Context, actorIRI string
 	return "", fmt.Errorf("no inbox found for actor %s", actorIRI)
 }
 
+// parseStringOrID extracts a string IRI from a variety of JSON formats (string, nested map, or list)
+func parseStringOrID(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	switch v := val.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		if id, ok := v["id"].(string); ok {
+			return id
+		}
+	case []interface{}:
+		if len(v) > 0 {
+			return parseStringOrID(v[0])
+		}
+	}
+	return ""
+}
+
+// validateInboundActivity runs strict security, origin, identity, and state checks on inbound activities
+func (s *ActivityService) validateInboundActivity(ctx context.Context, payload []byte) error {
+	var activity struct {
+		Type   string      `json:"type"`
+		Actor  interface{} `json:"actor"`
+		Object interface{} `json:"object"`
+		Target interface{} `json:"target"`
+	}
+	if err := json.Unmarshal(payload, &activity); err != nil {
+		return nil
+	}
+
+	actorIRI := parseStringOrID(activity.Actor)
+	if actorIRI == "" {
+		return nil
+	}
+
+	actType := strings.ToLower(activity.Type)
+
+	var actorQuads []model.Quad
+	var err error
+
+	// B. Mutating Verbs (Undo, Delete, Update)
+	if actType == "undo" || actType == "delete" || actType == "update" {
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI == "" {
+			return fmt.Errorf("missing object IRI for side-effect verb %s", activity.Type)
+		}
+
+		// 1. Cross-validate against internal RDF security public key graph entries
+		actorQuads, err = s.storage.StreamQuadsBySubject(ctx, actorIRI)
+		if err != nil {
+			return fmt.Errorf("failed to stream quads for actor %s: %w", actorIRI, err)
+		}
+		hasPubKey := false
+		for _, q := range actorQuads {
+			if strings.EqualFold(q.Predicate, model.PredicatePublicKeyPem) {
+				hasPubKey = true
+				break
+			}
+		}
+		if !hasPubKey {
+			return fmt.Errorf("security violation: actor %s does not have an active public key graph entry", actorIRI)
+		}
+
+		targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+		if err != nil {
+			return fmt.Errorf("failed to stream quads for target IRI %s: %w", targetIRI, err)
+		}
+
+		// Graceful No-Op for Missing Targets
+		if len(targetQuads) == 0 {
+			return nil
+		}
+
+		// Programmatic Identity Constraint Check & Update Scope Constraint
+		var originalActor string
+		for _, q := range targetQuads {
+			predLower := strings.ToLower(q.Predicate)
+			if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
+				originalActor = strings.Trim(q.Object, `"'`)
+				break
+			}
+		}
+		if originalActor != "" {
+			if strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
+				return fmt.Errorf("security violation: actor %s is not identical to original target actor %s", actorIRI, originalActor)
+			}
+		}
+	}
+
+	// C. Core Interactions
+	switch actType {
+	case "create":
+		// Object Origin Validation
+		objID := parseStringOrID(activity.Object)
+		if objID != "" {
+			actorDomain := extractDomain(actorIRI)
+			objectDomain := extractDomain(objID)
+			if actorDomain != "" && objectDomain != "" && actorDomain != objectDomain {
+				return fmt.Errorf("security violation: actor domain %s does not match object origin domain %s", actorDomain, objectDomain)
+			}
+		}
+
+	case "accept", "reject":
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI == "" {
+			return fmt.Errorf("missing object IRI for %s", activity.Type)
+		}
+
+		targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+		if err != nil || len(targetQuads) == 0 {
+			return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
+		}
+
+		// Accept / Reject Racing Conditions: check if relationship is still pending
+		var originalTarget string
+		var originalActor string
+		hasState := false
+		for _, q := range targetQuads {
+			predLower := strings.ToLower(q.Predicate)
+			if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
+				originalActor = strings.Trim(q.Object, `"'`)
+			}
+			if strings.Contains(predLower, "object") {
+				originalTarget = strings.Trim(q.Object, `"'`)
+			}
+			if strings.Contains(predLower, "accepted") || strings.Contains(predLower, "rejected") || strings.Contains(predLower, "result") {
+				hasState = true
+			}
+		}
+
+		if hasState {
+			return fmt.Errorf("prior activity %s is not in a pending state", targetIRI)
+		}
+
+		// Asserts the sender (actorIRI) matches the original activity target (originalTarget)
+		if originalTarget != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalTarget) {
+			return fmt.Errorf("security violation: actor %s is not authorized to %s follow sent by %s", actorIRI, activity.Type, originalActor)
+		}
+
+	case "add", "remove":
+		collectionIRI := parseStringOrID(activity.Target)
+		if collectionIRI == "" {
+			collectionIRI = parseStringOrID(activity.Object)
+		}
+		if collectionIRI != "" {
+			colQuads, err := s.storage.StreamQuadsBySubject(ctx, collectionIRI)
+			if err == nil && len(colQuads) > 0 {
+				var ownerActor string
+				for _, q := range colQuads {
+					predLower := strings.ToLower(q.Predicate)
+					if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
+						ownerActor = strings.Trim(q.Object, `"'`)
+						break
+					}
+				}
+				if ownerActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(ownerActor) {
+					return fmt.Errorf("security violation: actor %s is not authorized to edit collection %s owned by %s", actorIRI, collectionIRI, ownerActor)
+				}
+			}
+		}
+
+	case "like", "dislike":
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI != "" {
+			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+			if err != nil || len(targetQuads) == 0 {
+				return fmt.Errorf("target object %s not found locally", targetIRI)
+			}
+
+			// Visibility checks (if original post was followers-only/private, liking actor must have access)
+			isPublic := false
+			var originalActor string
+			var recipients []string
+			for _, q := range targetQuads {
+				predLower := strings.ToLower(q.Predicate)
+				if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
+					originalActor = strings.Trim(q.Object, `"'`)
+				}
+				if isAddressingPredicate(q.Predicate) {
+					cleanObject := strings.Trim(q.Object, `"'`)
+					if strings.Contains(cleanObject, "Public") {
+						isPublic = true
+					} else {
+						recipients = append(recipients, cleanObject)
+					}
+				}
+			}
+			if !isPublic && originalActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
+				allowed := false
+				for _, r := range recipients {
+					if strings.TrimSpace(actorIRI) == strings.TrimSpace(r) {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					return fmt.Errorf("security violation: actor %s does not have privacy clearance to view private object %s", actorIRI, targetIRI)
+				}
+			}
+
+			// Idempotency & Uniqueness: Prevent duplicate likes
+			if actType == "like" {
+				if len(actorQuads) == 0 {
+					actorQuads, _ = s.storage.StreamQuadsBySubject(ctx, actorIRI)
+				}
+				for _, q := range actorQuads {
+					if strings.Contains(strings.ToLower(q.Predicate), "liked") && strings.Trim(q.Object, `"'`) == targetIRI {
+						return fmt.Errorf("idempotency violation: actor %s has already liked object %s", actorIRI, targetIRI)
+					}
+				}
+			}
+		}
+
+	case "announce":
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI != "" {
+			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+			// Announce (The Remote Privacy Blindspot)
+			if err != nil || len(targetQuads) == 0 {
+				// JIT authenticated network fetch with safe fallback rejection
+				fetchedBody, jitErr := s.signedGet(ctx, targetIRI, "", "", "")
+				if jitErr != nil {
+					return fmt.Errorf("privacy guard rejection: remote object %s cannot be verified (safe-rejection posture)", targetIRI)
+				}
+				var remoteObj struct {
+					To       interface{} `json:"to"`
+					Cc       interface{} `json:"cc"`
+					Audience interface{} `json:"audience"`
+				}
+				if json.Unmarshal(fetchedBody, &remoteObj) == nil {
+					// Safely verify if it's public. If not cached, we check if public is in the targets
+					isPublic := false
+					checkTarget := func(val interface{}) {
+						switch v := val.(type) {
+						case string:
+							if strings.Contains(v, "Public") {
+								isPublic = true
+							}
+						case []interface{}:
+							for _, item := range v {
+								if str, ok := item.(string); ok && strings.Contains(str, "Public") {
+									isPublic = true
+								}
+							}
+						}
+					}
+					checkTarget(remoteObj.To)
+					checkTarget(remoteObj.Cc)
+					checkTarget(remoteObj.Audience)
+					if !isPublic {
+						return fmt.Errorf("privacy guard: cannot announce private/limited remote object %s", targetIRI)
+					}
+				} else {
+					return fmt.Errorf("privacy guard: failed parsing remote object %s", targetIRI)
+				}
+			} else {
+				// Cached check
+				isPublic := false
+				for _, q := range targetQuads {
+					if isAddressingPredicate(q.Predicate) {
+						cleanObject := strings.Trim(q.Object, `"'`)
+						if strings.Contains(cleanObject, "Public") {
+							isPublic = true
+							break
+						}
+					}
+				}
+				if !isPublic {
+					return fmt.Errorf("privacy guard: cannot announce private/limited object %s", targetIRI)
+				}
+			}
+		}
+
+	case "join", "leave":
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI != "" {
+			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+			if err != nil || len(targetQuads) == 0 {
+				return fmt.Errorf("target group or collection %s not found", targetIRI)
+			}
+			isGroupOrCollection := false
+			for _, q := range targetQuads {
+				if strings.Contains(strings.ToLower(q.Predicate), "type") {
+					objVal := strings.ToLower(q.Object)
+					if strings.Contains(objVal, "group") || strings.Contains(objVal, "collection") {
+						isGroupOrCollection = true
+						break
+					}
+				}
+			}
+			if !isGroupOrCollection {
+				return fmt.Errorf("target scoping violation: %s is not a Group or Collection", targetIRI)
+			}
+		}
+
+	case "question":
+		// Vote Closed State & One-Vote-Per-Actor Check
+		targetIRI := parseStringOrID(activity.Object)
+		if targetIRI != "" {
+			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+			if err == nil && len(targetQuads) > 0 {
+				for _, q := range targetQuads {
+					if strings.Contains(strings.ToLower(q.Predicate), "endtime") {
+						endTimeStr := strings.Trim(q.Object, `"'`)
+						if endTime, parseErr := time.Parse(time.RFC3339, endTimeStr); parseErr == nil {
+							if time.Now().UTC().After(endTime) {
+								return fmt.Errorf("vote rejected: poll Question %s has already expired", targetIRI)
+							}
+						}
+					}
+				}
+				// One-Vote-Per-Actor check (unless Update)
+				if actType != "update" {
+					for _, q := range targetQuads {
+						if strings.Contains(strings.ToLower(q.Predicate), "voted") && strings.Trim(q.Object, `"'`) == actorIRI {
+							return fmt.Errorf("double-vote violation: actor %s has already voted on Question %s", actorIRI, targetIRI)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
+	// Execute programmatic identity constraint checks on side-effect mutations before any updates
+	if err := s.validateInboundActivity(ctx, task.Payload); err != nil {
+		return fmt.Errorf("side-effect mutation rejected: %w", err)
+	}
+
 	var quads []model.Quad
 	var err error
 
@@ -715,6 +1048,7 @@ func (s *ActivityService) cacheServerInbox(ctx context.Context, targetDomain, sh
 }
 
 func (s *ActivityService) signedGet(ctx context.Context, targetURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) ([]byte, error) {
+	_ = privateKeyEd25519PEM // Suppress unused variable warning; currently only RSA signing is implemented
 	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
 	if err != nil {
 		return nil, err
@@ -747,7 +1081,7 @@ func (s *ActivityService) signedGet(ctx context.Context, targetURL, keyID, priva
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)

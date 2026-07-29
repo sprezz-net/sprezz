@@ -183,7 +183,19 @@ The system decouples asynchronous background scheduling mechanics from domain us
 
 - **The Generic Concurrency Frame (`internal/pkg/workers/`)**: Houses an abstraction-bound thread-pool utility (`Config` and `BatchEngine[T]`) operating on channel primitives and generic types `[T any]`. It manages lifecycle loops and graceful context cancellations (`<-ctx.Done()`) with zero awareness of ActivityPub vocabularies or SQL schemas.
 - **The Driving Inbound Worker (`internal/adapters/in/worker/inbound_worker.go`)**: Acts as a primary entry channel. It wraps the generic engine to pull pending tasks from database logs and actively drives execution downward into the core application logic via `ActivityServicePort`.
-- **The Driven Outbound Worker (`internal/adapters/out/federation/outbound_worker.go`)**: Acts as a secondary destination integration. It wraps the generic engine to pull outbound transport requests, resolves structural dual-keys from the lockbox layer, and dispatches signed activities out to external remote environments via `OutboundDispatcher`.
+- **The Driven Outbound Worker (`internal/adapters/out/federation/outbound_worker.go`)**: Acts as a secondary destination integration. It wraps the engine to pull outbound transport requests, resolves structural dual-keys from the lockbox layer, and dispatches signed activities out to external remote environments via `OutboundDispatcher`.
+
+### 4.3 Strict Graph Validation on Side-Effect Mutations
+
+When processing inbound activities, the background task queue worker parses raw payloads into RDF statements. However, handling side-effect mutations—such as `Undo`, `Delete`, and `Update` operations—poses a critical security and integrity hazard if database rows are modified or deleted haphazardly.
+
+To mitigate this spec hazard, the `ActivityService` implements an explicit **Object-Dereferencing Filter** that enforces programmatic identity constraint validation:
+
+1. **Verb Detection & Payload Parsing**: The incoming activity payload is unmarshaled to inspect its `"type"`, `"actor"`, and `"object"` target IRI fields.
+2. **Actor Public Key Cross-Validation**: Before applying any database updates or saving quads, the system verifies that the initiator actor has a valid, active public key graph entry (`https://w3id.org/security#publicKeyPem` predicate) stored in the RDF quad database. If missing, the mutation is rejected instantly.
+3. **Programmatic Identity Constraint Check**: The filter queries the RDF store for any existing quads associated with the target `"object"` IRI (the activity or object being undone, deleted, or updated).
+4. **Ownership Verification**: It scans the target's statement quads to locate the original owner/actor (e.g. predicates containing `actor` or `attributedTo`). If found, it ensures that the actor signing/initiating the inbound wrapper is identical to the actor associated with the original target statement graph.
+5. **Atomic Rejection**: If the identity constraint is violated, the transaction is rejected with an explicit security violation error, ensuring unauthorized actors cannot mutate or delete data they do not own.
 
 ## 5. Identity, Key Rotation, and Tenant Functions
 
@@ -380,6 +392,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - Nomad identity clones can be registered repeatedly without duplicate records.
 - pgx/sqlc integration tests cover UUIDs, JSONB, PostgreSQL arrays, transactions, and row-locking behavior.
 - A parser or quad persistence failure leaves no orphaned graph version.
+- Inbound side-effect mutations (Undo, Delete, Update) are programmatically verified against the original target graph's owner and the actor's RDF public key entries before updating any database quads.
 
 ### 11.1 Multipart Media Form Attachment Upload Loop Criteria
 
@@ -429,7 +442,7 @@ flowchart TD
 
 ## 13. Implementation Status
 
-The repository currently provides the hexagonal ports, a simplified unified wildcard HTTP routing adapter (`GenericHandler`) for GET/POST resources and collections, the complete `MediaUploadHandler` for multi-part media uploads featuring sequential streaming, memory isolation, and pre-flight storage quota checks, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher with high-performance shared-inbox consolidation and delivery, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, and full privacy-aware timeline traversal filters across indexed collection resources.
+The repository currently provides the hexagonal ports, a simplified unified wildcard HTTP routing adapter (`GenericHandler`) for GET/POST resources and collections, the complete `MediaUploadHandler` for multi-part media uploads featuring sequential streaming, memory isolation, and pre-flight storage quota checks, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher with high-performance shared-inbox consolidation and delivery, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, full privacy-aware timeline traversal filters across indexed collection resources, and an explicit object-dereferencing filter for strict graph validation of side-effect mutations.
 
 Additionally, the **Database Migration Subsystem** is fully operational. It leverages embedded filesystem compilation (`go:embed`), standard runtime interoperability adapters (`pgx/v5/stdlib`), and a fail-fast boot sequence execution block to cleanly isolate structural DDL schema synchronization tasks ahead of downstream worker pools.
 
