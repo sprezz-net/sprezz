@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"bytes"
 	"context"
 	"io"
@@ -39,8 +41,8 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 		}
 
 		// 2. Determine if it is an ActivityPub Content-Type
-		contentType := r.Header.Get("Content-Type")
-		isActivityPub := strings.Contains(contentType, "application/activity+json") ||
+		contentType := r.Header.Get(httputil.HeaderContentType)
+		isActivityPub := strings.Contains(contentType, httputil.ContentTypeActivityJSON) ||
 			strings.Contains(contentType, "application/ld+json")
 
 		// 3. Strict Content-Type check for S2S/C2S ActivityPub collections on POST
@@ -76,7 +78,7 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 				return
 			}
 			// If it is ActivityPub, signature is mandatory. Let's make sure a signature header exists
-			sigHeader := r.Header.Get("Signature")
+			sigHeader := r.Header.Get(httputil.HeaderSignature)
 			if sigHeader == "" {
 				http.Error(w, "Unauthorized: Invalid or missing HTTP Signature header", http.StatusUnauthorized)
 				return
@@ -87,7 +89,7 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			sigHeader := r.Header.Get("Signature")
+			sigHeader := r.Header.Get(httputil.HeaderSignature)
 			if sigHeader == "" {
 				// Signature is optional for GET, so bypass verification if absent
 				next.ServeHTTP(w, r)

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -36,7 +38,7 @@ func HandleWebfinger(tenantDomains []string, storage port.StoragePort) http.Hand
 			return
 		}
 
-		tenantHost := RequestHost(r)
+		tenantHost := httputil.RequestHost(r)
 		if !isTenantAllowed(tenantHost, tenantDomains) {
 			http.Error(w, "Domain not in allowed tenants or host missing", http.StatusForbidden)
 			return
@@ -54,7 +56,7 @@ func HandleWebfinger(tenantDomains []string, storage port.StoragePort) http.Hand
 			return
 		}
 
-		w.Header().Set(headerContentType, "application/jrd+json")
+		w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeJRDJSON)
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(buildWebfingerResponse(resource, profile))
 	}
@@ -146,7 +148,7 @@ func buildWebfingerResponse(resource string, profile *model.ActorProfile) Webfin
 		Links: []WebfingerReferenceLink{
 			{
 				Rel:  "self",
-				Type: "application/activity+json",
+				Type: httputil.ContentTypeActivityJSON,
 				Href: profile.IRI, // Points remote instances strictly to the Actor Profile
 			},
 		},

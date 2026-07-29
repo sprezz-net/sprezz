@@ -2,19 +2,9 @@ package service
 
 import (
 	"context"
-	"crypto"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -34,13 +24,15 @@ type ActivityService struct {
 	mediaStorage port.MediaStoragePort
 	parser       port.JSONLDParserPort
 	forwarder    port.OutboundDispatcher
+	fetcher      port.RemoteFetcher
 }
 
-func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, forwarders ...port.OutboundDispatcher) *ActivityService {
+func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, fetcher port.RemoteFetcher, forwarders ...port.OutboundDispatcher) *ActivityService {
 	service := &ActivityService{
 		storage:      storage,
 		mediaStorage: media,
 		parser:       parser,
+		fetcher:      fetcher,
 	}
 	if len(forwarders) > 0 {
 		service.forwarder = forwarders[0]
@@ -429,7 +421,7 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 			// Announce (The Remote Privacy Blindspot)
 			if err != nil || len(targetQuads) == 0 {
 				// JIT authenticated network fetch with safe fallback rejection
-				fetchedBody, jitErr := s.signedGet(ctx, targetIRI, "", "", "")
+				fetchedBody, jitErr := s.fetcher.FetchSigned(ctx, targetIRI, "", "", "")
 				if jitErr != nil {
 					return fmt.Errorf("privacy guard rejection: remote object %s cannot be verified (safe-rejection posture)", targetIRI)
 				}
@@ -1311,11 +1303,11 @@ func (s *ActivityService) getLocalServerCredentials(ctx context.Context, senderA
 // discoverRemoteActorIRI queries the WebFinger JRD of a remote domain to resolve its server-controlled actor IRI
 func (s *ActivityService) discoverRemoteActorIRI(ctx context.Context, targetDomain, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) (string, error) {
 	webfingerURL := fmt.Sprintf("https://%s/.well-known/webfinger?resource=https://%s", targetDomain, targetDomain)
-	wfBody, err := s.signedGet(ctx, webfingerURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
+	wfBody, err := s.fetcher.FetchSigned(ctx, webfingerURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
 	if err != nil {
 		// Fallback to http if https fails
 		webfingerURL = fmt.Sprintf("http://%s/.well-known/webfinger?resource=http://%s", targetDomain, targetDomain)
-		wfBody, err = s.signedGet(ctx, webfingerURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
+		wfBody, err = s.fetcher.FetchSigned(ctx, webfingerURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
 		if err != nil {
 			return "", fmt.Errorf("webfinger discovery failed: %w", err)
 		}
@@ -1343,7 +1335,7 @@ func (s *ActivityService) discoverRemoteActorIRI(ctx context.Context, targetDoma
 
 // discoverRemoteSharedInbox fetches and parses a remote actor's JSON-LD profile to extract its shared inbox URL
 func (s *ActivityService) discoverRemoteSharedInbox(ctx context.Context, actorProfileURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) (string, []byte, error) {
-	profileBody, err := s.signedGet(ctx, actorProfileURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
+	profileBody, err := s.fetcher.FetchSigned(ctx, actorProfileURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to fetch server actor profile: %w", err)
 	}
@@ -1391,75 +1383,6 @@ func (s *ActivityService) cacheServerInbox(ctx context.Context, targetDomain, sh
 	}
 }
 
-func (s *ActivityService) signedGet(ctx context.Context, targetURL, keyID, privateKeyRSAPEM, privateKeyEd25519PEM string) ([]byte, error) {
-	_ = privateKeyEd25519PEM // Suppress unused variable warning; currently only RSA signing is implemented
-	req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Accept", "application/activity+json, application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\", application/jrd+json")
-	req.Header.Set("User-Agent", "Sprezz-Hex-QuadStore/2.0")
-
-	if privateKeyRSAPEM != "" && keyID != "" {
-		cleanHost := req.URL.Host
-		if host, _, err := net.SplitHostPort(req.URL.Host); err == nil {
-			cleanHost = host
-		}
-		req.Header.Set("Host", cleanHost)
-		dateStr := time.Now().UTC().Format(http.TimeFormat)
-		req.Header.Set("Date", dateStr)
-
-		signingString := fmt.Sprintf("(request-target): get %s\nhost: %s\ndate: %s",
-			req.URL.RequestURI(), cleanHost, dateStr)
-
-		signature, err := signStringRSA(signingString, privateKeyRSAPEM)
-		if err == nil {
-			sigHeaderVal := fmt.Sprintf("keyId=\"%s\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date\",signature=\"%s\"",
-				keyID, signature)
-			req.Header.Set("Signature", sigHeaderVal)
-		}
-	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)
-	}
-
-	return io.ReadAll(resp.Body)
-}
-
-func signStringRSA(message, privateKeyPEM string) (string, error) {
-	block, _ := pem.Decode([]byte(privateKeyPEM))
-	if block == nil {
-		return "", fmt.Errorf("failed to parse raw identity key block format")
-	}
-
-	privKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		if parsedKey, err8 := x509.ParsePKCS8PrivateKey(block.Bytes); err8 == nil {
-			if rsaKey, ok := parsedKey.(*rsa.PrivateKey); ok {
-				privKey = rsaKey
-			} else {
-				return "", fmt.Errorf("key is not RSA private key: %w", err)
-			}
-		} else {
-			return "", err
-		}
-	}
-
-	msgHash := sha256.Sum256([]byte(message))
-	sigBytes, err := rsa.SignPKCS1v15(rand.Reader, privKey, crypto.SHA256, msgHash[:])
-	if err != nil {
-		return "", err
-	}
-	return base64.StdEncoding.EncodeToString(sigBytes), nil
-}
 
 // hasRelationshipWithDomain checks if the local server/actor has a federated relationship with the given remote domain.
 func (s *ActivityService) hasRelationshipWithDomain(ctx context.Context, localRecipients []string, targetDomain string) (bool, error) {

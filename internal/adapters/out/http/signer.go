@@ -1,6 +1,8 @@
 package http
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"bytes"
 	"context"
 	"crypto"
@@ -20,9 +22,9 @@ type FederatedSignerAdapter struct {
 	client *http.Client
 }
 
-func NewFederatedSignerAdapter() *FederatedSignerAdapter {
+func NewFederatedSignerAdapter(client *http.Client) *FederatedSignerAdapter {
 	return &FederatedSignerAdapter{
-		client: &http.Client{Timeout: 10 * time.Second},
+		client: client,
 	}
 }
 
@@ -34,22 +36,21 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 		return err
 	}
 
-	req.Header.Set("Content-Type", "application/activity+json")
-	req.Header.Set("User-Agent", "Sprezz-Hex-QuadStore/2.0")
+	req.Header.Set(httputil.HeaderContentType, "application/activity+json")
 
 	hasher := sha256.New()
 	hasher.Write(payload)
 	digestBase64 := base64.StdEncoding.EncodeToString(hasher.Sum(nil))
-	req.Header.Set("Digest", fmt.Sprintf("SHA-256=%s", digestBase64))
+	req.Header.Set(httputil.HeaderDigest, fmt.Sprintf("SHA-256=%s", digestBase64))
 
 	cleanHost := req.URL.Host
 	if host, _, err := net.SplitHostPort(req.URL.Host); err == nil {
 		cleanHost = host
 	}
 
-	req.Header.Set("Host", cleanHost)
+	req.Header.Set(httputil.HeaderHost, cleanHost)
 	dateStr := time.Now().UTC().Format(http.TimeFormat)
-	req.Header.Set("Date", dateStr)
+	req.Header.Set(httputil.HeaderDate, dateStr)
 
 	signingString := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s\ndigest: SHA-256=%s",
 		req.URL.RequestURI(), cleanHost, dateStr, digestBase64)
@@ -62,7 +63,7 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 
 	sigHeaderVal := fmt.Sprintf("keyId=\"%s\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date digest\",signature=\"%s\"",
 		actorKeyID, signature)
-	req.Header.Set("Signature", sigHeaderVal)
+	req.Header.Set(httputil.HeaderSignature, sigHeaderVal)
 
 	resp, err := a.client.Do(req)
 	if err != nil {

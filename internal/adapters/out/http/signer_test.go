@@ -1,6 +1,8 @@
 package http_test
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"context"
 	"crypto"
 	"crypto/ed25519"
@@ -16,7 +18,6 @@ import (
 	"strings"
 	"testing"
 
-	inhttp "sprezz/internal/adapters/in/http"
 	outhttp "sprezz/internal/adapters/out/http"
 )
 
@@ -46,7 +47,7 @@ func TestForwardFederatedActivity_Success(t *testing.T) {
 	defer server.Close()
 
 	// 3. Dispatch activity with dual-keys using a flat entry sequence [source: 11]
-	signer := outhttp.NewFederatedSignerAdapter()
+	signer := outhttp.NewFederatedSignerAdapter(&http.Client{})
 	payload := []byte(`{"type":"Create","actor":"https://sprezz.net"}`)
 
 	err = signer.ForwardFederatedActivity(
@@ -114,7 +115,7 @@ func verifyIncomingRequestSignature(r *http.Request, expectedPublicKey *rsa.Publ
 		return fmt.Errorf("failed to decode signature string: %w", err)
 	}
 
-	cleanHost := inhttp.RequestHost(r)
+	cleanHost := httputil.RequestHost(r)
 	canonical := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s\ndigest: %s",
 		r.URL.RequestURI(), cleanHost, dateHeader, digestHeader)
 

@@ -1,6 +1,8 @@
 package http
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"encoding/json"
 	"io"
 	"net/http"
@@ -16,7 +18,6 @@ import (
 
 const (
 	internalServerError = "Internal server error"
-	headerContentType   = "Content-Type"
 )
 
 type GenericHandler struct {
@@ -28,7 +29,7 @@ func NewGenericHandler(storage port.StoragePort) *GenericHandler {
 }
 
 func writeActivityJSON(w http.ResponseWriter, payload []byte) {
-	w.Header().Set(headerContentType, "application/activity+json")
+	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeActivityJSON)
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(payload)
 }
@@ -46,12 +47,12 @@ func collectionPage(r *http.Request) (int, int) {
 }
 
 func writeCollection(w http.ResponseWriter, id string, items []string) {
-	w.Header().Set(headerContentType, "application/ld+json")
+	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeLDJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": id, "totalItems": len(items), "orderedItems": items})
 }
 
 func (h *GenericHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	requestedIRI := "https://" + RequestHost(r) + r.URL.Path
+	requestedIRI := httputil.HTTPSPrefix + httputil.RequestHost(r) + r.URL.Path
 
 	switch r.Method {
 	case http.MethodGet:
@@ -94,9 +95,9 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 	}
 
 	// Intercept FEP-d556 root domain and decoupled shared inbox lookups
-	tenantHost := RequestHost(r)
+	tenantHost := httputil.RequestHost(r)
 	cleanActorIRI := strings.TrimRight(actorIRI, "/")
-	if cleanActorIRI == "https://"+tenantHost || cleanActorIRI == "http://"+tenantHost {
+	if cleanActorIRI == httputil.HTTPSPrefix+tenantHost || cleanActorIRI == httputil.HTTPPrefix+tenantHost {
 		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
 		if tenantID == 0 {
 			tenantDomain := middleware.GetTenantDomain(ctx)
@@ -137,13 +138,13 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 	}
 
 	// 4. Content Negotiation / MIME Type Branching
-	accept := r.Header.Get("Accept")
+	accept := r.Header.Get(httputil.HeaderAccept)
 	if strings.Contains(accept, "text/html") {
 		var profile struct {
 			PreferredUsername string `json:"preferredUsername"`
 		}
 		if err := json.Unmarshal(payload, &profile); err == nil && profile.PreferredUsername != "" {
-			http.Redirect(w, r, "https://"+RequestHost(r)+"/@"+profile.PreferredUsername, http.StatusFound)
+			http.Redirect(w, r, httputil.HTTPSPrefix+httputil.RequestHost(r)+"/@"+profile.PreferredUsername, http.StatusFound)
 			return
 		}
 	}
@@ -217,7 +218,7 @@ func (h *GenericHandler) servePayloadCollection(w http.ResponseWriter, r *http.R
 	for _, payload := range payloads {
 		items = append(items, json.RawMessage(payload))
 	}
-	w.Header().Set(headerContentType, "application/ld+json")
+	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeLDJSON)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": r.URL.String(), "orderedItems": items})
 }
 
@@ -256,7 +257,7 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetDomain := RequestHost(r)
+	targetDomain := httputil.RequestHost(r)
 
 	// Purely enqueue the inbound activity. Direct vs Shared delivery resolution is fully
 	// offloaded to the async background worker ProcessInboundTask.

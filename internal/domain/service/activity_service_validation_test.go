@@ -1,6 +1,7 @@
 package service_test
 
 import (
+
 	"context"
 	"errors"
 	"net/http"
@@ -21,7 +22,7 @@ func TestProcessInboundTask_Create_Spoof(t *testing.T) {
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://evil.com/act/create-1",
@@ -65,7 +66,7 @@ func TestProcessInboundTask_AcceptReject_Success(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/accept-1",
@@ -100,7 +101,7 @@ func TestProcessInboundTask_AcceptReject_Mismatch(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/accept-1",
@@ -139,7 +140,7 @@ func TestProcessInboundTask_AcceptReject_NotPending(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/accept-1",
@@ -177,7 +178,7 @@ func TestProcessInboundTask_Like_PrivateClearanceFail(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/like-1",
@@ -216,7 +217,7 @@ func TestProcessInboundTask_Like_Duplicate(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/like-1",
@@ -254,7 +255,7 @@ func TestProcessInboundTask_Announce_PrivateFail(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/announce-1",
@@ -302,7 +303,7 @@ func TestProcessInboundTask_Announce_JIT_Fetch_PublicSuccess(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/announce-1",
@@ -341,7 +342,7 @@ func TestProcessInboundTask_Announce_JIT_Fetch_PrivateFail(t *testing.T) {
 		return []model.Quad{}, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/announce-1",
@@ -383,7 +384,7 @@ func TestProcessInboundTask_JoinLeave_GroupSuccess(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/join-1",
@@ -417,7 +418,7 @@ func TestProcessInboundTask_JoinLeave_NotGroupFail(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/join-1",
@@ -455,7 +456,7 @@ func TestProcessInboundTask_Question_Expired(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/vote-1",
@@ -494,7 +495,7 @@ func TestProcessInboundTask_Question_DoubleVote(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/vote-1",
@@ -543,7 +544,7 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/vote-1",
@@ -556,3 +557,5 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 		t.Fatalf("Expected success for re-voting via Update activity, got error: %v", err)
 	}
 }
+
+

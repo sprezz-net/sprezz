@@ -1,6 +1,9 @@
 package service_test
 
 import (
+	"net/http"
+	"io"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -109,7 +112,7 @@ func TestActivityService_AcceptFollow_Success(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), mockForwarder)
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockForwarder)
 
 	err := svc.AcceptFollow(ctx, followedActorIRI, followActivityIRI)
 	if err != nil {
@@ -196,7 +199,7 @@ func TestActivityService_RejectFollow_Success(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), mockForwarder)
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockForwarder)
 
 	err := svc.RejectFollow(ctx, followedActorIRI, followActivityIRI)
 	if err != nil {
@@ -220,7 +223,7 @@ func TestActivityService_AcceptFollow_Mismatch_Error(t *testing.T) {
 		{Subject: followActivityIRI, Predicate: "as:object", Object: "https://local.com/actor/charlie"}, // Mismatched!
 	}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
 
 	err := svc.AcceptFollow(ctx, followedActorIRI, followActivityIRI)
 	if err == nil {
@@ -229,4 +232,25 @@ func TestActivityService_AcceptFollow_Mismatch_Error(t *testing.T) {
 	if !strings.Contains(err.Error(), "followed actor mismatch") {
 		t.Errorf("Unexpected error message: %v", err)
 	}
+}
+
+
+func createTestFetcher(mc *minimock.Controller) *portmock.RemoteFetcherMock {
+	mockFetcher := portmock.NewRemoteFetcherMock(mc)
+	mockFetcher.FetchSignedMock.Optional().Set(func(ctx context.Context, targetURL string, keyID string, privateKeyRSAPEM string, privateKeyEd25519PEM string) ([]byte, error) {
+		req, err := http.NewRequestWithContext(ctx, "GET", targetURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("HTTP error %d", resp.StatusCode)
+		}
+		return io.ReadAll(resp.Body)
+	})
+	return mockFetcher
 }

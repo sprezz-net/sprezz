@@ -20,6 +20,7 @@ import (
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
 	"sprezz/internal/domain/service"
+	"sprezz/internal/pkg/httpclient"
 	"sprezz/internal/pkg/workers"
 
 	"github.com/go-chi/chi/v5"
@@ -127,8 +128,10 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 
 	postgresStorage := postgres.NewPostgresStorage(db, dictCache)
 	jsonldParser := jsonld.NewJSONLDParser()
-	federatedSigner := outhttp.NewFederatedSignerAdapter()
-	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, federatedSigner)
+	sharedHTTPClient := httpclient.New()
+	federatedSigner := outhttp.NewFederatedSignerAdapter(sharedHTTPClient)
+	remoteFetcher := outhttp.NewRemoteFetcherAdapter(sharedHTTPClient)
+	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, remoteFetcher, federatedSigner)
 
 	deps := &dependencies{
 		cfg:             cfg,

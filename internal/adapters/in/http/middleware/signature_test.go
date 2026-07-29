@@ -1,6 +1,8 @@
 package middleware_test
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"context"
 	"errors"
 	"net/http"
@@ -122,7 +124,7 @@ func TestSignatureValidator_Handler(t *testing.T) {
 			name:           "Reject POST to outbox with Non-ActivityPub Content-Type",
 			method:         http.MethodPost,
 			path:           "https://sprezz.net/outbox",
-			contentType:    "application/json",
+			contentType:    httputil.ContentTypeJSON,
 			signature:      "",
 			expectedStatus: http.StatusUnsupportedMediaType,
 			expectedActor:  "",

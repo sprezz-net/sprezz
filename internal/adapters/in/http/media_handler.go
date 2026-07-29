@@ -1,6 +1,8 @@
 package http
 
 import (
+	"sprezz/internal/pkg/httputil"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -121,7 +123,7 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 7. Success Manifest Response Writeout
-	w.Header().Set(headerContentType, "application/json")
+	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeJSON)
 	w.WriteHeader(http.StatusAccepted)
 
 	responseBytes := fmt.Appendf(nil, `{"status":"committed","object_keys":%v}`, h.marshalKeysJSON(completedObjectKeys))
@@ -136,7 +138,7 @@ func (h *MediaUploadHandler) executeCompensatingCleanup(keys []string) {
 }
 
 func (h *MediaUploadHandler) writeError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set(headerContentType, "application/json")
+	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeJSON)
 	w.WriteHeader(status)
 
 	// Replaced memory allocation loop using zero-allocation byte block appends
