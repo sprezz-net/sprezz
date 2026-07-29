@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"sprezz/internal/domain/model"
@@ -130,6 +131,44 @@ func parseStringOrID(val interface{}) string {
 	return ""
 }
 
+// ThreadSafePredicateMap acts as an O(1) thread-safe query lookup cache for target IRI properties.
+type ThreadSafePredicateMap struct {
+	mu sync.RWMutex
+	m  map[string][]string
+}
+
+// NewThreadSafePredicateMap converts a raw slice of quads into a thread-safe predicate map.
+func NewThreadSafePredicateMap(quads []model.Quad) *ThreadSafePredicateMap {
+	m := make(map[string][]string)
+	for _, q := range quads {
+		pred := strings.ToLower(q.Predicate)
+		m[pred] = append(m[pred], q.Object)
+	}
+	return &ThreadSafePredicateMap{m: m}
+}
+
+// Get retrieves all objects matching a given predicate (casing normalized).
+func (t *ThreadSafePredicateMap) Get(predicate string) []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.m[strings.ToLower(predicate)]
+}
+
+// HasKey checks if the given predicate exists.
+func (t *ThreadSafePredicateMap) HasKey(predicate string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.m[strings.ToLower(predicate)]
+	return ok
+}
+
+// Len returns the number of distinct predicates cached in the map.
+func (t *ThreadSafePredicateMap) Len() int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return len(t.m)
+}
+
 // validateInboundActivity runs strict security, origin, identity, and state checks on inbound activities
 func (s *ActivityService) validateInboundActivity(ctx context.Context, payload []byte) error {
 	var activity struct {
@@ -164,14 +203,8 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 		if err != nil {
 			return fmt.Errorf("failed to stream quads for actor %s: %w", actorIRI, err)
 		}
-		hasPubKey := false
-		for _, q := range actorQuads {
-			if strings.EqualFold(q.Predicate, model.PredicatePublicKeyPem) {
-				hasPubKey = true
-				break
-			}
-		}
-		if !hasPubKey {
+		actorMap := NewThreadSafePredicateMap(actorQuads)
+		if !actorMap.HasKey(model.PredicatePublicKeyPem) {
 			return fmt.Errorf("security violation: actor %s does not have an active public key graph entry", actorIRI)
 		}
 
@@ -180,20 +213,26 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 			return fmt.Errorf("failed to stream quads for target IRI %s: %w", targetIRI, err)
 		}
 
+		targetMap := NewThreadSafePredicateMap(targetQuads)
+
 		// Graceful No-Op for Missing Targets
-		if len(targetQuads) == 0 {
+		if targetMap.Len() == 0 {
 			return nil
 		}
 
 		// Programmatic Identity Constraint Check & Update Scope Constraint
 		var originalActor string
-		for _, q := range targetQuads {
-			predLower := strings.ToLower(q.Predicate)
-			if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
-				originalActor = strings.Trim(q.Object, `"'`)
-				break
+		targetMap.mu.RLock()
+		for pred, objects := range targetMap.m {
+			if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+				if len(objects) > 0 {
+					originalActor = strings.Trim(objects[0], `"'`)
+					break
+				}
 			}
 		}
+		targetMap.mu.RUnlock()
+
 		if originalActor != "" {
 			if strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
 				return fmt.Errorf("security violation: actor %s is not identical to original target actor %s", actorIRI, originalActor)
@@ -221,7 +260,11 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 		}
 
 		targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
-		if err != nil || len(targetQuads) == 0 {
+		if err != nil {
+			return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
+		}
+		targetMap := NewThreadSafePredicateMap(targetQuads)
+		if targetMap.Len() == 0 {
 			return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
 		}
 
@@ -229,18 +272,23 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 		var originalTarget string
 		var originalActor string
 		hasState := false
-		for _, q := range targetQuads {
-			predLower := strings.ToLower(q.Predicate)
-			if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
-				originalActor = strings.Trim(q.Object, `"'`)
+		targetMap.mu.RLock()
+		for pred, objects := range targetMap.m {
+			if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+				if len(objects) > 0 {
+					originalActor = strings.Trim(objects[0], `"'`)
+				}
 			}
-			if strings.Contains(predLower, "object") {
-				originalTarget = strings.Trim(q.Object, `"'`)
+			if strings.Contains(pred, "object") {
+				if len(objects) > 0 {
+					originalTarget = strings.Trim(objects[0], `"'`)
+				}
 			}
-			if strings.Contains(predLower, "accepted") || strings.Contains(predLower, "rejected") || strings.Contains(predLower, "result") {
+			if strings.Contains(pred, "accepted") || strings.Contains(pred, "rejected") || strings.Contains(pred, "result") {
 				hasState = true
 			}
 		}
+		targetMap.mu.RUnlock()
 
 		if hasState {
 			return fmt.Errorf("prior activity %s is not in a pending state", targetIRI)
@@ -259,14 +307,18 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 		if collectionIRI != "" {
 			colQuads, err := s.storage.StreamQuadsBySubject(ctx, collectionIRI)
 			if err == nil && len(colQuads) > 0 {
+				colMap := NewThreadSafePredicateMap(colQuads)
 				var ownerActor string
-				for _, q := range colQuads {
-					predLower := strings.ToLower(q.Predicate)
-					if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
-						ownerActor = strings.Trim(q.Object, `"'`)
-						break
+				colMap.mu.RLock()
+				for pred, objects := range colMap.m {
+					if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+						if len(objects) > 0 {
+							ownerActor = strings.Trim(objects[0], `"'`)
+							break
+						}
 					}
 				}
+				colMap.mu.RUnlock()
 				if ownerActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(ownerActor) {
 					return fmt.Errorf("security violation: actor %s is not authorized to edit collection %s owned by %s", actorIRI, collectionIRI, ownerActor)
 				}
@@ -281,24 +333,32 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 				return fmt.Errorf("target object %s not found locally", targetIRI)
 			}
 
+			targetMap := NewThreadSafePredicateMap(targetQuads)
+
 			// Visibility checks (if original post was followers-only/private, liking actor must have access)
 			isPublic := false
 			var originalActor string
 			var recipients []string
-			for _, q := range targetQuads {
-				predLower := strings.ToLower(q.Predicate)
-				if strings.Contains(predLower, "actor") || strings.Contains(predLower, "attributedto") {
-					originalActor = strings.Trim(q.Object, `"'`)
+			targetMap.mu.RLock()
+			for pred, objects := range targetMap.m {
+				if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+					if len(objects) > 0 {
+						originalActor = strings.Trim(objects[0], `"'`)
+					}
 				}
-				if isAddressingPredicate(q.Predicate) {
-					cleanObject := strings.Trim(q.Object, `"'`)
-					if strings.Contains(cleanObject, "Public") {
-						isPublic = true
-					} else {
-						recipients = append(recipients, cleanObject)
+				if isAddressingPredicate(pred) {
+					for _, obj := range objects {
+						cleanObject := strings.Trim(obj, `"'`)
+						if strings.Contains(cleanObject, "Public") {
+							isPublic = true
+						} else {
+							recipients = append(recipients, cleanObject)
+						}
 					}
 				}
 			}
+			targetMap.mu.RUnlock()
+
 			if !isPublic && originalActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
 				allowed := false
 				for _, r := range recipients {
@@ -317,10 +377,25 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 				if len(actorQuads) == 0 {
 					actorQuads, _ = s.storage.StreamQuadsBySubject(ctx, actorIRI)
 				}
-				for _, q := range actorQuads {
-					if strings.Contains(strings.ToLower(q.Predicate), "liked") && strings.Trim(q.Object, `"'`) == targetIRI {
-						return fmt.Errorf("idempotency violation: actor %s has already liked object %s", actorIRI, targetIRI)
+				actorMap := NewThreadSafePredicateMap(actorQuads)
+				actorMap.mu.RLock()
+				alreadyLiked := false
+				for pred, objects := range actorMap.m {
+					if strings.Contains(pred, "liked") {
+						for _, obj := range objects {
+							if strings.Trim(obj, `"'`) == targetIRI {
+								alreadyLiked = true
+								break
+							}
+						}
 					}
+					if alreadyLiked {
+						break
+					}
+				}
+				actorMap.mu.RUnlock()
+				if alreadyLiked {
+					return fmt.Errorf("idempotency violation: actor %s has already liked object %s", actorIRI, targetIRI)
 				}
 			}
 		}
@@ -369,16 +444,24 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 				}
 			} else {
 				// Cached check
+				targetMap := NewThreadSafePredicateMap(targetQuads)
 				isPublic := false
-				for _, q := range targetQuads {
-					if isAddressingPredicate(q.Predicate) {
-						cleanObject := strings.Trim(q.Object, `"'`)
-						if strings.Contains(cleanObject, "Public") {
-							isPublic = true
-							break
+				targetMap.mu.RLock()
+				for pred, objects := range targetMap.m {
+					if isAddressingPredicate(pred) {
+						for _, obj := range objects {
+							cleanObject := strings.Trim(obj, `"'`)
+							if strings.Contains(cleanObject, "Public") {
+								isPublic = true
+								break
+							}
 						}
 					}
+					if isPublic {
+						break
+					}
 				}
+				targetMap.mu.RUnlock()
 				if !isPublic {
 					return fmt.Errorf("privacy guard: cannot announce private/limited object %s", targetIRI)
 				}
@@ -392,16 +475,24 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 			if err != nil || len(targetQuads) == 0 {
 				return fmt.Errorf("target group or collection %s not found", targetIRI)
 			}
+			targetMap := NewThreadSafePredicateMap(targetQuads)
 			isGroupOrCollection := false
-			for _, q := range targetQuads {
-				if strings.Contains(strings.ToLower(q.Predicate), "type") {
-					objVal := strings.ToLower(q.Object)
-					if strings.Contains(objVal, "group") || strings.Contains(objVal, "collection") {
-						isGroupOrCollection = true
-						break
+			targetMap.mu.RLock()
+			for pred, objects := range targetMap.m {
+				if strings.Contains(pred, "type") {
+					for _, obj := range objects {
+						objVal := strings.ToLower(obj)
+						if strings.Contains(objVal, "group") || strings.Contains(objVal, "collection") {
+							isGroupOrCollection = true
+							break
+						}
 					}
 				}
+				if isGroupOrCollection {
+					break
+				}
 			}
+			targetMap.mu.RUnlock()
 			if !isGroupOrCollection {
 				return fmt.Errorf("target scoping violation: %s is not a Group or Collection", targetIRI)
 			}
@@ -413,22 +504,42 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, payload [
 		if targetIRI != "" {
 			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
 			if err == nil && len(targetQuads) > 0 {
-				for _, q := range targetQuads {
-					if strings.Contains(strings.ToLower(q.Predicate), "endtime") {
-						endTimeStr := strings.Trim(q.Object, `"'`)
-						if endTime, parseErr := time.Parse(time.RFC3339, endTimeStr); parseErr == nil {
-							if time.Now().UTC().After(endTime) {
-								return fmt.Errorf("vote rejected: poll Question %s has already expired", targetIRI)
+				targetMap := NewThreadSafePredicateMap(targetQuads)
+				targetMap.mu.RLock()
+				for pred, objects := range targetMap.m {
+					if strings.Contains(pred, "endtime") {
+						for _, obj := range objects {
+							endTimeStr := strings.Trim(obj, `"'`)
+							if endTime, parseErr := time.Parse(time.RFC3339, endTimeStr); parseErr == nil {
+								if time.Now().UTC().After(endTime) {
+									targetMap.mu.RUnlock()
+									return fmt.Errorf("vote rejected: poll Question %s has already expired", targetIRI)
+								}
 							}
 						}
 					}
 				}
+				targetMap.mu.RUnlock()
 				// One-Vote-Per-Actor check (unless Update)
 				if actType != "update" {
-					for _, q := range targetQuads {
-						if strings.Contains(strings.ToLower(q.Predicate), "voted") && strings.Trim(q.Object, `"'`) == actorIRI {
-							return fmt.Errorf("double-vote violation: actor %s has already voted on Question %s", actorIRI, targetIRI)
+					hasVoted := false
+					targetMap.mu.RLock()
+					for pred, objects := range targetMap.m {
+						if strings.Contains(pred, "voted") {
+							for _, obj := range objects {
+								if strings.Trim(obj, `"'`) == actorIRI {
+									hasVoted = true
+									break
+								}
+							}
 						}
+						if hasVoted {
+							break
+						}
+					}
+					targetMap.mu.RUnlock()
+					if hasVoted {
+						return fmt.Errorf("double-vote violation: actor %s has already voted on Question %s", actorIRI, targetIRI)
 					}
 				}
 			}
