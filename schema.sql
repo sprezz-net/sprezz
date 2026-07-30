@@ -72,6 +72,12 @@ CREATE TABLE inbound_activity_queue (
 );
 CREATE INDEX idx_inbound_queue_process ON inbound_activity_queue(status, updated_at) WHERE status = 'pending' OR status = 'failed';
 
+-- Idempotency registry for processed inbound activities to prevent duplicate processing
+CREATE TABLE processed_activities (
+    activity_iri TEXT PRIMARY KEY,
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Multi-Tenant Router Cross-References
 CREATE TABLE activity_tenant_deliveries (
     id BIGSERIAL PRIMARY KEY,

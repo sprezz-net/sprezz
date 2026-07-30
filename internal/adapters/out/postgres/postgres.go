@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -293,6 +294,19 @@ func (s *PostgresStorage) MarkInboundFailed(ctx context.Context, id string, reas
 		errMsg = &reason
 	}
 	return s.queries().MarkInboundFailed(ctx, db.MarkInboundFailedParams{ID: queueID, ErrorMessage: errMsg})
+}
+
+func (s *PostgresStorage) RecordProcessedActivity(ctx context.Context, activityIRI string) (bool, error) {
+	err := s.queries().RecordProcessedActivity(ctx, activityIRI)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			// Unique constraint violation (already processed)
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (s *PostgresStorage) ClaimOutboundBatch(ctx context.Context, batchSize int) ([]model.OutboundTask, error) {

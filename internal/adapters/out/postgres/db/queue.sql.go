@@ -225,6 +225,16 @@ func (q *Queries) RecordActorInboxDelivery(ctx context.Context, arg RecordActorI
 	return err
 }
 
+const recordProcessedActivity = `-- name: RecordProcessedActivity :exec
+INSERT INTO processed_activities (activity_iri)
+VALUES ($1)
+`
+
+func (q *Queries) RecordProcessedActivity(ctx context.Context, activityIri string) error {
+	_, err := q.db.Exec(ctx, recordProcessedActivity, activityIri)
+	return err
+}
+
 const recordTenantDelivery = `-- name: RecordTenantDelivery :exec
 INSERT INTO activity_tenant_deliveries (activity_iri, tenant_id)
 VALUES ($1, $2)

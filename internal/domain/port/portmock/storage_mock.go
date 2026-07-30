@@ -230,6 +230,13 @@ type StoragePortMock struct {
 	beforeRecordActorInboxDeliveryCounter uint64
 	RecordActorInboxDeliveryMock          mStoragePortMockRecordActorInboxDelivery
 
+	funcRecordProcessedActivity          func(ctx context.Context, activityIRI string) (b1 bool, err error)
+	funcRecordProcessedActivityOrigin    string
+	inspectFuncRecordProcessedActivity   func(ctx context.Context, activityIRI string)
+	afterRecordProcessedActivityCounter  uint64
+	beforeRecordProcessedActivityCounter uint64
+	RecordProcessedActivityMock          mStoragePortMockRecordProcessedActivity
+
 	funcRegisterIdentityClone          func(ctx context.Context, guid string, hubURL string, isLocal bool) (err error)
 	funcRegisterIdentityCloneOrigin    string
 	inspectFuncRegisterIdentityClone   func(ctx context.Context, guid string, hubURL string, isLocal bool)
@@ -391,6 +398,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.RecordActorInboxDeliveryMock = mStoragePortMockRecordActorInboxDelivery{mock: m}
 	m.RecordActorInboxDeliveryMock.callArgs = []*StoragePortMockRecordActorInboxDeliveryParams{}
+
+	m.RecordProcessedActivityMock = mStoragePortMockRecordProcessedActivity{mock: m}
+	m.RecordProcessedActivityMock.callArgs = []*StoragePortMockRecordProcessedActivityParams{}
 
 	m.RegisterIdentityCloneMock = mStoragePortMockRegisterIdentityClone{mock: m}
 	m.RegisterIdentityCloneMock.callArgs = []*StoragePortMockRegisterIdentityCloneParams{}
@@ -11544,6 +11554,349 @@ func (m *StoragePortMock) MinimockRecordActorInboxDeliveryInspect() {
 	}
 }
 
+type mStoragePortMockRecordProcessedActivity struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockRecordProcessedActivityExpectation
+	expectations       []*StoragePortMockRecordProcessedActivityExpectation
+
+	callArgs []*StoragePortMockRecordProcessedActivityParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockRecordProcessedActivityExpectation specifies expectation struct of the StoragePort.RecordProcessedActivity
+type StoragePortMockRecordProcessedActivityExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockRecordProcessedActivityParams
+	paramPtrs          *StoragePortMockRecordProcessedActivityParamPtrs
+	expectationOrigins StoragePortMockRecordProcessedActivityExpectationOrigins
+	results            *StoragePortMockRecordProcessedActivityResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockRecordProcessedActivityParams contains parameters of the StoragePort.RecordProcessedActivity
+type StoragePortMockRecordProcessedActivityParams struct {
+	ctx         context.Context
+	activityIRI string
+}
+
+// StoragePortMockRecordProcessedActivityParamPtrs contains pointers to parameters of the StoragePort.RecordProcessedActivity
+type StoragePortMockRecordProcessedActivityParamPtrs struct {
+	ctx         *context.Context
+	activityIRI *string
+}
+
+// StoragePortMockRecordProcessedActivityResults contains results of the StoragePort.RecordProcessedActivity
+type StoragePortMockRecordProcessedActivityResults struct {
+	b1  bool
+	err error
+}
+
+// StoragePortMockRecordProcessedActivityOrigins contains origins of expectations of the StoragePort.RecordProcessedActivity
+type StoragePortMockRecordProcessedActivityExpectationOrigins struct {
+	origin            string
+	originCtx         string
+	originActivityIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Optional() *mStoragePortMockRecordProcessedActivity {
+	mmRecordProcessedActivity.optional = true
+	return mmRecordProcessedActivity
+}
+
+// Expect sets up expected params for StoragePort.RecordProcessedActivity
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Expect(ctx context.Context, activityIRI string) *mStoragePortMockRecordProcessedActivity {
+	if mmRecordProcessedActivity.mock.funcRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Set")
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation == nil {
+		mmRecordProcessedActivity.defaultExpectation = &StoragePortMockRecordProcessedActivityExpectation{}
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation.paramPtrs != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by ExpectParams functions")
+	}
+
+	mmRecordProcessedActivity.defaultExpectation.params = &StoragePortMockRecordProcessedActivityParams{ctx, activityIRI}
+	mmRecordProcessedActivity.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRecordProcessedActivity.expectations {
+		if minimock.Equal(e.params, mmRecordProcessedActivity.defaultExpectation.params) {
+			mmRecordProcessedActivity.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRecordProcessedActivity.defaultExpectation.params)
+		}
+	}
+
+	return mmRecordProcessedActivity
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.RecordProcessedActivity
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) ExpectCtxParam1(ctx context.Context) *mStoragePortMockRecordProcessedActivity {
+	if mmRecordProcessedActivity.mock.funcRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Set")
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation == nil {
+		mmRecordProcessedActivity.defaultExpectation = &StoragePortMockRecordProcessedActivityExpectation{}
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation.params != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Expect")
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation.paramPtrs == nil {
+		mmRecordProcessedActivity.defaultExpectation.paramPtrs = &StoragePortMockRecordProcessedActivityParamPtrs{}
+	}
+	mmRecordProcessedActivity.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRecordProcessedActivity.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRecordProcessedActivity
+}
+
+// ExpectActivityIRIParam2 sets up expected param activityIRI for StoragePort.RecordProcessedActivity
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) ExpectActivityIRIParam2(activityIRI string) *mStoragePortMockRecordProcessedActivity {
+	if mmRecordProcessedActivity.mock.funcRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Set")
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation == nil {
+		mmRecordProcessedActivity.defaultExpectation = &StoragePortMockRecordProcessedActivityExpectation{}
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation.params != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Expect")
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation.paramPtrs == nil {
+		mmRecordProcessedActivity.defaultExpectation.paramPtrs = &StoragePortMockRecordProcessedActivityParamPtrs{}
+	}
+	mmRecordProcessedActivity.defaultExpectation.paramPtrs.activityIRI = &activityIRI
+	mmRecordProcessedActivity.defaultExpectation.expectationOrigins.originActivityIRI = minimock.CallerInfo(1)
+
+	return mmRecordProcessedActivity
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.RecordProcessedActivity
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Inspect(f func(ctx context.Context, activityIRI string)) *mStoragePortMockRecordProcessedActivity {
+	if mmRecordProcessedActivity.mock.inspectFuncRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("Inspect function is already set for StoragePortMock.RecordProcessedActivity")
+	}
+
+	mmRecordProcessedActivity.mock.inspectFuncRecordProcessedActivity = f
+
+	return mmRecordProcessedActivity
+}
+
+// Return sets up results that will be returned by StoragePort.RecordProcessedActivity
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Return(b1 bool, err error) *StoragePortMock {
+	if mmRecordProcessedActivity.mock.funcRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Set")
+	}
+
+	if mmRecordProcessedActivity.defaultExpectation == nil {
+		mmRecordProcessedActivity.defaultExpectation = &StoragePortMockRecordProcessedActivityExpectation{mock: mmRecordProcessedActivity.mock}
+	}
+	mmRecordProcessedActivity.defaultExpectation.results = &StoragePortMockRecordProcessedActivityResults{b1, err}
+	mmRecordProcessedActivity.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRecordProcessedActivity.mock
+}
+
+// Set uses given function f to mock the StoragePort.RecordProcessedActivity method
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Set(f func(ctx context.Context, activityIRI string) (b1 bool, err error)) *StoragePortMock {
+	if mmRecordProcessedActivity.defaultExpectation != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("Default expectation is already set for the StoragePort.RecordProcessedActivity method")
+	}
+
+	if len(mmRecordProcessedActivity.expectations) > 0 {
+		mmRecordProcessedActivity.mock.t.Fatalf("Some expectations are already set for the StoragePort.RecordProcessedActivity method")
+	}
+
+	mmRecordProcessedActivity.mock.funcRecordProcessedActivity = f
+	mmRecordProcessedActivity.mock.funcRecordProcessedActivityOrigin = minimock.CallerInfo(1)
+	return mmRecordProcessedActivity.mock
+}
+
+// When sets expectation for the StoragePort.RecordProcessedActivity which will trigger the result defined by the following
+// Then helper
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) When(ctx context.Context, activityIRI string) *StoragePortMockRecordProcessedActivityExpectation {
+	if mmRecordProcessedActivity.mock.funcRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.mock.t.Fatalf("StoragePortMock.RecordProcessedActivity mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockRecordProcessedActivityExpectation{
+		mock:               mmRecordProcessedActivity.mock,
+		params:             &StoragePortMockRecordProcessedActivityParams{ctx, activityIRI},
+		expectationOrigins: StoragePortMockRecordProcessedActivityExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRecordProcessedActivity.expectations = append(mmRecordProcessedActivity.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.RecordProcessedActivity return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockRecordProcessedActivityExpectation) Then(b1 bool, err error) *StoragePortMock {
+	e.results = &StoragePortMockRecordProcessedActivityResults{b1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.RecordProcessedActivity should be invoked
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Times(n uint64) *mStoragePortMockRecordProcessedActivity {
+	if n == 0 {
+		mmRecordProcessedActivity.mock.t.Fatalf("Times of StoragePortMock.RecordProcessedActivity mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRecordProcessedActivity.expectedInvocations, n)
+	mmRecordProcessedActivity.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRecordProcessedActivity
+}
+
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) invocationsDone() bool {
+	if len(mmRecordProcessedActivity.expectations) == 0 && mmRecordProcessedActivity.defaultExpectation == nil && mmRecordProcessedActivity.mock.funcRecordProcessedActivity == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRecordProcessedActivity.mock.afterRecordProcessedActivityCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRecordProcessedActivity.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RecordProcessedActivity implements mm_port.StoragePort
+func (mmRecordProcessedActivity *StoragePortMock) RecordProcessedActivity(ctx context.Context, activityIRI string) (b1 bool, err error) {
+	mm_atomic.AddUint64(&mmRecordProcessedActivity.beforeRecordProcessedActivityCounter, 1)
+	defer mm_atomic.AddUint64(&mmRecordProcessedActivity.afterRecordProcessedActivityCounter, 1)
+
+	mmRecordProcessedActivity.t.Helper()
+
+	if mmRecordProcessedActivity.inspectFuncRecordProcessedActivity != nil {
+		mmRecordProcessedActivity.inspectFuncRecordProcessedActivity(ctx, activityIRI)
+	}
+
+	mm_params := StoragePortMockRecordProcessedActivityParams{ctx, activityIRI}
+
+	// Record call args
+	mmRecordProcessedActivity.RecordProcessedActivityMock.mutex.Lock()
+	mmRecordProcessedActivity.RecordProcessedActivityMock.callArgs = append(mmRecordProcessedActivity.RecordProcessedActivityMock.callArgs, &mm_params)
+	mmRecordProcessedActivity.RecordProcessedActivityMock.mutex.Unlock()
+
+	for _, e := range mmRecordProcessedActivity.RecordProcessedActivityMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.b1, e.results.err
+		}
+	}
+
+	if mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.Counter, 1)
+		mm_want := mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.params
+		mm_want_ptrs := mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockRecordProcessedActivityParams{ctx, activityIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRecordProcessedActivity.t.Errorf("StoragePortMock.RecordProcessedActivity got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.activityIRI != nil && !minimock.Equal(*mm_want_ptrs.activityIRI, mm_got.activityIRI) {
+				mmRecordProcessedActivity.t.Errorf("StoragePortMock.RecordProcessedActivity got unexpected parameter activityIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.expectationOrigins.originActivityIRI, *mm_want_ptrs.activityIRI, mm_got.activityIRI, minimock.Diff(*mm_want_ptrs.activityIRI, mm_got.activityIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRecordProcessedActivity.t.Errorf("StoragePortMock.RecordProcessedActivity got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRecordProcessedActivity.RecordProcessedActivityMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRecordProcessedActivity.t.Fatal("No results are set for the StoragePortMock.RecordProcessedActivity")
+		}
+		return (*mm_results).b1, (*mm_results).err
+	}
+	if mmRecordProcessedActivity.funcRecordProcessedActivity != nil {
+		return mmRecordProcessedActivity.funcRecordProcessedActivity(ctx, activityIRI)
+	}
+	mmRecordProcessedActivity.t.Fatalf("Unexpected call to StoragePortMock.RecordProcessedActivity. %v %v", ctx, activityIRI)
+	return
+}
+
+// RecordProcessedActivityAfterCounter returns a count of finished StoragePortMock.RecordProcessedActivity invocations
+func (mmRecordProcessedActivity *StoragePortMock) RecordProcessedActivityAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRecordProcessedActivity.afterRecordProcessedActivityCounter)
+}
+
+// RecordProcessedActivityBeforeCounter returns a count of StoragePortMock.RecordProcessedActivity invocations
+func (mmRecordProcessedActivity *StoragePortMock) RecordProcessedActivityBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRecordProcessedActivity.beforeRecordProcessedActivityCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.RecordProcessedActivity.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRecordProcessedActivity *mStoragePortMockRecordProcessedActivity) Calls() []*StoragePortMockRecordProcessedActivityParams {
+	mmRecordProcessedActivity.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockRecordProcessedActivityParams, len(mmRecordProcessedActivity.callArgs))
+	copy(argCopy, mmRecordProcessedActivity.callArgs)
+
+	mmRecordProcessedActivity.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRecordProcessedActivityDone returns true if the count of the RecordProcessedActivity invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockRecordProcessedActivityDone() bool {
+	if m.RecordProcessedActivityMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RecordProcessedActivityMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RecordProcessedActivityMock.invocationsDone()
+}
+
+// MinimockRecordProcessedActivityInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockRecordProcessedActivityInspect() {
+	for _, e := range m.RecordProcessedActivityMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.RecordProcessedActivity at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRecordProcessedActivityCounter := mm_atomic.LoadUint64(&m.afterRecordProcessedActivityCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RecordProcessedActivityMock.defaultExpectation != nil && afterRecordProcessedActivityCounter < 1 {
+		if m.RecordProcessedActivityMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.RecordProcessedActivity at\n%s", m.RecordProcessedActivityMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.RecordProcessedActivity at\n%s with params: %#v", m.RecordProcessedActivityMock.defaultExpectation.expectationOrigins.origin, *m.RecordProcessedActivityMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRecordProcessedActivity != nil && afterRecordProcessedActivityCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.RecordProcessedActivity at\n%s", m.funcRecordProcessedActivityOrigin)
+	}
+
+	if !m.RecordProcessedActivityMock.invocationsDone() && afterRecordProcessedActivityCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.RecordProcessedActivity at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RecordProcessedActivityMock.expectedInvocations), m.RecordProcessedActivityMock.expectedInvocationsOrigin, afterRecordProcessedActivityCounter)
+	}
+}
+
 type mStoragePortMockRegisterIdentityClone struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -14875,6 +15228,8 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockRecordActorInboxDeliveryInspect()
 
+			m.MinimockRecordProcessedActivityInspect()
+
 			m.MinimockRegisterIdentityCloneInspect()
 
 			m.MinimockRemoveMediaRecordInspect()
@@ -14945,6 +15300,7 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockMarkOutboundCompleteDone() &&
 		m.MinimockMarkOutboundFailedDone() &&
 		m.MinimockRecordActorInboxDeliveryDone() &&
+		m.MinimockRecordProcessedActivityDone() &&
 		m.MinimockRegisterIdentityCloneDone() &&
 		m.MinimockRemoveMediaRecordDone() &&
 		m.MinimockRemoveQuadEdgeDone() &&

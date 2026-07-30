@@ -64,3 +64,7 @@ WHERE id = $1;
 UPDATE outbound_activity_queue
 SET status = 'failed', error_message = $2, next_run_at = $3, updated_at = NOW()
 WHERE id = $1;
+
+-- name: RecordProcessedActivity :exec
+INSERT INTO processed_activities (activity_iri)
+VALUES ($1);

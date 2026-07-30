@@ -151,6 +151,11 @@ type OutboundActivityQueue struct {
 	ErrorMessage *string            `json:"error_message"`
 }
 
+type ProcessedActivity struct {
+	ActivityIri string             `json:"activity_iri"`
+	ProcessedAt pgtype.Timestamptz `json:"processed_at"`
+}
+
 type RdfDictionary struct {
 	ID    int64  `json:"id"`
 	Value string `json:"value"`
