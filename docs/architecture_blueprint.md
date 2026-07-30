@@ -212,6 +212,14 @@ To mitigate this spec hazard, the `ActivityService` implements an explicit **Obj
 
 Although the multi-tenant isolation relies on an SQL view (`rdf_statements`) that parses domains on the fly from subject URIs, this model preserves optimal constant-time performance. Because the query engine filters on `subject = $1` first using the highly selective Unique Index (`idx_dict_value`) on `rdf_dictionary.value`, the regex-based domain extraction is only executed lazily on the single resolved row—never performing full sequential database scans.
 
+### 4.4 Strict Validation on Inbound Object Creations (Create Verb)
+
+To prevent spoofing and identity hijacking, the system enforces strict programmatic validation rules on any inbound `Create` activities:
+
+1. **Domain-Origin Integrity Check**: The system extracts the host domain names from both the requesting actor's IRI and the created object's IRI. If the domains do not match (e.g., a remote actor attempting to declare an object under our local domain), the request is rejected immediately with a security violation.
+2. **Path-Agnostic Actor Creation Guard**: If the payload attempts to create an Actor profile (such as `Person`, `Service`, `Group`, `Organization`, or `Application`), the system dynamically parses the object type from the JSON-LD structure itself without relying on hardcoded URL path conventions.
+3. **Strict Self-Creation Enforcement**: For any Actor creation, the system enforces that the requesting actor's IRI must be exactly identical to the created actor's profile ID. This completely prevents any valid user from spoofing or creating "ghost" profiles of other users (both locally and remotely), restricting profile creation exclusively to self-authored/self-signed identities.
+
 ## 5. Multi-Tenancy and Resource Schema Boundaries
 
 ### 5.1 Implicit Multi-Tenant Graph Partitioning
