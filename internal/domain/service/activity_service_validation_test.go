@@ -55,8 +55,8 @@ func TestProcessInboundTask_AcceptReject_Success(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/act/follow-1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:actor", Object: "https://remote.com/actor/alice"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:object", Object: "https://remote.com/actor/bob"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateActor, Object: "https://remote.com/actor/alice"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateObject, Object: "https://remote.com/actor/bob"},
 			}, nil
 		}
 		return nil, nil
@@ -93,8 +93,8 @@ func TestProcessInboundTask_AcceptReject_Mismatch(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/act/follow-1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:actor", Object: "https://remote.com/actor/alice"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:object", Object: "https://remote.com/actor/bob"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateActor, Object: "https://remote.com/actor/alice"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateObject, Object: "https://remote.com/actor/bob"},
 			}, nil
 		}
 		return nil, nil
@@ -131,9 +131,9 @@ func TestProcessInboundTask_AcceptReject_NotPending(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/act/follow-1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:actor", Object: "https://remote.com/actor/alice"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:object", Object: "https://remote.com/actor/bob"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:accepted", Object: "true"}, // Already accepted state!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateActor, Object: "https://remote.com/actor/alice"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateObject, Object: "https://remote.com/actor/bob"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateAccepted, Object: "true"}, // Already accepted state!
 			}, nil
 		}
 		return nil, nil
@@ -170,8 +170,8 @@ func TestProcessInboundTask_Like_PrivateClearanceFail(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/note/private-1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:attributedTo", Object: "https://remote.com/actor/alice"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "activitystreams#to", Object: "https://remote.com/actor/bob"}, // Not mallory!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateAttributedTo, Object: "https://remote.com/actor/alice"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateTo, Object: "https://remote.com/actor/bob"}, // Not mallory!
 			}, nil
 		}
 		return nil, nil
@@ -204,13 +204,13 @@ func TestProcessInboundTask_Like_Duplicate(t *testing.T) {
 		if subjectIRI == "https://remote.com/actor/bob" {
 			return []model.Quad{
 				{GraphID: 1, Subject: subjectIRI, Predicate: model.PredicatePublicKeyPem, Object: "mock-pubkey"},
-				{GraphID: 1, Subject: subjectIRI, Predicate: "as:liked", Object: "https://remote.com/note/1"}, // Already liked!
+				{GraphID: 1, Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#liked", Object: "https://remote.com/note/1"}, // Already liked!
 			}, nil
 		}
 		if subjectIRI == "https://remote.com/note/1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:attributedTo", Object: "https://remote.com/actor/alice"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "activitystreams#to", Object: "https://www.w3.org/ns/activitystreams#Public"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateAttributedTo, Object: "https://remote.com/actor/alice"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateTo, Object: "https://www.w3.org/ns/activitystreams#Public"},
 			}, nil
 		}
 		return nil, nil
@@ -247,8 +247,8 @@ func TestProcessInboundTask_Announce_PrivateFail(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/note/private-1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:attributedTo", Object: "https://remote.com/actor/alice"},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "activitystreams#to", Object: "https://remote.com/actor/bob"}, // Limited audience!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateAttributedTo, Object: "https://remote.com/actor/alice"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateTo, Object: "https://remote.com/actor/bob"}, // Limited audience!
 			}, nil
 		}
 		return nil, nil
@@ -374,7 +374,7 @@ func TestProcessInboundTask_JoinLeave_GroupSuccess(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/groups/tech" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "rdf:type", Object: "as:Group"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.RDFType, Object: "as:Group"},
 			}, nil
 		}
 		return nil, nil
@@ -411,7 +411,7 @@ func TestProcessInboundTask_JoinLeave_NotGroupFail(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/note/1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "rdf:type", Object: "as:Note"}, // Note, not Group!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.RDFType, Object: "as:Note"}, // Note, not Group!
 			}, nil
 		}
 		return nil, nil
@@ -449,7 +449,7 @@ func TestProcessInboundTask_Question_Expired(t *testing.T) {
 		if subjectIRI == "https://remote.com/poll/1" {
 			pastTime := time.Now().Add(-1 * time.Hour).UTC().Format(time.RFC3339)
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:endTime", Object: pastTime},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateEndTime, Object: pastTime},
 			}, nil
 		}
 		return nil, nil
@@ -487,8 +487,8 @@ func TestProcessInboundTask_Question_DoubleVote(t *testing.T) {
 		if subjectIRI == "https://remote.com/poll/1" {
 			futureTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339)
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:endTime", Object: futureTime},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:voted", Object: "https://remote.com/actor/alice"}, // Already voted!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateEndTime, Object: futureTime},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateVoted, Object: "https://remote.com/actor/alice"}, // Already voted!
 			}, nil
 		}
 		return nil, nil
@@ -533,8 +533,8 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 		if subjectIRI == "https://remote.com/poll/1" {
 			futureTime := time.Now().Add(1 * time.Hour).UTC().Format(time.RFC3339)
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:endTime", Object: futureTime},
-				{GraphID: 2, Subject: subjectIRI, Predicate: "as:voted", Object: "https://remote.com/actor/alice"}, // Already voted!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateEndTime, Object: futureTime},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateVoted, Object: "https://remote.com/actor/alice"}, // Already voted!
 			}, nil
 		}
 		return nil, nil

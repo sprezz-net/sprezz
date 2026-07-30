@@ -78,11 +78,23 @@ const (
 	TypeTombstone = NamespaceActivityStreams + ShortTombstone
 
 	// Vocabulary predicates
-	PredicateInbox       = NamespaceActivityStreams + "inbox"
-	PredicateSharedInbox = NamespaceActivityStreams + "sharedInbox"
-	PredicateFollower    = NamespaceActivityStreams + "follower"
-	PredicateAccepted    = NamespaceActivityStreams + "accepted"
-	PredicateRejected    = NamespaceActivityStreams + "rejected"
+	PredicateInbox        = NamespaceActivityStreams + "inbox"
+	PredicateSharedInbox  = NamespaceActivityStreams + "sharedInbox"
+	PredicateFollower     = NamespaceActivityStreams + "follower"
+	PredicateAccepted     = NamespaceActivityStreams + "accepted"
+	PredicateRejected     = NamespaceActivityStreams + "rejected"
+	PredicateActor        = NamespaceActivityStreams + "actor"
+	PredicateAttributedTo = NamespaceActivityStreams + "attributedTo"
+	PredicateObject       = NamespaceActivityStreams + "object"
+	PredicateResult       = NamespaceActivityStreams + "result"
+	PredicateTo           = NamespaceActivityStreams + "to"
+	PredicateCc           = NamespaceActivityStreams + "cc"
+	PredicateBto          = NamespaceActivityStreams + "bto"
+	PredicateBcc          = NamespaceActivityStreams + "bcc"
+	PredicateAudience     = NamespaceActivityStreams + "audience"
+	PredicateFollowers    = NamespaceActivityStreams + "followers"
+	PredicateEndTime      = NamespaceActivityStreams + "endTime"
+	PredicateVoted        = NamespaceActivityStreams + "voted"
 
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"

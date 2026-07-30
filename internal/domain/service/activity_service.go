@@ -91,11 +91,10 @@ func (s *ActivityService) resolveActorInbox(ctx context.Context, actorIRI string
 	var sharedInbox string
 
 	for _, q := range quads {
-		pred := strings.ToLower(q.Predicate)
-		if strings.Contains(pred, "sharedinbox") {
+		if q.Predicate == model.PredicateSharedInbox {
 			sharedInbox = strings.Trim(q.Object, `"'`)
 		}
-		if strings.Contains(pred, "inbox") && !strings.Contains(pred, "sharedinbox") {
+		if q.Predicate == model.PredicateInbox {
 			resolvedInbox = strings.Trim(q.Object, `"'`)
 		}
 	}
@@ -139,24 +138,23 @@ type ThreadSafePredicateMap struct {
 func NewThreadSafePredicateMap(quads []model.Quad) *ThreadSafePredicateMap {
 	m := make(map[string][]string)
 	for _, q := range quads {
-		pred := strings.ToLower(q.Predicate)
-		m[pred] = append(m[pred], q.Object)
+		m[q.Predicate] = append(m[q.Predicate], q.Object)
 	}
 	return &ThreadSafePredicateMap{m: m}
 }
 
-// Get retrieves all objects matching a given predicate (casing normalized).
+// Get retrieves all objects matching a given predicate.
 func (t *ThreadSafePredicateMap) Get(predicate string) []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	return t.m[strings.ToLower(predicate)]
+	return t.m[predicate]
 }
 
 // HasKey checks if the given predicate exists.
 func (t *ThreadSafePredicateMap) HasKey(predicate string) bool {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	_, ok := t.m[strings.ToLower(predicate)]
+	_, ok := t.m[predicate]
 	return ok
 }
 
@@ -185,42 +183,40 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 		return nil
 	}
 
-	actType := strings.ToLower(activity.Type)
-
-	if actType == "undo" || actType == "delete" || actType == "update" {
-		if err := s.validateMutatingVerb(ctx, activityIRI, actorIRI, actType, activity.Object); err != nil {
+	if activity.Type == model.ShortUndo || activity.Type == model.ShortDelete || activity.Type == model.ShortUpdate {
+		if err := s.validateMutatingVerb(ctx, activityIRI, actorIRI, activity.Type, activity.Object); err != nil {
 			return err
 		}
 	}
 
 	// C. Core Interactions
-	switch actType {
-	case "create":
+	switch activity.Type {
+	case model.ShortCreate:
 		if err := s.validateCreateVerb(actorIRI, activity.Object); err != nil {
 			return err
 		}
-	case "accept", "reject":
+	case model.ShortAccept, model.ShortReject:
 		if err := s.validateAcceptRejectVerb(ctx, actorIRI, activity.Type, activity.Object); err != nil {
 			return err
 		}
-	case "add", "remove":
+	case model.ShortAdd, model.ShortRemove:
 		if err := s.validateAddRemoveVerb(ctx, actorIRI, activity.Target, activity.Object); err != nil {
 			return err
 		}
-	case "like", "dislike":
-		if err := s.validateLikeDislikeVerb(ctx, actorIRI, actType, activity.Object); err != nil {
+	case model.ShortLike, model.ShortDislike:
+		if err := s.validateLikeDislikeVerb(ctx, actorIRI, activity.Type, activity.Object); err != nil {
 			return err
 		}
-	case "announce":
+	case model.ShortAnnounce:
 		if err := s.validateAnnounceVerb(ctx, activity.Object); err != nil {
 			return err
 		}
-	case "join", "leave":
+	case model.ShortJoin, model.ShortLeave:
 		if err := s.validateJoinLeaveVerb(ctx, activity.Object); err != nil {
 			return err
 		}
-	case "question":
-		if err := s.validateQuestionVerb(ctx, actorIRI, actType, activity.Object); err != nil {
+	case model.ShortQuestion:
+		if err := s.validateQuestionVerb(ctx, actorIRI, activity.Type, activity.Object); err != nil {
 			return err
 		}
 	}
@@ -274,7 +270,7 @@ func (s *ActivityService) validateMutatingVerb(ctx context.Context, activityIRI,
 	var originalActor string
 	targetMap.mu.RLock()
 	for pred, objects := range targetMap.m {
-		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
 				originalActor = strings.Trim(objects[0], `"'`)
 				break
@@ -320,17 +316,17 @@ func (s *ActivityService) validateAcceptRejectVerb(ctx context.Context, actorIRI
 	hasState := false
 	targetMap.mu.RLock()
 	for pred, objects := range targetMap.m {
-		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
 				originalActor = strings.Trim(objects[0], `"'`)
 			}
 		}
-		if strings.Contains(pred, "object") {
+		if pred == model.PredicateObject {
 			if len(objects) > 0 {
 				originalTarget = strings.Trim(objects[0], `"'`)
 			}
 		}
-		if strings.Contains(pred, "accepted") || strings.Contains(pred, "rejected") || strings.Contains(pred, "result") {
+		if pred == model.PredicateAccepted || pred == model.PredicateRejected || pred == model.PredicateResult {
 			hasState = true
 		}
 	}
@@ -358,7 +354,7 @@ func (s *ActivityService) validateAddRemoveVerb(ctx context.Context, actorIRI st
 			var ownerActor string
 			colMap.mu.RLock()
 			for pred, objects := range colMap.m {
-				if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+				if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 					if len(objects) > 0 {
 						ownerActor = strings.Trim(objects[0], `"'`)
 						break
@@ -400,7 +396,7 @@ func (s *ActivityService) validateLikeDislikeVerb(ctx context.Context, actorIRI,
 		}
 	}
 
-	if actType == "like" {
+	if actType == model.ShortLike {
 		actorQuads, _ := s.storage.StreamQuadsBySubject(ctx, actorIRI)
 		actorMap := NewThreadSafePredicateMap(actorQuads)
 		actorMap.mu.RLock()
@@ -433,7 +429,7 @@ func (s *ActivityService) extractVisibilityAndActor(targetMap *ThreadSafePredica
 	targetMap.mu.RLock()
 	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
-		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
 				originalActor = strings.Trim(objects[0], `"'`)
 			}
@@ -441,7 +437,7 @@ func (s *ActivityService) extractVisibilityAndActor(targetMap *ThreadSafePredica
 		if isAddressingPredicate(pred) {
 			for _, obj := range objects {
 				cleanObject := strings.Trim(obj, `"'`)
-				if strings.Contains(cleanObject, "Public") {
+				if cleanObject == model.PublicAudience {
 					isPublic = true
 				} else {
 					recipients = append(recipients, cleanObject)
@@ -512,7 +508,7 @@ func (s *ActivityService) isCachedObjectPublic(targetMap *ThreadSafePredicateMap
 	for pred, objects := range targetMap.m {
 		if isAddressingPredicate(pred) {
 			for _, obj := range objects {
-				if strings.Contains(strings.Trim(obj, `"'`), "Public") {
+				if strings.Trim(obj, `"'`) == model.PublicAudience {
 					isPublic = true
 					break
 				}
@@ -538,7 +534,7 @@ func (s *ActivityService) validateJoinLeaveVerb(ctx context.Context, object inte
 	isGroupOrCollection := false
 	targetMap.mu.RLock()
 	for pred, objects := range targetMap.m {
-		if strings.Contains(pred, "type") {
+		if pred == model.RDFType {
 			for _, obj := range objects {
 				if model.IsGroupOrCollection(obj) {
 					isGroupOrCollection = true
@@ -572,7 +568,7 @@ func (s *ActivityService) validateQuestionVerb(ctx context.Context, actorIRI, ac
 		return err
 	}
 
-	if actType != "update" {
+	if actType != model.ShortUpdate {
 		if err := s.checkDoubleVote(targetMap, actorIRI, targetIRI); err != nil {
 			return err
 		}
@@ -584,7 +580,7 @@ func (s *ActivityService) checkQuestionExpiration(targetMap *ThreadSafePredicate
 	targetMap.mu.RLock()
 	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
-		if strings.Contains(pred, "endtime") {
+		if pred == model.PredicateEndTime {
 			for _, obj := range objects {
 				endTimeStr := strings.Trim(obj, `"'`)
 				if endTime, err := time.Parse(time.RFC3339, endTimeStr); err == nil {
@@ -602,7 +598,7 @@ func (s *ActivityService) checkDoubleVote(targetMap *ThreadSafePredicateMap, act
 	hasVoted := false
 	targetMap.mu.RLock()
 	for pred, objects := range targetMap.m {
-		if strings.Contains(pred, "voted") {
+		if pred == model.PredicateVoted {
 			for _, obj := range objects {
 				if strings.Trim(obj, `"'`) == actorIRI {
 					hasVoted = true
@@ -629,10 +625,9 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		Object interface{} `json:"object"`
 	}
 	_ = json.Unmarshal(task.Payload, &activity)
-	actType := strings.ToLower(activity.Type)
 
 	// A. Check for idempotent delete redundant actions
-	isIdempotent, err := s.handleIdempotentDelete(ctx, actType, activity.Object)
+	isIdempotent, err := s.handleIdempotentDelete(ctx, activity.Type, activity.Object)
 	if err != nil {
 		return err
 	}
@@ -649,7 +644,7 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	}
 
 	// C. Process actual delete side-effect and tombstone creation/saving
-	if actType == strings.ToLower(model.ShortDelete) {
+	if activity.Type == model.ShortDelete {
 		return s.processDeleteActivity(ctx, task, activity.Object)
 	}
 
@@ -670,7 +665,7 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 
 // handleIdempotentDelete detects if a delete action is a duplicate attempt on a tombstone.
 func (s *ActivityService) handleIdempotentDelete(ctx context.Context, actType string, object interface{}) (bool, error) {
-	if actType != "delete" {
+	if actType != model.ShortDelete {
 		return false, nil
 	}
 	targetIRI := parseStringOrID(object)
@@ -1071,9 +1066,7 @@ func (s *ActivityService) GetFollowersTimeline(ctx context.Context, actorIRI str
 
 	followers := make([]string, 0)
 	for _, q := range quads {
-		// Using strings.Contains to catch any W3C protocol layout
-		// variations variation dynamically (handles both http/https and singular/plural specs).
-		if strings.Contains(q.Predicate, "activitystreams#follower") || strings.Contains(q.Predicate, "activitystreams#followers") {
+		if q.Predicate == model.PredicateFollower || q.Predicate == model.PredicateFollowers {
 			followers = append(followers, q.Object)
 		}
 	}
@@ -1145,15 +1138,11 @@ func (s *ActivityService) isGraphAuthorized(graphID int64, readerActorIRI string
 
 // isAddressingPredicate isolates the specific W3C target addressing field checks.
 func isAddressingPredicate(predicate string) bool {
-	// Standardized on lowercase containment substrings to match absolute URLs
-	// featuring both hash fragments or folder path separators emitted by the parser engine.
-	addressingTerms := []string{"activitystreams#to", "activitystreams#cc", "activitystreams#bto", "activitystreams#bcc", "activitystreams#audience"}
-	for _, term := range addressingTerms {
-		if strings.Contains(strings.ToLower(predicate), term) {
-			return true
-		}
-	}
-	return false
+	return predicate == model.PredicateTo ||
+		predicate == model.PredicateCc ||
+		predicate == model.PredicateBto ||
+		predicate == model.PredicateBcc ||
+		predicate == model.PredicateAudience
 }
 
 // GetCollectionTimeline retrieves an actor's collection (e.g. "inbox" or "outbox"),

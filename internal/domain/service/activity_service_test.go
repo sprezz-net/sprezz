@@ -278,12 +278,12 @@ func TestActivityService_GetCollectionTimeline_PrivacyScoping(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockParser.ToQuadsMock.Set(func(ctx context.Context, graphID int64, mainObjectIRI string, rawJSON []byte) ([]model.Quad, error) {
 		if string(rawJSON) == string(publicPayload) {
-			return []model.Quad{{GraphID: graphID, Subject: "act/1", Predicate: "activitystreams#to", Object: "https://www.w3.org/ns/activitystreams#Public", ObjType: model.NamedNode}}, nil
+			return []model.Quad{{GraphID: graphID, Subject: "act/1", Predicate: model.PredicateTo, Object: "https://www.w3.org/ns/activitystreams#Public", ObjType: model.NamedNode}}, nil
 		}
 		if string(rawJSON) == string(privatePayload) {
-			return []model.Quad{{GraphID: graphID, Subject: "act/2", Predicate: "activitystreams#to", Object: readerBob, ObjType: model.NamedNode}}, nil
+			return []model.Quad{{GraphID: graphID, Subject: "act/2", Predicate: model.PredicateTo, Object: readerBob, ObjType: model.NamedNode}}, nil
 		}
-		return []model.Quad{{GraphID: graphID, Subject: "act/3", Predicate: "activitystreams#to", Object: "https://remote.com", ObjType: model.NamedNode}}, nil
+		return []model.Quad{{GraphID: graphID, Subject: "act/3", Predicate: model.PredicateTo, Object: "https://remote.com", ObjType: model.NamedNode}}, nil
 	})
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
@@ -469,24 +469,24 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
 		if subjectIRI == "https://remote.com" {
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateSharedInbox, Object: "https://remote.com/inbox"},
 			}, nil
 		}
 		if subjectIRI == "https://remote.com/actor/bob" {
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
-				{Subject: subjectIRI, Predicate: "activitystreams#inbox", Object: "https://remote.com/actor/bob/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateSharedInbox, Object: "https://remote.com/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/bob/inbox"},
 			}, nil
 		}
 		if subjectIRI == "https://remote.com/actor/charlie" {
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "activitystreams#sharedInbox", Object: "https://remote.com/inbox"},
-				{Subject: subjectIRI, Predicate: "activitystreams#inbox", Object: "https://remote.com/actor/charlie/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateSharedInbox, Object: "https://remote.com/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/charlie/inbox"},
 			}, nil
 		}
 		if subjectIRI == "https://other.com/actor/dan" {
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "activitystreams#inbox", Object: "https://other.com/actor/dan/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateInbox, Object: "https://other.com/actor/dan/inbox"},
 			}, nil
 		}
 		return nil, errors.New("not found")
@@ -678,18 +678,18 @@ func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 		if subjectIRI == "https://cached-relationship.com" {
 			// Cached shared inbox indicates relationship
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox", Object: "https://cached-relationship.com/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateSharedInbox, Object: "https://cached-relationship.com/inbox"},
 			}, nil
 		}
 		if subjectIRI == "https://local.com/actor/alice" {
 			// Alice has a follower on followers-relationship.com
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#follower", Object: "https://followers-relationship.com/actor/bob"},
+				{Subject: subjectIRI, Predicate: model.PredicateFollower, Object: "https://followers-relationship.com/actor/bob"},
 			}, nil
 		}
 		if subjectIRI == "https://followers-relationship.com/actor/charlie" {
 			return []model.Quad{
-				{Subject: subjectIRI, Predicate: "https://www.w3.org/ns/activitystreams#inbox", Object: "https://followers-relationship.com/actor/charlie/inbox"},
+				{Subject: subjectIRI, Predicate: model.PredicateInbox, Object: "https://followers-relationship.com/actor/charlie/inbox"},
 			}, nil
 		}
 		return nil, errors.New("not found")
