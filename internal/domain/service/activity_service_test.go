@@ -639,6 +639,27 @@ func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
 	}
 }
 
+func setupStreamQuadsMockForInboxForwarding(mockStorage *portmock.StoragePortMock) {
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		if subjectIRI == "https://cached-relationship.com" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: model.PredicateSharedInbox, Object: "https://cached-relationship.com/inbox"},
+			}, nil
+		}
+		if subjectIRI == "https://local.com/actor/alice" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: model.PredicateFollower, Object: "https://followers-relationship.com/actor/bob"},
+			}, nil
+		}
+		if subjectIRI == "https://followers-relationship.com/actor/charlie" {
+			return []model.Quad{
+				{Subject: subjectIRI, Predicate: model.PredicateInbox, Object: "https://followers-relationship.com/actor/charlie/inbox"},
+			}, nil
+		}
+		return nil, errors.New("not found")
+	})
+}
+
 func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 	ctx := context.Background()
 	mc := minimock.NewController(t)
@@ -673,27 +694,7 @@ func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 		return false, nil
 	})
 
-	// Setup stream quads mock
-	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
-		if subjectIRI == "https://cached-relationship.com" {
-			// Cached shared inbox indicates relationship
-			return []model.Quad{
-				{Subject: subjectIRI, Predicate: model.PredicateSharedInbox, Object: "https://cached-relationship.com/inbox"},
-			}, nil
-		}
-		if subjectIRI == "https://local.com/actor/alice" {
-			// Alice has a follower on followers-relationship.com
-			return []model.Quad{
-				{Subject: subjectIRI, Predicate: model.PredicateFollower, Object: "https://followers-relationship.com/actor/bob"},
-			}, nil
-		}
-		if subjectIRI == "https://followers-relationship.com/actor/charlie" {
-			return []model.Quad{
-				{Subject: subjectIRI, Predicate: model.PredicateInbox, Object: "https://followers-relationship.com/actor/charlie/inbox"},
-			}, nil
-		}
-		return nil, errors.New("not found")
-	})
+	setupStreamQuadsMockForInboxForwarding(mockStorage)
 
 	mockStorage.CreateGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte) (int64, error) {
 		return 1, nil
