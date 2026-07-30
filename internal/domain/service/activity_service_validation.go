@@ -72,8 +72,6 @@ func (s *ActivityService) resolveTenantID(ctx context.Context, activityIRI strin
 }
 
 func (s *ActivityService) getOriginalActor(targetMap *ThreadSafePredicateMap) string {
-	targetMap.mu.RLock()
-	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
 		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
@@ -132,8 +130,6 @@ func (s *ActivityService) validateCreateVerb(actorIRI string, object interface{}
 func (s *ActivityService) extractFollowState(targetMap *ThreadSafePredicateMap) (string, string, bool) {
 	var originalTarget, originalActor string
 	hasState := false
-	targetMap.mu.RLock()
-	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
 		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
@@ -184,8 +180,6 @@ func (s *ActivityService) getCollectionOwner(ctx context.Context, collectionIRI 
 		return "", nil
 	}
 	colMap := NewThreadSafePredicateMap(colQuads)
-	colMap.mu.RLock()
-	defer colMap.mu.RUnlock()
 	for pred, objects := range colMap.m {
 		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
@@ -225,8 +219,6 @@ func (s *ActivityService) verifyLikePrivacy(actorIRI, targetIRI string, isPublic
 func (s *ActivityService) verifyDuplicateLike(ctx context.Context, actorIRI, targetIRI string) error {
 	actorQuads, _ := s.storage.StreamQuadsBySubject(ctx, actorIRI)
 	actorMap := NewThreadSafePredicateMap(actorQuads)
-	actorMap.mu.RLock()
-	defer actorMap.mu.RUnlock()
 	for pred, objects := range actorMap.m {
 		if pred == model.PredicateLiked {
 			for _, obj := range objects {
@@ -281,8 +273,6 @@ func (s *ActivityService) extractVisibilityAndActor(targetMap *ThreadSafePredica
 	isPublic := false
 	var originalActor string
 	var recipients []string
-	targetMap.mu.RLock()
-	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
 		if pred == model.PredicateActor || pred == model.PredicateAttributedTo {
 			if len(objects) > 0 {
@@ -351,8 +341,6 @@ func (s *ActivityService) isRemoteObjectPublic(fetchedBody []byte) bool {
 
 func (s *ActivityService) isCachedObjectPublic(targetMap *ThreadSafePredicateMap) bool {
 	isPublic := false
-	targetMap.mu.RLock()
-	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
 		if isAddressingPredicate(pred) {
 			for _, obj := range objects {
@@ -370,8 +358,6 @@ func (s *ActivityService) isCachedObjectPublic(targetMap *ThreadSafePredicateMap
 }
 
 func (s *ActivityService) hasGroupOrCollectionType(targetMap *ThreadSafePredicateMap) bool {
-	targetMap.mu.RLock()
-	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
 		if pred == model.RDFType {
 			for _, obj := range objects {
@@ -424,8 +410,6 @@ func (s *ActivityService) validateQuestionVerb(ctx context.Context, actorIRI, ac
 }
 
 func (s *ActivityService) checkQuestionExpiration(targetMap *ThreadSafePredicateMap, targetIRI string) error {
-	targetMap.mu.RLock()
-	defer targetMap.mu.RUnlock()
 	for pred, objects := range targetMap.m {
 		if pred == model.PredicateEndTime {
 			for _, obj := range objects {
@@ -443,7 +427,6 @@ func (s *ActivityService) checkQuestionExpiration(targetMap *ThreadSafePredicate
 
 func (s *ActivityService) checkDoubleVote(targetMap *ThreadSafePredicateMap, actorIRI, targetIRI string) error {
 	hasVoted := false
-	targetMap.mu.RLock()
 	for pred, objects := range targetMap.m {
 		if pred == model.PredicateVoted {
 			for _, obj := range objects {
@@ -457,7 +440,6 @@ func (s *ActivityService) checkDoubleVote(targetMap *ThreadSafePredicateMap, act
 			break
 		}
 	}
-	targetMap.mu.RUnlock()
 	if hasVoted {
 		return fmt.Errorf("double-vote violation: actor %s has already voted on Question %s", actorIRI, targetIRI)
 	}

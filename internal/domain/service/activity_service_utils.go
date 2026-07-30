@@ -3,15 +3,13 @@ package service
 import (
 	"net/url"
 	"strings"
-	"sync"
 
 	"sprezz/internal/domain/model"
 )
 
-// ThreadSafePredicateMap acts as an O(1) thread-safe query lookup cache for target IRI properties.
+// ThreadSafePredicateMap acts as a lock-free thread-safe read-only query lookup cache for target IRI properties.
 type ThreadSafePredicateMap struct {
-	mu sync.RWMutex
-	m  map[string][]string
+	m map[string][]string
 }
 
 // NewThreadSafePredicateMap converts a raw slice of quads into a thread-safe predicate map.
@@ -25,23 +23,17 @@ func NewThreadSafePredicateMap(quads []model.Quad) *ThreadSafePredicateMap {
 
 // Get retrieves all objects matching a given predicate.
 func (t *ThreadSafePredicateMap) Get(predicate string) []string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.m[predicate]
 }
 
 // HasKey checks if the given predicate exists.
 func (t *ThreadSafePredicateMap) HasKey(predicate string) bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	_, ok := t.m[predicate]
 	return ok
 }
 
 // Len returns the number of distinct predicates cached in the map.
 func (t *ThreadSafePredicateMap) Len() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return len(t.m)
 }
 
