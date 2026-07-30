@@ -205,12 +205,17 @@ func parseStringOrID(val interface{}) string {
 	case string:
 		return v
 	case map[string]interface{}:
-		if id, ok := v["id"].(string); ok {
-			return id
+		keys := []string{"id", "@id", "@value"}
+		for _, k := range keys {
+			if s := parseStringOrID(v[k]); s != "" {
+				return s
+			}
 		}
 	case []interface{}:
-		if len(v) > 0 {
-			return parseStringOrID(v[0])
+		for _, item := range v {
+			if s := parseStringOrID(item); s != "" {
+				return s
+			}
 		}
 	}
 	return ""

@@ -556,3 +556,126 @@ func TestProcessInboundTask_Question_UpdateVoteSuccess(t *testing.T) {
 		t.Fatalf("Expected success for re-voting via Update activity, got error: %v", err)
 	}
 }
+
+type typeConfusionTestCase struct {
+	name          string
+	payload       string
+	expectedError string
+}
+
+func getTypeConfusionTestCases() []typeConfusionTestCase {
+	return []typeConfusionTestCase{
+		{
+			name: "array of maps for actor",
+			payload: `{
+				"type": "Create",
+				"actor": [{"id": "https://remote.com/actor/alice"}],
+				"object": "https://remote.com/note/1"
+			}`,
+			expectedError: "", // should validate actor successfully and proceed
+		},
+		{
+			name: "deeply nested @id and @value structure for object",
+			payload: `{
+				"type": "Create",
+				"actor": "https://remote.com/actor/alice",
+				"object": [{"@id": "https://remote.com/note/1"}]
+			}`,
+			expectedError: "", // should validate object successfully and proceed
+		},
+		{
+			name: "nested domain spoofing block inside expanded structure",
+			payload: `{
+				"type": "Create",
+				"actor": [{"id": "https://remote.com/actor/alice"}],
+				"object": [{"@id": "https://trusted.com/note/1"}]
+			}`,
+			expectedError: "security violation: actor domain remote.com does not match object origin domain trusted.com",
+		},
+		{
+			name: "array of strings for type validation",
+			payload: `{
+				"type": "Create",
+				"actor": "https://remote.com/actor/alice",
+				"object": {
+					"id": "https://remote.com/actor/alice",
+					"type": ["Person", "Actor"]
+				}
+			}`,
+			expectedError: "", // Person/Actor matches profile. Self-creation checks should pass safely.
+		},
+		{
+			name: "array of maps for to address list",
+			payload: `{
+				"type": "Create",
+				"actor": "https://remote.com/actor/alice",
+				"object": "https://remote.com/note/1",
+				"to": [{"id": "https://www.w3.org/ns/activitystreams#Public"}]
+			}`,
+			expectedError: "", // Should successfully extract the Public audience without panic or crash
+		},
+	}
+}
+
+func runTypeConfusionTest(t *testing.T, ctx context.Context, payload, expectedError string) {
+	mc := minimock.NewController(t)
+	defer mc.Finish()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+
+	// Mark all mocks optional so subtests that exit early are not counted as failed uncalled expectations
+	mockStorage.SaveGraphVersionMock.Optional()
+	mockParser.ToQuadsMock.Optional()
+	mockStorage.GetActorDualKeysMock.Optional()
+	mockStorage.StreamQuadsBySubjectMock.Optional()
+
+	if expectedError == "" {
+		mockStorage.SaveGraphVersionMock.Return(nil)
+		mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+	}
+	mockStorage.GetActorDualKeysMock.Return(nil, errors.New("not local"))
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		if strings.HasPrefix(subjectIRI, "https://remote.com/actor") {
+			return []model.Quad{
+				{GraphID: 1, Subject: subjectIRI, Predicate: model.PredicatePublicKeyPem, Object: "mock-pubkey"},
+			}, nil
+		}
+		return nil, nil
+	})
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/create-1",
+		ObjectIRI:   "https://remote.com/note/1",
+		Payload:     []byte(payload),
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if expectedError == "" {
+		if err != nil {
+			t.Fatalf("Expected success, got error: %v", err)
+		}
+	} else {
+		if err == nil {
+			t.Fatalf("Expected error %q, got nil", expectedError)
+		}
+		if !strings.Contains(err.Error(), expectedError) {
+			t.Errorf("Expected error containing %q, got: %v", expectedError, err)
+		}
+	}
+}
+
+func TestProcessInboundTask_TypeConfusion_Resilience(t *testing.T) {
+	ctx := context.Background()
+	tests := getTypeConfusionTestCases()
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runTypeConfusionTest(t, ctx, tc.payload, tc.expectedError)
+		})
+	}
+}

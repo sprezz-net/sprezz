@@ -27,18 +27,8 @@ func extractAddressingTargets(payload []byte) (map[string]struct{}, error) {
 
 	targetsMap := make(map[string]struct{})
 	collectAddresses := func(val interface{}) {
-		if val == nil {
-			return
-		}
-		switch v := val.(type) {
-		case string:
-			targetsMap[v] = struct{}{}
-		case []interface{}:
-			for _, item := range v {
-				if str, ok := item.(string); ok {
-					targetsMap[str] = struct{}{}
-				}
-			}
+		for _, t := range SafeExtractStringSlice(val) {
+			targetsMap[t] = struct{}{}
 		}
 	}
 	collectAddresses(envelope.To)

@@ -223,6 +223,14 @@ To prevent spoofing and identity hijacking, the system enforces strict programma
 2. **Path-Agnostic Actor Creation Guard**: If the payload attempts to create an Actor profile (such as `Person`, `Service`, `Group`, `Organization`, or `Application`), the system dynamically parses the object type from the JSON-LD structure itself without relying on hardcoded URL path conventions.
 3. **Strict Self-Creation Enforcement**: For any Actor creation, the system enforces that the requesting actor's IRI must be exactly identical to the created actor's profile ID. This completely prevents any valid user from spoofing or creating "ghost" profiles of other users (both locally and remotely), restricting profile creation exclusively to self-authored/self-signed identities.
 
+### 4.5 Heterogeneous JSON-LD Type Confusion and Graph Flattening Mitigation
+
+To prevent Denial of Service (DoS) exploits and validation bypasses via heterogeneous or expanded JSON-LD arrays/maps (where fields expected to be singular IRI strings, such as `actor`, `object`, or `target`, are represented as arrays of maps or duplicate vocabularies), the application enforces strict recursive type-safety rules:
+
+1. **Safe Recursive Extraction (`SafeExtractString`)**: Instead of raw, brittle type-assertions (`val.(string)`), the application utilizes a flat key-loop recursive type switch. If a field is wrapped in a map (`id`, `@id`, `@value` keys) or array, the extractor recursively unpacks and returns the first valid non-empty string.
+2. **Safe Array/Slice Flattening (`SafeExtractStringSlice`)**: Recursively traverses heterogeneous values to flatten nested collections or maps of values into a flat slice of string IRIs, ensuring robust addressing target parsing without panics.
+3. **Recursive Collection Traversal (`ExecuteOnHeterogeneousObjects`)**: Security-critical validations (such as self-creation and origin-spoofing checks) recursively traverse both singular objects and nested collections of maps, ensuring that an adversary cannot bypass verification routines by nesting malicious profile/object definitions inside expanded arrays.
+
 ## 5. Multi-Tenancy and Resource Schema Boundaries
 
 ### 5.1 Implicit Multi-Tenant Graph Partitioning

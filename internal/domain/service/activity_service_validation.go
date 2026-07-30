@@ -130,30 +130,35 @@ func (s *ActivityService) validateCreateVerb(actorIRI string, object interface{}
 
 // validateActorSelfCreation enforces that only the actor themselves can create/represent their own profile.
 func (s *ActivityService) validateActorSelfCreation(actorIRI string, object interface{}) error {
-	objMap, ok := object.(map[string]interface{})
-	if !ok {
+	validateMap := func(objMap map[string]interface{}) error {
+		objType := SafeExtractString(objMap["type"])
+		if objType == "" {
+			objType = SafeExtractString(objMap["@type"])
+		}
+		if objType == "" {
+			return nil
+		}
+
+		if !model.IsShortActorType(objType) && !model.IsActorType(objType) {
+			return nil
+		}
+
+		objID := SafeExtractString(objMap["id"])
+		if objID == "" {
+			objID = SafeExtractString(objMap["@id"])
+		}
+		if objID == "" {
+			return nil
+		}
+
+		if actorIRI != objID {
+			return fmt.Errorf("security violation: actor %s is not authorized to create actor profile %s", actorIRI, objID)
+		}
+
 		return nil
 	}
 
-	objType, ok := objMap["type"].(string)
-	if !ok {
-		return nil
-	}
-
-	if !model.IsShortActorType(objType) && !model.IsActorType(objType) {
-		return nil
-	}
-
-	objID, ok := objMap["id"].(string)
-	if !ok {
-		return nil
-	}
-
-	if actorIRI != objID {
-		return fmt.Errorf("security violation: actor %s is not authorized to create actor profile %s", actorIRI, objID)
-	}
-
-	return nil
+	return ExecuteOnHeterogeneousObjects(object, validateMap)
 }
 
 func (s *ActivityService) extractFollowState(targetMap *ThreadSafePredicateMap) (string, string, bool) {
@@ -347,25 +352,16 @@ func (s *ActivityService) isRemoteObjectPublic(fetchedBody []byte) bool {
 	if json.Unmarshal(fetchedBody, &remoteObj) != nil {
 		return false
 	}
-	isPublic := false
-	checkTarget := func(val interface{}) {
-		switch v := val.(type) {
-		case string:
-			if v == model.PublicAudience {
-				isPublic = true
-			}
-		case []interface{}:
-			for _, item := range v {
-				if str, ok := item.(string); ok && str == model.PublicAudience {
-					isPublic = true
-				}
-			}
+
+	targets := append(SafeExtractStringSlice(remoteObj.To), SafeExtractStringSlice(remoteObj.Cc)...)
+	targets = append(targets, SafeExtractStringSlice(remoteObj.Audience)...)
+
+	for _, t := range targets {
+		if t == model.PublicAudience {
+			return true
 		}
 	}
-	checkTarget(remoteObj.To)
-	checkTarget(remoteObj.Cc)
-	checkTarget(remoteObj.Audience)
-	return isPublic
+	return false
 }
 
 func (s *ActivityService) isCachedObjectPublic(targetMap *ThreadSafePredicateMap) bool {

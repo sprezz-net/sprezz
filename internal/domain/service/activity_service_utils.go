@@ -37,8 +37,8 @@ func (t *ThreadSafePredicateMap) Len() int {
 	return len(t.m)
 }
 
-// parseStringOrID extracts a string IRI from a variety of JSON formats (string, nested map, or list)
-func parseStringOrID(val interface{}) string {
+// SafeExtractString extracts a string IRI/value recursively from a variety of JSON-LD / heterogeneous structures
+func SafeExtractString(val interface{}) string {
 	if val == nil {
 		return ""
 	}
@@ -46,15 +46,65 @@ func parseStringOrID(val interface{}) string {
 	case string:
 		return v
 	case map[string]interface{}:
-		if id, ok := v["id"].(string); ok {
-			return id
+		keys := []string{"id", "@id", "@value"}
+		for _, k := range keys {
+			if s := SafeExtractString(v[k]); s != "" {
+				return s
+			}
 		}
 	case []interface{}:
-		if len(v) > 0 {
-			return parseStringOrID(v[0])
+		for _, item := range v {
+			if s := SafeExtractString(item); s != "" {
+				return s
+			}
 		}
 	}
 	return ""
+}
+
+// SafeExtractStringSlice recursively flattens nested arrays/maps/strings into a slice of strings
+func SafeExtractStringSlice(val interface{}) []string {
+	if val == nil {
+		return nil
+	}
+	var result []string
+	switch v := val.(type) {
+	case string:
+		result = append(result, v)
+	case map[string]interface{}:
+		keys := []string{"id", "@id", "@value"}
+		for _, k := range keys {
+			result = append(result, SafeExtractStringSlice(v[k])...)
+		}
+	case []interface{}:
+		for _, item := range v {
+			result = append(result, SafeExtractStringSlice(item)...)
+		}
+	}
+	return result
+}
+
+// ExecuteOnHeterogeneousObjects recursively processes single maps or collections of maps
+func ExecuteOnHeterogeneousObjects(val interface{}, fn func(map[string]interface{}) error) error {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case map[string]interface{}:
+		return fn(v)
+	case []interface{}:
+		for _, item := range v {
+			if err := ExecuteOnHeterogeneousObjects(item, fn); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// parseStringOrID extracts a string IRI from a variety of JSON formats (string, nested map, or list)
+func parseStringOrID(val interface{}) string {
+	return SafeExtractString(val)
 }
 
 // extractDomain extracts the lowercased host from an IRI
