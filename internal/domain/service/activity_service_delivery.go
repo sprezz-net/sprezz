@@ -564,12 +564,12 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
 
 	responseActivity := map[string]interface{}{
-		"@context": model.ContextActivityStreams,
-		"id":       activityIRI,
-		"type":     activityType,
-		"actor":    followedActorIRI,
-		"object":   originalFollow,
-		"to":       []string{followerIRI},
+		model.JSONLDContext: model.ContextActivityStreams,
+		"id":                activityIRI,
+		"type":              activityType,
+		"actor":             followedActorIRI,
+		"object":            originalFollow,
+		"to":                []string{followerIRI},
 	}
 	payload, err := json.Marshal(responseActivity)
 	if err != nil {

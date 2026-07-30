@@ -1,6 +1,9 @@
 package model
 
 const (
+	// JSON-LD Specific Key Names
+	JSONLDContext = "@context"
+
 	// Canonical context URIs
 	ContextActivityStreams = "https://www.w3.org/ns/activitystreams"
 
