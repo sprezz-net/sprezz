@@ -82,6 +82,48 @@ func TestProcessInboundTask_PayloadSizeLimit(t *testing.T) {
 	}
 }
 
+func TestProcessInboundTask_InboxDeliveryError(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.SaveGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
+		return nil
+	})
+
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local-domain.com/actor/alice" {
+			return &model.ActorDualKeys{}, nil
+		}
+		return nil, errors.New("not local actor")
+	})
+
+	// Setup RecordActorInboxDelivery to return a database write error
+	mockStorage.RecordActorInboxDeliveryMock.Return(errors.New("postgres write error"))
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/1",
+		ObjectIRI:   "https://remote.com/note/1",
+		Payload:     []byte(`{"to":["https://local-domain.com/actor/alice"]}`),
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err == nil {
+		t.Fatal("Expected error on inbox delivery record failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "failed to record actor inbox delivery") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
 func TestProcessInboundTask_SharedInboxFanOut(t *testing.T) {
 	mc := minimock.NewController(t)
 

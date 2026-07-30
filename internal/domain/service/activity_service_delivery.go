@@ -161,7 +161,9 @@ func (s *ActivityService) deliverDeleteActivity(ctx context.Context, task model.
 		}
 		_, err := s.storage.GetActorDualKeys(ctx, target)
 		if err == nil {
-			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
+			if err := s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI); err != nil {
+				return fmt.Errorf("failed to record delete activity delivery for %s: %w", target, err)
+			}
 		}
 	}
 	return nil
@@ -243,7 +245,9 @@ func (s *ActivityService) deliverToLocalInboxes(ctx context.Context, task model.
 		_, err := s.storage.GetActorDualKeys(ctx, target)
 		if err == nil {
 			localRecipients = append(localRecipients, target)
-			_ = s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI)
+			if err := s.storage.RecordActorInboxDelivery(ctx, target, task.ActivityIRI); err != nil {
+				return nil, fmt.Errorf("failed to record actor inbox delivery for %s: %w", target, err)
+			}
 		}
 	}
 	return localRecipients, nil
@@ -507,7 +511,9 @@ func (s *ActivityService) saveFollowStateTransition(ctx context.Context, followA
 			ObjType:   model.Literal,
 		},
 	}
-	_ = s.storage.SaveQuads(ctx, stateQuads)
+	if err := s.storage.SaveQuads(ctx, stateQuads); err != nil {
+		return fmt.Errorf("failed to save follow state transition: %w", err)
+	}
 
 	if accept {
 		followerQuads := []model.Quad{
