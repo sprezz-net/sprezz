@@ -13,6 +13,7 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/httputil"
 
 	"github.com/google/uuid"
 )
@@ -186,379 +187,437 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 
 	actType := strings.ToLower(activity.Type)
 
-	var actorQuads []model.Quad
-	var err error
-
-	// B. Mutating Verbs (Undo, Delete, Update)
 	if actType == "undo" || actType == "delete" || actType == "update" {
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI == "" {
-			return fmt.Errorf("missing object IRI for side-effect verb %s", activity.Type)
-		}
-
-		// 1. Cross-validate against internal RDF security public key graph entries
-		actorQuads, err = s.storage.StreamQuadsBySubject(ctx, actorIRI)
-		if err != nil {
-			return fmt.Errorf("failed to stream quads for actor %s: %w", actorIRI, err)
-		}
-		actorMap := NewThreadSafePredicateMap(actorQuads)
-		if !actorMap.HasKey(model.PredicatePublicKeyPem) {
-			return fmt.Errorf("security violation: actor %s does not have an active public key graph entry", actorIRI)
-		}
-
-		// Resolve tenant ID
-		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
-		if tenantID == 0 {
-			if activityIRI != "" {
-				var lookupErr error
-				tenantID, lookupErr = s.storage.GetTenantIDByActivityIRI(ctx, activityIRI)
-				if lookupErr != nil || tenantID == 0 {
-					tenantID = 1
-				}
-			} else {
-				tenantID = 1
-			}
-		}
-
-		targetQuads, err := s.storage.GetStatementsBySubjectIsolated(ctx, targetIRI, tenantID)
-		if err != nil {
-			return fmt.Errorf("failed to stream isolated quads for target IRI %s: %w", targetIRI, err)
-		}
-
-		targetMap := NewThreadSafePredicateMap(targetQuads)
-
-		// Enforce graceful fallback pattern: If this scoped query returns 0 rows
-		// because an incoming delete statement targets a resource outside its visible tenant partition
-		// or an item already purged, immediately drop the action with a nil code exit (ErrDropAction).
-		if targetMap.Len() == 0 {
-			return ErrDropAction
-		}
-
-		// Programmatic Identity Constraint Check & Update Scope Constraint
-		var originalActor string
-		targetMap.mu.RLock()
-		for pred, objects := range targetMap.m {
-			if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
-				if len(objects) > 0 {
-					originalActor = strings.Trim(objects[0], `"'`)
-					break
-				}
-			}
-		}
-		targetMap.mu.RUnlock()
-
-		if originalActor != "" {
-			if strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
-				return fmt.Errorf("security violation: actor %s is not identical to original target actor %s", actorIRI, originalActor)
-			}
+		if err := s.validateMutatingVerb(ctx, activityIRI, actorIRI, actType, activity.Object); err != nil {
+			return err
 		}
 	}
 
 	// C. Core Interactions
 	switch actType {
 	case "create":
-		// Object Origin Validation
-		objID := parseStringOrID(activity.Object)
-		if objID != "" {
-			actorDomain := extractDomain(actorIRI)
-			objectDomain := extractDomain(objID)
-			if actorDomain != "" && objectDomain != "" && actorDomain != objectDomain {
-				return fmt.Errorf("security violation: actor domain %s does not match object origin domain %s", actorDomain, objectDomain)
-			}
+		if err := s.validateCreateVerb(actorIRI, activity.Object); err != nil {
+			return err
 		}
-
 	case "accept", "reject":
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI == "" {
-			return fmt.Errorf("missing object IRI for %s", activity.Type)
+		if err := s.validateAcceptRejectVerb(ctx, actorIRI, activity.Type, activity.Object); err != nil {
+			return err
 		}
-
-		targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
-		if err != nil {
-			return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
-		}
-		targetMap := NewThreadSafePredicateMap(targetQuads)
-		if targetMap.Len() == 0 {
-			return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
-		}
-
-		// Accept / Reject Racing Conditions: check if relationship is still pending
-		var originalTarget string
-		var originalActor string
-		hasState := false
-		targetMap.mu.RLock()
-		for pred, objects := range targetMap.m {
-			if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
-				if len(objects) > 0 {
-					originalActor = strings.Trim(objects[0], `"'`)
-				}
-			}
-			if strings.Contains(pred, "object") {
-				if len(objects) > 0 {
-					originalTarget = strings.Trim(objects[0], `"'`)
-				}
-			}
-			if strings.Contains(pred, "accepted") || strings.Contains(pred, "rejected") || strings.Contains(pred, "result") {
-				hasState = true
-			}
-		}
-		targetMap.mu.RUnlock()
-
-		if hasState {
-			return fmt.Errorf("prior activity %s is not in a pending state", targetIRI)
-		}
-
-		// Asserts the sender (actorIRI) matches the original activity target (originalTarget)
-		if originalTarget != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalTarget) {
-			return fmt.Errorf("security violation: actor %s is not authorized to %s follow sent by %s", actorIRI, activity.Type, originalActor)
-		}
-
 	case "add", "remove":
-		collectionIRI := parseStringOrID(activity.Target)
-		if collectionIRI == "" {
-			collectionIRI = parseStringOrID(activity.Object)
+		if err := s.validateAddRemoveVerb(ctx, actorIRI, activity.Target, activity.Object); err != nil {
+			return err
 		}
-		if collectionIRI != "" {
-			colQuads, err := s.storage.StreamQuadsBySubject(ctx, collectionIRI)
-			if err == nil && len(colQuads) > 0 {
-				colMap := NewThreadSafePredicateMap(colQuads)
-				var ownerActor string
-				colMap.mu.RLock()
-				for pred, objects := range colMap.m {
-					if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
-						if len(objects) > 0 {
-							ownerActor = strings.Trim(objects[0], `"'`)
-							break
-						}
-					}
-				}
-				colMap.mu.RUnlock()
-				if ownerActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(ownerActor) {
-					return fmt.Errorf("security violation: actor %s is not authorized to edit collection %s owned by %s", actorIRI, collectionIRI, ownerActor)
-				}
-			}
-		}
-
 	case "like", "dislike":
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI != "" {
-			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
-			if err != nil || len(targetQuads) == 0 {
-				return fmt.Errorf("target object %s not found locally", targetIRI)
+		if err := s.validateLikeDislikeVerb(ctx, actorIRI, actType, activity.Object); err != nil {
+			return err
+		}
+	case "announce":
+		if err := s.validateAnnounceVerb(ctx, activity.Object); err != nil {
+			return err
+		}
+	case "join", "leave":
+		if err := s.validateJoinLeaveVerb(ctx, activity.Object); err != nil {
+			return err
+		}
+	case "question":
+		if err := s.validateQuestionVerb(ctx, actorIRI, actType, activity.Object); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *ActivityService) validateMutatingVerb(ctx context.Context, activityIRI, actorIRI, actType string, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return fmt.Errorf("missing object IRI for side-effect verb %s", actType)
+	}
+
+	// 1. Cross-validate against internal RDF security public key graph entries
+	actorQuads, err := s.storage.StreamQuadsBySubject(ctx, actorIRI)
+	if err != nil {
+		return fmt.Errorf("failed to stream quads for actor %s: %w", actorIRI, err)
+	}
+	actorMap := NewThreadSafePredicateMap(actorQuads)
+	if !actorMap.HasKey(model.PredicatePublicKeyPem) {
+		return fmt.Errorf("security violation: actor %s does not have an active public key graph entry", actorIRI)
+	}
+
+	// Resolve tenant ID
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		if activityIRI != "" {
+			var lookupErr error
+			tenantID, lookupErr = s.storage.GetTenantIDByActivityIRI(ctx, activityIRI)
+			if lookupErr != nil || tenantID == 0 {
+				tenantID = 1
 			}
+		} else {
+			tenantID = 1
+		}
+	}
 
-			targetMap := NewThreadSafePredicateMap(targetQuads)
+	targetQuads, err := s.storage.GetStatementsBySubjectIsolated(ctx, targetIRI, tenantID)
+	if err != nil {
+		return fmt.Errorf("failed to stream isolated quads for target IRI %s: %w", targetIRI, err)
+	}
 
-			// Visibility checks (if original post was followers-only/private, liking actor must have access)
-			isPublic := false
-			var originalActor string
-			var recipients []string
-			targetMap.mu.RLock()
-			for pred, objects := range targetMap.m {
+	targetMap := NewThreadSafePredicateMap(targetQuads)
+
+	// Enforce graceful fallback pattern
+	if targetMap.Len() == 0 {
+		return ErrDropAction
+	}
+
+	// Programmatic Identity Constraint Check
+	var originalActor string
+	targetMap.mu.RLock()
+	for pred, objects := range targetMap.m {
+		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+			if len(objects) > 0 {
+				originalActor = strings.Trim(objects[0], `"'`)
+				break
+			}
+		}
+	}
+	targetMap.mu.RUnlock()
+
+	if originalActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
+		return fmt.Errorf("security violation: actor %s is not identical to original target actor %s", actorIRI, originalActor)
+	}
+	return nil
+}
+
+func (s *ActivityService) validateCreateVerb(actorIRI string, object interface{}) error {
+	objID := parseStringOrID(object)
+	if objID != "" {
+		actorDomain := extractDomain(actorIRI)
+		objectDomain := extractDomain(objID)
+		if actorDomain != "" && objectDomain != "" && actorDomain != objectDomain {
+			return fmt.Errorf("security violation: actor domain %s does not match object origin domain %s", actorDomain, objectDomain)
+		}
+	}
+	return nil
+}
+
+func (s *ActivityService) validateAcceptRejectVerb(ctx context.Context, actorIRI, activityType string, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return fmt.Errorf("missing object IRI for %s", activityType)
+	}
+
+	targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+	if err != nil {
+		return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
+	}
+	targetMap := NewThreadSafePredicateMap(targetQuads)
+	if targetMap.Len() == 0 {
+		return fmt.Errorf("prior pending activity %s not found in database", targetIRI)
+	}
+
+	var originalTarget, originalActor string
+	hasState := false
+	targetMap.mu.RLock()
+	for pred, objects := range targetMap.m {
+		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+			if len(objects) > 0 {
+				originalActor = strings.Trim(objects[0], `"'`)
+			}
+		}
+		if strings.Contains(pred, "object") {
+			if len(objects) > 0 {
+				originalTarget = strings.Trim(objects[0], `"'`)
+			}
+		}
+		if strings.Contains(pred, "accepted") || strings.Contains(pred, "rejected") || strings.Contains(pred, "result") {
+			hasState = true
+		}
+	}
+	targetMap.mu.RUnlock()
+
+	if hasState {
+		return fmt.Errorf("prior activity %s is not in a pending state", targetIRI)
+	}
+
+	if originalTarget != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalTarget) {
+		return fmt.Errorf("security violation: actor %s is not authorized to %s follow sent by %s", actorIRI, activityType, originalActor)
+	}
+	return nil
+}
+
+func (s *ActivityService) validateAddRemoveVerb(ctx context.Context, actorIRI string, target, object interface{}) error {
+	collectionIRI := parseStringOrID(target)
+	if collectionIRI == "" {
+		collectionIRI = parseStringOrID(object)
+	}
+	if collectionIRI != "" {
+		colQuads, err := s.storage.StreamQuadsBySubject(ctx, collectionIRI)
+		if err == nil && len(colQuads) > 0 {
+			colMap := NewThreadSafePredicateMap(colQuads)
+			var ownerActor string
+			colMap.mu.RLock()
+			for pred, objects := range colMap.m {
 				if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
 					if len(objects) > 0 {
-						originalActor = strings.Trim(objects[0], `"'`)
-					}
-				}
-				if isAddressingPredicate(pred) {
-					for _, obj := range objects {
-						cleanObject := strings.Trim(obj, `"'`)
-						if strings.Contains(cleanObject, "Public") {
-							isPublic = true
-						} else {
-							recipients = append(recipients, cleanObject)
-						}
-					}
-				}
-			}
-			targetMap.mu.RUnlock()
-
-			if !isPublic && originalActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
-				allowed := false
-				for _, r := range recipients {
-					if strings.TrimSpace(actorIRI) == strings.TrimSpace(r) {
-						allowed = true
+						ownerActor = strings.Trim(objects[0], `"'`)
 						break
 					}
 				}
-				if !allowed {
-					return fmt.Errorf("security violation: actor %s does not have privacy clearance to view private object %s", actorIRI, targetIRI)
-				}
 			}
-
-			// Idempotency & Uniqueness: Prevent duplicate likes
-			if actType == "like" {
-				if len(actorQuads) == 0 {
-					actorQuads, _ = s.storage.StreamQuadsBySubject(ctx, actorIRI)
-				}
-				actorMap := NewThreadSafePredicateMap(actorQuads)
-				actorMap.mu.RLock()
-				alreadyLiked := false
-				for pred, objects := range actorMap.m {
-					if strings.Contains(pred, "liked") {
-						for _, obj := range objects {
-							if strings.Trim(obj, `"'`) == targetIRI {
-								alreadyLiked = true
-								break
-							}
-						}
-					}
-					if alreadyLiked {
-						break
-					}
-				}
-				actorMap.mu.RUnlock()
-				if alreadyLiked {
-					return fmt.Errorf("idempotency violation: actor %s has already liked object %s", actorIRI, targetIRI)
-				}
+			colMap.mu.RUnlock()
+			if ownerActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(ownerActor) {
+				return fmt.Errorf("security violation: actor %s is not authorized to edit collection %s owned by %s", actorIRI, collectionIRI, ownerActor)
 			}
 		}
+	}
+	return nil
+}
 
-	case "announce":
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI != "" {
-			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
-			// Announce (The Remote Privacy Blindspot)
-			if err != nil || len(targetQuads) == 0 {
-				// JIT authenticated network fetch with safe fallback rejection
-				fetchedBody, jitErr := s.fetcher.FetchSigned(ctx, targetIRI, "", "", "")
-				if jitErr != nil {
-					return fmt.Errorf("privacy guard rejection: remote object %s cannot be verified (safe-rejection posture)", targetIRI)
-				}
-				var remoteObj struct {
-					To       interface{} `json:"to"`
-					Cc       interface{} `json:"cc"`
-					Audience interface{} `json:"audience"`
-				}
-				if json.Unmarshal(fetchedBody, &remoteObj) == nil {
-					// Safely verify if it's public. If not cached, we check if public is in the targets
-					isPublic := false
-					checkTarget := func(val interface{}) {
-						switch v := val.(type) {
-						case string:
-							if strings.Contains(v, "Public") {
-								isPublic = true
-							}
-						case []interface{}:
-							for _, item := range v {
-								if str, ok := item.(string); ok && strings.Contains(str, "Public") {
-									isPublic = true
-								}
-							}
-						}
+func (s *ActivityService) validateLikeDislikeVerb(ctx context.Context, actorIRI, actType string, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return nil
+	}
+	targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+	if err != nil || len(targetQuads) == 0 {
+		return fmt.Errorf("target object %s not found locally", targetIRI)
+	}
+
+	targetMap := NewThreadSafePredicateMap(targetQuads)
+	isPublic, originalActor, recipients := s.extractVisibilityAndActor(targetMap)
+
+	if !isPublic && originalActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(originalActor) {
+		allowed := false
+		for _, r := range recipients {
+			if strings.TrimSpace(actorIRI) == strings.TrimSpace(r) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			return fmt.Errorf("security violation: actor %s does not have privacy clearance to view private object %s", actorIRI, targetIRI)
+		}
+	}
+
+	if actType == "like" {
+		actorQuads, _ := s.storage.StreamQuadsBySubject(ctx, actorIRI)
+		actorMap := NewThreadSafePredicateMap(actorQuads)
+		actorMap.mu.RLock()
+		alreadyLiked := false
+		for pred, objects := range actorMap.m {
+			if strings.Contains(pred, "liked") {
+				for _, obj := range objects {
+					if strings.Trim(obj, `"'`) == targetIRI {
+						alreadyLiked = true
+						break
 					}
-					checkTarget(remoteObj.To)
-					checkTarget(remoteObj.Cc)
-					checkTarget(remoteObj.Audience)
-					if !isPublic {
-						return fmt.Errorf("privacy guard: cannot announce private/limited remote object %s", targetIRI)
-					}
+				}
+			}
+			if alreadyLiked {
+				break
+			}
+		}
+		actorMap.mu.RUnlock()
+		if alreadyLiked {
+			return fmt.Errorf("idempotency violation: actor %s has already liked object %s", actorIRI, targetIRI)
+		}
+	}
+	return nil
+}
+
+func (s *ActivityService) extractVisibilityAndActor(targetMap *ThreadSafePredicateMap) (bool, string, []string) {
+	isPublic := false
+	var originalActor string
+	var recipients []string
+	targetMap.mu.RLock()
+	defer targetMap.mu.RUnlock()
+	for pred, objects := range targetMap.m {
+		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+			if len(objects) > 0 {
+				originalActor = strings.Trim(objects[0], `"'`)
+			}
+		}
+		if isAddressingPredicate(pred) {
+			for _, obj := range objects {
+				cleanObject := strings.Trim(obj, `"'`)
+				if strings.Contains(cleanObject, "Public") {
+					isPublic = true
 				} else {
-					return fmt.Errorf("privacy guard: failed parsing remote object %s", targetIRI)
-				}
-			} else {
-				// Cached check
-				targetMap := NewThreadSafePredicateMap(targetQuads)
-				isPublic := false
-				targetMap.mu.RLock()
-				for pred, objects := range targetMap.m {
-					if isAddressingPredicate(pred) {
-						for _, obj := range objects {
-							cleanObject := strings.Trim(obj, `"'`)
-							if strings.Contains(cleanObject, "Public") {
-								isPublic = true
-								break
-							}
-						}
-					}
-					if isPublic {
-						break
-					}
-				}
-				targetMap.mu.RUnlock()
-				if !isPublic {
-					return fmt.Errorf("privacy guard: cannot announce private/limited object %s", targetIRI)
+					recipients = append(recipients, cleanObject)
 				}
 			}
 		}
+	}
+	return isPublic, originalActor, recipients
+}
 
-	case "join", "leave":
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI != "" {
-			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
-			if err != nil || len(targetQuads) == 0 {
-				return fmt.Errorf("target group or collection %s not found", targetIRI)
+func (s *ActivityService) validateAnnounceVerb(ctx context.Context, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return nil
+	}
+	targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+	if err != nil || len(targetQuads) == 0 {
+		fetchedBody, jitErr := s.fetcher.FetchSigned(ctx, targetIRI, "", "", "")
+		if jitErr != nil {
+			return fmt.Errorf("privacy guard rejection: remote object %s cannot be verified (safe-rejection posture)", targetIRI)
+		}
+		if !s.isRemoteObjectPublic(fetchedBody) {
+			return fmt.Errorf("privacy guard: cannot announce private/limited remote object %s", targetIRI)
+		}
+	} else {
+		targetMap := NewThreadSafePredicateMap(targetQuads)
+		if !s.isCachedObjectPublic(targetMap) {
+			return fmt.Errorf("privacy guard: cannot announce private/limited object %s", targetIRI)
+		}
+	}
+	return nil
+}
+
+func (s *ActivityService) isRemoteObjectPublic(fetchedBody []byte) bool {
+	var remoteObj struct {
+		To       interface{} `json:"to"`
+		Cc       interface{} `json:"cc"`
+		Audience interface{} `json:"audience"`
+	}
+	if json.Unmarshal(fetchedBody, &remoteObj) != nil {
+		return false
+	}
+	isPublic := false
+	checkTarget := func(val interface{}) {
+		switch v := val.(type) {
+		case string:
+			if strings.Contains(v, "Public") {
+				isPublic = true
 			}
-			targetMap := NewThreadSafePredicateMap(targetQuads)
-			isGroupOrCollection := false
-			targetMap.mu.RLock()
-			for pred, objects := range targetMap.m {
-				if strings.Contains(pred, "type") {
-					for _, obj := range objects {
-						if model.IsGroupOrCollection(obj) {
-							isGroupOrCollection = true
-							break
-						}
-					}
+		case []interface{}:
+			for _, item := range v {
+				if str, ok := item.(string); ok && strings.Contains(str, "Public") {
+					isPublic = true
 				}
-				if isGroupOrCollection {
+			}
+		}
+	}
+	checkTarget(remoteObj.To)
+	checkTarget(remoteObj.Cc)
+	checkTarget(remoteObj.Audience)
+	return isPublic
+}
+
+func (s *ActivityService) isCachedObjectPublic(targetMap *ThreadSafePredicateMap) bool {
+	isPublic := false
+	targetMap.mu.RLock()
+	defer targetMap.mu.RUnlock()
+	for pred, objects := range targetMap.m {
+		if isAddressingPredicate(pred) {
+			for _, obj := range objects {
+				if strings.Contains(strings.Trim(obj, `"'`), "Public") {
+					isPublic = true
 					break
 				}
 			}
-			targetMap.mu.RUnlock()
-			if !isGroupOrCollection {
-				return fmt.Errorf("target scoping violation: %s is not a Group or Collection", targetIRI)
+		}
+		if isPublic {
+			break
+		}
+	}
+	return isPublic
+}
+
+func (s *ActivityService) validateJoinLeaveVerb(ctx context.Context, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return nil
+	}
+	targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+	if err != nil || len(targetQuads) == 0 {
+		return fmt.Errorf("target group or collection %s not found", targetIRI)
+	}
+	targetMap := NewThreadSafePredicateMap(targetQuads)
+	isGroupOrCollection := false
+	targetMap.mu.RLock()
+	for pred, objects := range targetMap.m {
+		if strings.Contains(pred, "type") {
+			for _, obj := range objects {
+				if model.IsGroupOrCollection(obj) {
+					isGroupOrCollection = true
+					break
+				}
 			}
 		}
+		if isGroupOrCollection {
+			break
+		}
+	}
+	targetMap.mu.RUnlock()
+	if !isGroupOrCollection {
+		return fmt.Errorf("target scoping violation: %s is not a Group or Collection", targetIRI)
+	}
+	return nil
+}
 
-	case "question":
-		// Vote Closed State & One-Vote-Per-Actor Check
-		targetIRI := parseStringOrID(activity.Object)
-		if targetIRI != "" {
-			targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
-			if err == nil && len(targetQuads) > 0 {
-				targetMap := NewThreadSafePredicateMap(targetQuads)
-				targetMap.mu.RLock()
-				for pred, objects := range targetMap.m {
-					if strings.Contains(pred, "endtime") {
-						for _, obj := range objects {
-							endTimeStr := strings.Trim(obj, `"'`)
-							if endTime, parseErr := time.Parse(time.RFC3339, endTimeStr); parseErr == nil {
-								if time.Now().UTC().After(endTime) {
-									targetMap.mu.RUnlock()
-									return fmt.Errorf("vote rejected: poll Question %s has already expired", targetIRI)
-								}
-							}
-						}
-					}
-				}
-				targetMap.mu.RUnlock()
-				// One-Vote-Per-Actor check (unless Update)
-				if actType != "update" {
-					hasVoted := false
-					targetMap.mu.RLock()
-					for pred, objects := range targetMap.m {
-						if strings.Contains(pred, "voted") {
-							for _, obj := range objects {
-								if strings.Trim(obj, `"'`) == actorIRI {
-									hasVoted = true
-									break
-								}
-							}
-						}
-						if hasVoted {
-							break
-						}
-					}
-					targetMap.mu.RUnlock()
-					if hasVoted {
-						return fmt.Errorf("double-vote violation: actor %s has already voted on Question %s", actorIRI, targetIRI)
+func (s *ActivityService) validateQuestionVerb(ctx context.Context, actorIRI, actType string, object interface{}) error {
+	targetIRI := parseStringOrID(object)
+	if targetIRI == "" {
+		return nil
+	}
+	targetQuads, err := s.storage.StreamQuadsBySubject(ctx, targetIRI)
+	if err != nil || len(targetQuads) == 0 {
+		return nil
+	}
+	targetMap := NewThreadSafePredicateMap(targetQuads)
+
+	if err := s.checkQuestionExpiration(targetMap, targetIRI); err != nil {
+		return err
+	}
+
+	if actType != "update" {
+		if err := s.checkDoubleVote(targetMap, actorIRI, targetIRI); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ActivityService) checkQuestionExpiration(targetMap *ThreadSafePredicateMap, targetIRI string) error {
+	targetMap.mu.RLock()
+	defer targetMap.mu.RUnlock()
+	for pred, objects := range targetMap.m {
+		if strings.Contains(pred, "endtime") {
+			for _, obj := range objects {
+				endTimeStr := strings.Trim(obj, `"'`)
+				if endTime, err := time.Parse(time.RFC3339, endTimeStr); err == nil {
+					if time.Now().UTC().After(endTime) {
+						return fmt.Errorf("vote rejected: poll Question %s has already expired", targetIRI)
 					}
 				}
 			}
 		}
 	}
+	return nil
+}
 
+func (s *ActivityService) checkDoubleVote(targetMap *ThreadSafePredicateMap, actorIRI, targetIRI string) error {
+	hasVoted := false
+	targetMap.mu.RLock()
+	for pred, objects := range targetMap.m {
+		if strings.Contains(pred, "voted") {
+			for _, obj := range objects {
+				if strings.Trim(obj, `"'`) == actorIRI {
+					hasVoted = true
+					break
+				}
+			}
+		}
+		if hasVoted {
+			break
+		}
+	}
+	targetMap.mu.RUnlock()
+	if hasVoted {
+		return fmt.Errorf("double-vote violation: actor %s has already voted on Question %s", actorIRI, targetIRI)
+	}
 	return nil
 }
 
@@ -792,12 +851,12 @@ func (s *ActivityService) performInboxForwarding(ctx context.Context, task model
 	var targetKeyID string
 	var privateKeyRSAPEM, privateKeyEd25519PEM string
 	if err == nil {
-		targetKeyID = serverActorIRI + "#main-key"
+		targetKeyID = serverActorIRI + model.SuffixMainKey
 		privateKeyRSAPEM = serverKeys.PrivateKeyRSAPEM
 		privateKeyEd25519PEM = serverKeys.PrivateKeyEd25519PEM
 	} else {
 		serverActorIRI = localRecipients[0]
-		targetKeyID = serverActorIRI + "#main-key"
+		targetKeyID = serverActorIRI + model.SuffixMainKey
 		dualKeys, err := s.storage.GetActorDualKeys(ctx, serverActorIRI)
 		if err == nil {
 			privateKeyRSAPEM = dualKeys.PrivateKeyRSAPEM
@@ -843,44 +902,46 @@ func (s *ActivityService) performInboxForwarding(ctx context.Context, task model
 	return nil
 }
 
+func (s *ActivityService) checkMediaQuota(ctx context.Context, tenantIDStr string, size int64) (int32, error) {
+	var resolvedTenantID int32 = 1
+	if tenantIDStr != "" {
+		if val, err := strconv.ParseInt(tenantIDStr, 10, 32); err == nil {
+			resolvedTenantID = int32(val)
+		}
+	}
+
+	hasQuota, err := s.storage.VerifyIncomingQuota(ctx, resolvedTenantID, size)
+	if err != nil {
+		return 0, fmt.Errorf("quota audit system interception error: %w", err)
+	}
+	if !hasQuota {
+		return 0, fmt.Errorf("media workflow aborted: storage authorization ceiling threshold exceeded")
+	}
+	return resolvedTenantID, nil
+}
+
 // ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
 func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) error {
 	if s.mediaStorage == nil {
 		return fmt.Errorf("media storage engine driver is not configured")
 	}
 
-	// 1. Resolve tenant identity dynamically from context strings
-	var resolvedTenantID int32 = 1 // Safe baseline default mapping
-	if mediaCtx.TenantID != "" {
-		if val, err := strconv.ParseInt(mediaCtx.TenantID, 10, 32); err == nil {
-			resolvedTenantID = int32(val)
-		}
-	}
-
-	// 2. Execute the Pre-Flight Quota Guard verification FIRST before any storage I/O
-	hasQuota, err := s.storage.VerifyIncomingQuota(ctx, resolvedTenantID, mediaCtx.Size)
+	_, err := s.checkMediaQuota(ctx, mediaCtx.TenantID, mediaCtx.Size)
 	if err != nil {
-		return fmt.Errorf("quota audit system interception error: %w", err)
-	}
-	if !hasQuota {
-		// Terminate execution paths instantly before invoking any remote connection sockets
-		return fmt.Errorf("media workflow aborted: storage authorization ceiling threshold exceeded")
+		return err
 	}
 
-	// 3. Stream the object payload to MinIO only AFTER quota validation passes successfully.
 	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
 	if err != nil {
 		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
 	}
 
-	// 4. Parse the JSON-LD payload into quads before triggering the database routine
 	quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
 	if err != nil {
-		_ = s.mediaStorage.DeleteObject(ctx, stableKey) // Compensating removal
+		_ = s.mediaStorage.DeleteObject(ctx, stableKey)
 		return fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
 	}
 
-	// 5. Delegate atomic multi-table execution down to the transaction writer engine
 	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
 		err := writer.SaveGraphVersionWithMedia(ctx, port.MediaAttachmentParams{
 			ObjectName:   stableKey,
@@ -924,42 +985,15 @@ func (s *ActivityService) PurgeOrphanedMedia(ctx context.Context, tempObjectKey 
 	return nil
 }
 
-// DispatchOutboundActivity routes activities outbound, consolidating deliveries using sharedInboxes
-func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error {
-	if s.forwarder == nil {
-		return fmt.Errorf("outbound dispatcher is not configured")
-	}
-
-	// 1. Gather all unique targets from addressing fields
-	targetsMap, err := extractAddressingTargets(payload)
-	if err != nil {
-		return err
-	}
-
-	// Expand target followers first
-	s.expandFollowers(ctx, targetsMap)
-
-	// 2. Load the sender's dual-key credentials
-	dualKeys, err := s.storage.GetActorDualKeys(ctx, actorIRI)
-	if err != nil {
-		return fmt.Errorf("load actor dual-key credentials: %w", err)
-	}
-
-	targetKeyID := actorIRI + "#main-key"
-
-	// 3. Resolve the target inboxes (preferring domain-level sharedInbox via FEP-d556, falling back to direct inbox)
+func (s *ActivityService) resolveOutboundInboxes(ctx context.Context, actorIRI string, targetsMap map[string]struct{}, payload []byte, activityIRI string) (map[string]struct{}, error) {
 	inboxesMap := make(map[string]struct{})
-
-	// Group remote targets by domain using our generic helper
 	domainToRecipients := s.groupRemoteTargetsByDomain(ctx, targetsMap)
 
 	for domain, recipients := range domainToRecipients {
-		// Attempt to discover the server-level shared inbox for this domain
 		sharedInboxURL, err := s.resolveServerActorInbox(ctx, domain, actorIRI)
 		if err == nil && sharedInboxURL != "" {
 			inboxesMap[sharedInboxURL] = struct{}{}
 		} else {
-			// Fallback: resolve individual recipient inboxes if server actor discovery fails
 			for _, target := range recipients {
 				inboxURL, err := s.resolveActorInbox(ctx, target)
 				if err == nil && inboxURL != "" {
@@ -969,19 +1003,44 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 		}
 	}
 
-	// 4. Fallback if no target inboxes were resolved but envelope.Inbox is specified
 	if len(inboxesMap) == 0 {
 		var envelope struct {
 			Inbox string `json:"inbox"`
 		}
 		_ = json.Unmarshal(payload, &envelope)
 		if envelope.Inbox == "" {
-			return fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
+			return nil, fmt.Errorf("outbound activity %s has no target inbox", activityIRI)
 		}
 		inboxesMap[envelope.Inbox] = struct{}{}
 	}
+	return inboxesMap, nil
+}
 
-	// 5. Dispatch the activity to each unique inbox endpoint
+// DispatchOutboundActivity routes activities outbound, consolidating deliveries using sharedInboxes
+func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activityIRI string, actorIRI string, payload []byte) error {
+	if s.forwarder == nil {
+		return fmt.Errorf("outbound dispatcher is not configured")
+	}
+
+	targetsMap, err := extractAddressingTargets(payload)
+	if err != nil {
+		return err
+	}
+
+	s.expandFollowers(ctx, targetsMap)
+
+	dualKeys, err := s.storage.GetActorDualKeys(ctx, actorIRI)
+	if err != nil {
+		return fmt.Errorf("load actor dual-key credentials: %w", err)
+	}
+
+	targetKeyID := actorIRI + model.SuffixMainKey
+
+	inboxesMap, err := s.resolveOutboundInboxes(ctx, actorIRI, targetsMap, payload, activityIRI)
+	if err != nil {
+		return err
+	}
+
 	var lastErr error
 	for inbox := range inboxesMap {
 		err = s.forwarder.ForwardFederatedActivity(
@@ -1247,7 +1306,7 @@ func (s *ActivityService) resolveServerActorInbox(ctx context.Context, targetDom
 		return "", err
 	}
 
-	targetKeyID := serverActorIRI + "#main-key"
+	targetKeyID := serverActorIRI + model.SuffixMainKey
 
 	// Step A: WebFinger query for resource=https://<domain>
 	actorProfileURL, err := s.discoverRemoteActorIRI(ctx, targetDomain, targetKeyID, serverKeys.PrivateKeyRSAPEM, serverKeys.PrivateKeyEd25519PEM)
@@ -1269,11 +1328,11 @@ func (s *ActivityService) resolveServerActorInbox(ctx context.Context, targetDom
 
 // resolveCachedServerInbox queries our database for a cached server actor's shared inbox URL
 func (s *ActivityService) resolveCachedServerInbox(ctx context.Context, targetDomain string) string {
-	inboxURL, err := s.resolveActorInbox(ctx, "https://"+targetDomain)
+	inboxURL, err := s.resolveActorInbox(ctx, httputil.HTTPSPrefix+targetDomain)
 	if err == nil && inboxURL != "" {
 		return inboxURL
 	}
-	inboxURL, err = s.resolveActorInbox(ctx, "http://"+targetDomain)
+	inboxURL, err = s.resolveActorInbox(ctx, httputil.HTTPPrefix+targetDomain)
 	if err == nil && inboxURL != "" {
 		return inboxURL
 	}
@@ -1368,12 +1427,13 @@ func (s *ActivityService) discoverRemoteSharedInbox(ctx context.Context, actorPr
 
 // cacheServerInbox persists the discovered shared inbox as quads so future queries are instant
 func (s *ActivityService) cacheServerInbox(ctx context.Context, targetDomain, sharedInbox string, profileBody []byte) {
-	graphID, _ := s.storage.CreateGraphVersion(ctx, "https://"+targetDomain, "https://"+targetDomain, profileBody)
+	iri := httputil.HTTPSPrefix + targetDomain
+	graphID, _ := s.storage.CreateGraphVersion(ctx, iri, iri, profileBody)
 	if graphID > 0 {
 		quads := []model.Quad{
 			{
 				GraphID:   graphID,
-				Subject:   "https://" + targetDomain,
+				Subject:   iri,
 				Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox",
 				Object:    sharedInbox,
 				ObjType:   model.NamedNode,
@@ -1381,6 +1441,21 @@ func (s *ActivityService) cacheServerInbox(ctx context.Context, targetDomain, sh
 		}
 		_ = s.storage.SaveQuads(ctx, quads)
 	}
+}
+
+func (s *ActivityService) anyRecipientFollowsDomain(ctx context.Context, localRecipients []string, targetDomain string) bool {
+	for _, localActor := range localRecipients {
+		followers, err := s.GetFollowersTimeline(ctx, localActor, 1000, 0)
+		if err != nil {
+			continue
+		}
+		for _, follower := range followers {
+			if extractDomain(follower) == targetDomain {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // hasRelationshipWithDomain checks if the local server/actor has a federated relationship with the given remote domain.
@@ -1396,19 +1471,67 @@ func (s *ActivityService) hasRelationshipWithDomain(ctx context.Context, localRe
 	}
 
 	// 2. Check if any local recipient has follower relationships on that domain
-	for _, localActor := range localRecipients {
-		followers, err := s.GetFollowersTimeline(ctx, localActor, 1000, 0)
-		if err != nil {
-			continue
+	return s.anyRecipientFollowsDomain(ctx, localRecipients, targetDomain), nil
+}
+
+func (s *ActivityService) parseFollowActivityQuads(quads []model.Quad) (string, string, error) {
+	var followerIRI, followedIRI string
+	for _, q := range quads {
+		pred := strings.ToLower(q.Predicate)
+		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
+			followerIRI = strings.Trim(q.Object, `"'`)
 		}
-		for _, follower := range followers {
-			if extractDomain(follower) == targetDomain {
-				return true, nil
-			}
+		if strings.Contains(pred, "object") {
+			followedIRI = strings.Trim(q.Object, `"'`)
 		}
 	}
+	if followerIRI == "" || followedIRI == "" {
+		return "", "", fmt.Errorf("invalid follow activity structure")
+	}
+	return followerIRI, followedIRI, nil
+}
 
-	return false, nil
+func (s *ActivityService) getOriginalFollow(ctx context.Context, followActivityIRI string) interface{} {
+	followPayload, _ := s.storage.GetLatestPayload(ctx, followActivityIRI)
+	if len(followPayload) > 0 {
+		var parsed map[string]interface{}
+		if json.Unmarshal(followPayload, &parsed) == nil {
+			return parsed
+		}
+	}
+	return followActivityIRI
+}
+
+func (s *ActivityService) saveFollowStateTransition(ctx context.Context, followActivityIRI, followedActorIRI, followerIRI string, accept bool) error {
+	statePredicate := model.PredicateRejected
+	if accept {
+		statePredicate = model.PredicateAccepted
+	}
+
+	stateQuads := []model.Quad{
+		{
+			Subject:   followActivityIRI,
+			Predicate: statePredicate,
+			Object:    "true",
+			ObjType:   model.Literal,
+		},
+	}
+	_ = s.storage.SaveQuads(ctx, stateQuads)
+
+	if accept {
+		followerQuads := []model.Quad{
+			{
+				Subject:   followedActorIRI,
+				Predicate: model.PredicateFollower,
+				Object:    followerIRI,
+				ObjType:   model.NamedNode,
+			},
+		}
+		if err := s.storage.SaveQuads(ctx, followerQuads); err != nil {
+			return fmt.Errorf("failed to save follower relationship quads: %w", err)
+		}
+	}
+	return nil
 }
 
 func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActorIRI, followActivityIRI string, accept bool) error {
@@ -1420,19 +1543,9 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 		return fmt.Errorf("prior activity %s not found in database", followActivityIRI)
 	}
 
-	var followerIRI string
-	var followedIRI string
-	for _, q := range quads {
-		pred := strings.ToLower(q.Predicate)
-		if strings.Contains(pred, "actor") || strings.Contains(pred, "attributedto") {
-			followerIRI = strings.Trim(q.Object, `"'`)
-		}
-		if strings.Contains(pred, "object") {
-			followedIRI = strings.Trim(q.Object, `"'`)
-		}
-	}
-	if followerIRI == "" || followedIRI == "" {
-		return fmt.Errorf("invalid follow activity structure")
+	followerIRI, followedIRI, err := s.parseFollowActivityQuads(quads)
+	if err != nil {
+		return err
 	}
 
 	if followedIRI != followedActorIRI {
@@ -1444,17 +1557,7 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 		activityType = model.ShortAccept
 	}
 
-	followPayload, _ := s.storage.GetLatestPayload(ctx, followActivityIRI)
-	var originalFollow interface{}
-	if len(followPayload) > 0 {
-		var parsed map[string]interface{}
-		if json.Unmarshal(followPayload, &parsed) == nil {
-			originalFollow = parsed
-		}
-	}
-	if originalFollow == nil {
-		originalFollow = followActivityIRI
-	}
+	originalFollow := s.getOriginalFollow(ctx, followActivityIRI)
 
 	id, err := uuid.NewV7()
 	if err != nil {
@@ -1480,38 +1583,7 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 		return fmt.Errorf("dispatch follow response activity: %w", err)
 	}
 
-	// 1. Write the state transition quad (accepted or rejected) on the original follow activity subject
-	statePredicate := model.PredicateRejected
-	if accept {
-		statePredicate = model.PredicateAccepted
-	}
-
-	stateQuads := []model.Quad{
-		{
-			Subject:   followActivityIRI,
-			Predicate: statePredicate,
-			Object:    "true",
-			ObjType:   model.Literal,
-		},
-	}
-	_ = s.storage.SaveQuads(ctx, stateQuads)
-
-	// 2. On Accept, write the activitystreams#follower edge into the RDF graph
-	if accept {
-		followerQuads := []model.Quad{
-			{
-				Subject:   followedActorIRI,
-				Predicate: model.PredicateFollower,
-				Object:    followerIRI,
-				ObjType:   model.NamedNode,
-			},
-		}
-		if err := s.storage.SaveQuads(ctx, followerQuads); err != nil {
-			return fmt.Errorf("failed to save follower relationship quads: %w", err)
-		}
-	}
-
-	return nil
+	return s.saveFollowStateTransition(ctx, followActivityIRI, followedActorIRI, followerIRI, accept)
 }
 
 func (s *ActivityService) AcceptFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error {

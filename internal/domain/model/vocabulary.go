@@ -87,6 +87,9 @@ const (
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"
 
+	// SuffixMainKey represents the default key ID suffix for AP actor keys
+	SuffixMainKey = "#main-key"
+
 	// ActivityPub Collection Types
 	CollectionRegular     = NamespaceActivityStreams + "Collection"
 	CollectionOrdered     = NamespaceActivityStreams + "OrderedCollection"

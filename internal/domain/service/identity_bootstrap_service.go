@@ -73,16 +73,17 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 	}
 
 	// Create a graph version payload block for the actor profile
+	const inboxSuffix = "/inbox"
 	payloadMap := map[string]interface{}{
 		"id":                actorIRI,
 		"type":              "Application",
 		"preferredUsername": "server",
-		"inbox":             actorIRI + "/inbox",
+		"inbox":             actorIRI + inboxSuffix,
 		"endpoints": map[string]interface{}{
-			"sharedInbox": "https://" + domain + "/inbox",
+			"sharedInbox": "https://" + domain + inboxSuffix,
 		},
 		"publicKey": map[string]interface{}{
-			"id":           actorIRI + "#main-key",
+			"id":           actorIRI + model.SuffixMainKey,
 			"owner":        actorIRI,
 			"publicKeyPem": pubKey,
 		},
@@ -124,14 +125,14 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 			GraphID:   graphID,
 			Subject:   actorIRI,
 			Predicate: "https://www.w3.org/ns/activitystreams#inbox",
-			Object:    actorIRI + "/inbox",
+			Object:    actorIRI + inboxSuffix,
 			ObjType:   model.NamedNode,
 		},
 		{
 			GraphID:   graphID,
 			Subject:   actorIRI,
 			Predicate: "https://www.w3.org/ns/activitystreams#sharedInbox",
-			Object:    "https://" + domain + "/inbox",
+			Object:    "https://" + domain + inboxSuffix,
 			ObjType:   model.NamedNode,
 		},
 	}

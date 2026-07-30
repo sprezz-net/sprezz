@@ -186,57 +186,61 @@ func (s *PostgresStorage) GetCollectionPayloads(ctx context.Context, actorIRI, c
 	case "outbox":
 		return queries.GetOutboxPayloads(ctx, db.GetOutboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
 	case "pending_follows":
-		tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
-		if tenantID == 0 {
-			host := extractDomain(actorIRI)
-			if host != "" {
-				if tRow, err := queries.GetTenantByDomain(ctx, host); err == nil {
-					tenantID = tRow.ID
-				}
-			}
-		}
-		if tenantID == 0 {
-			tenantID = 1
-		}
-
-		query := `
-			SELECT DISTINCT g.payload
-			FROM rdf_graphs g
-			JOIN rdf_statements rs_obj ON g.activity_id = rs_obj.subject
-			JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
-			WHERE rs_obj.tenant_id = $1
-			  AND rs_obj.object = $2
-			  AND (rs_obj.predicate ILIKE '%object%' OR rs_obj.predicate ILIKE '%as:object%')
-			  AND rs_type.tenant_id = $1
-			  AND rs_type.predicate ILIKE '%type%'
-			  AND rs_type.object ILIKE '%Follow%'
-			  AND NOT EXISTS (
-				  SELECT 1 FROM rdf_statements rs_state
-				  WHERE rs_state.subject = g.activity_id
-					AND rs_state.tenant_id = $1
-					AND (rs_state.predicate ILIKE '%accepted%' OR rs_state.predicate ILIKE '%rejected%' OR rs_state.predicate ILIKE '%result%')
-			  )
-			ORDER BY g.created_at DESC
-			LIMIT $3 OFFSET $4;
-		`
-		rows, err := s.db.Query(ctx, query, tenantID, actorIRI, int32(limit), int32(offset))
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		var payloads [][]byte
-		for rows.Next() {
-			var payload []byte
-			if err := rows.Scan(&payload); err != nil {
-				return nil, err
-			}
-			payloads = append(payloads, payload)
-		}
-		return payloads, nil
+		return s.getPendingFollowsPayloads(ctx, actorIRI, limit, offset)
 	default:
 		return nil, fmt.Errorf("unsupported collection %q", collection)
 	}
+}
+
+func (s *PostgresStorage) getPendingFollowsPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		host := extractDomain(actorIRI)
+		if host != "" {
+			if tRow, err := s.queries().GetTenantByDomain(ctx, host); err == nil {
+				tenantID = tRow.ID
+			}
+		}
+	}
+	if tenantID == 0 {
+		tenantID = 1
+	}
+
+	query := `
+		SELECT DISTINCT g.payload
+		FROM rdf_graphs g
+		JOIN rdf_statements rs_obj ON g.activity_id = rs_obj.subject
+		JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
+		WHERE rs_obj.tenant_id = $1
+		  AND rs_obj.object = $2
+		  AND (rs_obj.predicate ILIKE '%object%' OR rs_obj.predicate ILIKE '%as:object%')
+		  AND rs_type.tenant_id = $1
+		  AND rs_type.predicate ILIKE '%type%'
+		  AND rs_type.object ILIKE '%Follow%'
+		  AND NOT EXISTS (
+			  SELECT 1 FROM rdf_statements rs_state
+			  WHERE rs_state.subject = g.activity_id
+				AND rs_state.tenant_id = $1
+				AND (rs_state.predicate ILIKE '%accepted%' OR rs_state.predicate ILIKE '%rejected%' OR rs_state.predicate ILIKE '%result%')
+		  )
+		ORDER BY g.created_at DESC
+		LIMIT $3 OFFSET $4;
+	`
+	rows, err := s.db.Query(ctx, query, tenantID, actorIRI, int32(limit), int32(offset))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payloads [][]byte
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		payloads = append(payloads, payload)
+	}
+	return payloads, nil
 }
 
 func (s *PostgresStorage) ClaimInboundBatch(ctx context.Context, batchSize int) ([]model.InboundTask, error) {
@@ -673,58 +677,45 @@ func (s *PostgresStorage) SaveQuadIDs(ctx context.Context, quadIDs []model.QuadI
 	return tx.Commit(ctx)
 }
 
+func (s *PostgresStorage) getExistingDictionaryID(ctx context.Context, value string) (int64, error) {
+	if id, found := s.cache.GetID(value); found {
+		return id, nil
+	}
+	id, err := s.queries().GetDictionaryID(ctx, value)
+	if err != nil {
+		return 0, err
+	}
+	s.cache.Set(value, id)
+	return id, nil
+}
+
 func (s *PostgresStorage) RemoveQuadEdge(ctx context.Context, subject, predicate, object string) error {
-	subID, foundSub := s.cache.GetID(subject)
-	if !foundSub {
-		var err error
-		subID, err = s.queries().GetDictionaryID(ctx, subject)
+	subID, err := s.getExistingDictionaryID(ctx, subject)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		if err != nil {
-			return err
-		}
-		s.cache.Set(subject, subID)
+		return err
 	}
 
-	predID, foundPred := s.cache.GetID(predicate)
-	if !foundPred {
-		var err error
-		predID, err = s.queries().GetDictionaryID(ctx, predicate)
+	predID, err := s.getExistingDictionaryID(ctx, predicate)
+	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
-		if err != nil {
-			return err
-		}
-		s.cache.Set(predicate, predID)
-	}
-
-	var objID int64
-	var literalVal string
-
-	// Check if object is in dictionary/cache (IRI), else treat as literal
-	if id, found := s.cache.GetID(object); found {
-		objID = id
-	} else {
-		id, err := s.queries().GetDictionaryID(ctx, object)
-		if err == nil {
-			objID = id
-			s.cache.Set(object, id)
-		} else if errors.Is(err, pgx.ErrNoRows) {
-			literalVal = object
-		} else {
-			return err
-		}
+		return err
 	}
 
 	var objectID *int64
-	if objID != 0 {
-		objectID = &objID
-	}
 	var literalValue *string
-	if literalVal != "" {
-		literalValue = &literalVal
+
+	objID, err := s.getExistingDictionaryID(ctx, object)
+	if err == nil {
+		objectID = &objID
+	} else if errors.Is(err, pgx.ErrNoRows) {
+		literalValue = &object
+	} else {
+		return err
 	}
 
 	return s.queries().RemoveQuadEdge(ctx, db.RemoveQuadEdgeParams{

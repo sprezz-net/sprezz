@@ -523,14 +523,8 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 	}
 }
 
-func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
-	ctx := context.Background()
-	mc := minimock.NewController(t)
-
-	var remoteHost string
-
-	// Spin up a mock remote server to reply to WebFinger and Actor profile GET requests
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func startDiscoveryMockServer(remoteHost *string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "webfinger") {
 			w.Header().Set("Content-Type", "application/jrd+json")
 			_, _ = w.Write([]byte(`{
@@ -538,7 +532,7 @@ func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
 					{
 						"rel": "self",
 						"type": "application/activity+json",
-						"href": "http://` + remoteHost + `/actor"
+						"href": "http://` + *remoteHost + `/actor"
 					}
 				]
 			}`))
@@ -547,15 +541,25 @@ func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
 		if r.URL.Path == "/actor" {
 			w.Header().Set("Content-Type", "application/activity+json")
 			_, _ = w.Write([]byte(`{
-				"id": "http://` + remoteHost + `/actor",
+				"id": "http://` + *remoteHost + `/actor",
 				"endpoints": {
-					"sharedInbox": "http://` + remoteHost + `/inbox"
+					"sharedInbox": "http://` + *remoteHost + `/inbox"
 				}
 			}`))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
 	}))
+}
+
+func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
+	ctx := context.Background()
+	mc := minimock.NewController(t)
+
+	var remoteHost string
+
+	// Spin up a mock remote server to reply to WebFinger and Actor profile GET requests
+	server := startDiscoveryMockServer(&remoteHost)
 	defer server.Close()
 
 	u, _ := url.Parse(server.URL)
