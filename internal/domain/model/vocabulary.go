@@ -144,8 +144,5 @@ func IsCollectionType(uri string) bool {
 func IsGroupOrCollection(t string) bool {
 	return t == ShortGroup ||
 		t == ActorGroup ||
-		t == CollectionRegular ||
-		t == CollectionOrdered ||
-		t == CollectionPageRegular ||
-		t == CollectionPageOrdered
+		IsCollectionType(t)
 }
