@@ -1,15 +1,16 @@
 package http
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/httputil"
 
 	"github.com/google/uuid"
 )
@@ -71,29 +72,46 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	completedObjectKeys, err := h.processUploadFiles(ctx, tenantID, actorIRI, activityJSON, envelope.ID, envelope.Object, files)
+	if err != nil {
+		statusCode := http.StatusInternalServerError
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "exceeds maximum file size") || strings.Contains(errMsg, "Failed to read file chunk stream") {
+			statusCode = http.StatusBadRequest
+		}
+		h.writeError(w, statusCode, errMsg)
+		return
+	}
+
+	// Success Manifest Response Writeout
+	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeJSON)
+	w.WriteHeader(http.StatusAccepted)
+
+	responseBytes := fmt.Appendf(nil, `{"status":"committed","object_keys":%v}`, h.marshalKeysJSON(completedObjectKeys))
+	_, _ = w.Write(responseBytes)
+}
+
+// processUploadFiles handles parsing, limits verification, and physical upload execution for files batch
+func (h *MediaUploadHandler) processUploadFiles(ctx context.Context, tenantID, actorIRI, activityJSON, activityID, objectIRI string, files []*multipart.FileHeader) ([]string, error) {
 	var completedObjectKeys []string
 
-	// 4. Sequential Multi-File Streaming Loop (Preserves tenantID and actorIRI context visibility)
 	for _, fileHeader := range files {
 		if fileHeader.Size > h.maxFileSize {
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Attachment %s exceeds maximum file size limit of %d bytes", fileHeader.Filename, h.maxFileSize))
-			return
+			return nil, fmt.Errorf("attachment %s exceeds maximum file size limit of %d bytes", fileHeader.Filename, h.maxFileSize)
 		}
 
 		fileStream, err := fileHeader.Open()
 		if err != nil {
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusBadRequest, "Failed to read file chunk stream")
-			return
+			return nil, fmt.Errorf("failed to read file chunk stream")
 		}
 
 		taskUUID, err := uuid.NewV7()
 		if err != nil {
 			_ = fileStream.Close()
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusInternalServerError, "Entropy initialization failure")
-			return
+			return nil, fmt.Errorf("entropy initialization failure")
 		}
 
 		taskID := taskUUID.String()
@@ -111,8 +129,8 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		task := model.InboundTask{
 			ID:          taskID,
-			ActivityIRI: envelope.ID,
-			ObjectIRI:   envelope.Object,
+			ActivityIRI: activityID,
+			ObjectIRI:   objectIRI,
 			Payload:     []byte(activityJSON),
 		}
 
@@ -120,20 +138,14 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if err := h.activitySvc.ProcessInboundMediaTask(ctx, mediaCtx, task); err != nil {
 			_ = fileStream.Close()
 			h.executeCompensatingCleanup(completedObjectKeys)
-			h.writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return nil, err
 		}
 
 		completedObjectKeys = append(completedObjectKeys, tempObjectKey)
 		_ = fileStream.Close() // Immediate deterministic release
 	}
 
-	// 7. Success Manifest Response Writeout
-	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeJSON)
-	w.WriteHeader(http.StatusAccepted)
-
-	responseBytes := fmt.Appendf(nil, `{"status":"committed","object_keys":%v}`, h.marshalKeysJSON(completedObjectKeys))
-	_, _ = w.Write(responseBytes)
+	return completedObjectKeys, nil
 }
 
 // executeCompensatingCleanup runs a reverse pruning sequence if an iteration fails mid-loop
