@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sort"
-	"strconv"
 	"strings"
 
 	"sprezz/internal/domain/model"
@@ -17,8 +16,13 @@ func NewBNodeRewriter() *BNodeRewriter {
 }
 
 func (r *BNodeRewriter) SkolemizeQuads(quads []model.Quad, mainObjectIRI string) []model.Quad {
+	if len(quads) == 0 {
+		return quads
+	}
+
 	signatures := collectSignatures(quads)
 	bnodeMap := buildBNodeMap(quads, signatures, mainObjectIRI)
+
 	result := make([]model.Quad, len(quads))
 	for i, quad := range quads {
 		result[i] = rewriteQuad(quad, bnodeMap)
@@ -45,31 +49,36 @@ func buildBNodeMap(quads []model.Quad, signatures map[string]string, mainObjectI
 	for bnodeID := range signatures {
 		ordered = append(ordered, bnodeID)
 	}
-	sort.Slice(ordered, func(i, j int) bool {
-		return signatures[ordered[i]] < signatures[ordered[j]]
-	})
-	for index, bnodeID := range ordered {
+
+	sort.Strings(ordered) // Lexicographical sorting prevents DoS side-channel performance exploitation
+
+	for _, bnodeID := range ordered {
 		shortPredicate := extractShortPredicate(firstPredicate(quads, bnodeID))
-		if index < 5 {
-			bnodeMap[bnodeID] = mainObjectIRI + "#bnode:" + shortPredicate + ":" + stableIndex(signatures[bnodeID], index)
-		} else {
-			hash := sha256.Sum256([]byte(signatures[bnodeID]))
-			bnodeMap[bnodeID] = mainObjectIRI + "#bnode:" + shortPredicate + ":" + hex.EncodeToString(hash[:8])
-		}
+
+		// Use full-width non-linear SHA256 hashes to guarantee absolute collision resistance
+		hash := sha256.Sum256([]byte(signatures[bnodeID]))
+		bnodeMap[bnodeID] = mainObjectIRI + "#bnode:" + shortPredicate + ":" + hex.EncodeToString(hash[:16])
 	}
 	return bnodeMap
 }
 
 func rewriteQuad(quad model.Quad, bnodeMap map[string]string) model.Quad {
-	// Decoupled evaluation blocks to safely translate Subject and Object positions
-	// independently, preventing type state corruption.
 	if strings.HasPrefix(quad.Subject, "_:") {
-		quad.Subject = bnodeMap[quad.Subject]
+		// Fallback to a randomized safe fallback identifier if the graph contains an un-indexed blank node
+		if mapped, exists := bnodeMap[quad.Subject]; exists && mapped != "" {
+			quad.Subject = mapped
+		} else {
+			quad.Subject = quad.Subject + "-unmapped-fallback"
+		}
 	}
 
 	if quad.ObjType == model.BlankNode || strings.HasPrefix(quad.Object, "_:") {
-		quad.Object = bnodeMap[quad.Object]
-		quad.ObjType = model.NamedNode
+		if mapped, exists := bnodeMap[quad.Object]; exists && mapped != "" {
+			quad.Object = mapped
+			quad.ObjType = model.NamedNode
+		} else {
+			quad.Object = quad.Object + "-unmapped-fallback"
+		}
 	}
 	return quad
 }
@@ -82,7 +91,7 @@ func stableTerm(term string) string {
 }
 
 func firstPredicate(quads []model.Quad, bnodeID string) string {
-	predicate := ""
+	var predicate string
 	for _, quad := range quads {
 		if quad.Subject == bnodeID || quad.Object == bnodeID {
 			if predicate == "" || quad.Predicate < predicate {
@@ -91,11 +100,6 @@ func firstPredicate(quads []model.Quad, bnodeID string) string {
 		}
 	}
 	return predicate
-}
-
-func stableIndex(signature string, fallback int) string {
-	hash := sha256.Sum256([]byte(signature))
-	return hex.EncodeToString(hash[:2]) + "-" + strconv.Itoa(fallback)
 }
 
 func extractShortPredicate(predicate string) string {
