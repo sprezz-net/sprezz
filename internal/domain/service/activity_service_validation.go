@@ -332,12 +332,12 @@ func (s *ActivityService) isRemoteObjectPublic(fetchedBody []byte) bool {
 	checkTarget := func(val interface{}) {
 		switch v := val.(type) {
 		case string:
-			if strings.Contains(v, "Public") {
+			if v == model.PublicAudience {
 				isPublic = true
 			}
 		case []interface{}:
 			for _, item := range v {
-				if str, ok := item.(string); ok && strings.Contains(str, "Public") {
+				if str, ok := item.(string); ok && str == model.PublicAudience {
 					isPublic = true
 				}
 			}
