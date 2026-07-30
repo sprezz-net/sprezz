@@ -851,45 +851,8 @@ func TestProcessInboundTask_GroupJoin_Success(t *testing.T) {
 	groupIRI := "https://local.com/actor/group-1"
 	senderIRI := "https://remote.com/actor/bob"
 
-	mockStorage := portmock.NewStoragePortMock(mc)
-	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
-	mockStorage.GetTenantIDByDomainMock.Return(int32(1), nil)
-	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
-
-	// Expect SaveQuads to save group follower relationship
 	savedQuads := false
-	mockStorage.SaveQuadsMock.Set(func(ctx context.Context, quads []model.Quad) error {
-		for _, q := range quads {
-			if q.Subject == groupIRI && q.Predicate == model.PredicateFollower && q.Object == senderIRI {
-				savedQuads = true
-			}
-		}
-		return nil
-	})
-
-	// Dispatch outbound Accept(Join) expectations
-	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
-		if actorIRI == groupIRI {
-			return &model.ActorDualKeys{
-				PrivateKeyRSAPEM:     "server-rsa-private",
-				PrivateKeyEd25519PEM: "server-ed-private",
-			}, nil
-		}
-		return nil, errors.New("not local")
-	})
-	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
-		if subject == groupIRI {
-			return []model.Quad{
-				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
-			}, nil
-		}
-		if subject == senderIRI {
-			return []model.Quad{
-				{Subject: senderIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/bob/inbox"},
-			}, nil
-		}
-		return nil, nil
-	})
+	mockStorage := setupGroupStorageMock(mc, groupIRI, senderIRI, &savedQuads)
 
 	dispatchedAccept := false
 	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
@@ -940,25 +903,7 @@ func TestProcessInboundTask_GroupLeave_Success(t *testing.T) {
 	groupIRI := "https://local.com/actor/group-1"
 	senderIRI := "https://remote.com/actor/bob"
 
-	mockStorage := portmock.NewStoragePortMock(mc)
-	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
-	mockStorage.SaveQuadsMock.Return(nil)
-	mockStorage.GetTenantIDByDomainMock.Return(int32(1), nil)
-	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
-
-	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
-		if subject == groupIRI {
-			return []model.Quad{
-				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
-			}, nil
-		}
-		if subject == senderIRI {
-			return []model.Quad{
-				{Subject: senderIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/bob/inbox"},
-			}, nil
-		}
-		return nil, nil
-	})
+	mockStorage := setupGroupStorageMock(mc, groupIRI, senderIRI, nil)
 
 	// Expect RemoveQuadEdge to be called to prune relationship
 	removedEdge := false
@@ -967,16 +912,6 @@ func TestProcessInboundTask_GroupLeave_Success(t *testing.T) {
 			removedEdge = true
 		}
 		return nil
-	})
-
-	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
-		if actorIRI == groupIRI {
-			return &model.ActorDualKeys{
-				PrivateKeyRSAPEM:     "server-rsa-private",
-				PrivateKeyEd25519PEM: "server-ed-private",
-			}, nil
-		}
-		return nil, errors.New("not local")
 	})
 
 	dispatchedAccept := false
@@ -1028,18 +963,14 @@ func TestProcessInboundTask_GroupAnnounce_Success(t *testing.T) {
 	groupIRI := "https://local.com/actor/group-1"
 	senderIRI := "https://remote.com/actor/bob"
 
-	mockStorage := portmock.NewStoragePortMock(mc)
-	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
-	mockStorage.SaveQuadsMock.Return(nil)
-	mockStorage.GetTenantIDByDomainMock.Return(int32(1), nil)
-	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
+	mockStorage := setupGroupStorageMock(mc, groupIRI, senderIRI, nil)
 	mockStorage.RecordActorInboxDeliveryMock.Return(nil)
 
+	// Bob is a member! Group quads should reflect that
 	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
 		if subject == groupIRI {
 			return []model.Quad{
 				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
-				// BOB is a member (follower) of the Group!
 				{Subject: groupIRI, Predicate: model.PredicateFollower, Object: senderIRI},
 				{Subject: groupIRI, Predicate: model.PredicateFollower, Object: "https://remote-2.com/actor/charlie"},
 			}, nil
@@ -1050,16 +981,6 @@ func TestProcessInboundTask_GroupAnnounce_Success(t *testing.T) {
 			}, nil
 		}
 		return nil, nil
-	})
-
-	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
-		if actorIRI == groupIRI {
-			return &model.ActorDualKeys{
-				PrivateKeyRSAPEM:     "server-rsa-private",
-				PrivateKeyEd25519PEM: "server-ed-private",
-			}, nil
-		}
-		return nil, errors.New("not local")
 	})
 
 	dispatchedAnnounce := false
@@ -1106,17 +1027,15 @@ func TestProcessInboundTask_GroupAnnounce_NonMemberRejected(t *testing.T) {
 	ctx := context.Background()
 
 	groupIRI := "https://local.com/actor/group-1"
+	senderIRI := "https://remote.com/actor/bob"
 
-	mockStorage := portmock.NewStoragePortMock(mc)
-	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
-	mockStorage.SaveQuadsMock.Return(nil)
-	mockStorage.GetActorDualKeysMock.Return(&model.ActorDualKeys{}, nil)
+	mockStorage := setupGroupStorageMock(mc, groupIRI, senderIRI, nil)
 
+	// Bob is NOT a member (no follower quad)!
 	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
 		if subject == groupIRI {
 			return []model.Quad{
 				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
-				// Bob is NOT in the followers collection (not a member)
 			}, nil
 		}
 		return nil, nil
@@ -1147,4 +1066,49 @@ func TestProcessInboundTask_GroupAnnounce_NonMemberRejected(t *testing.T) {
 	if !strings.Contains(err.Error(), "sender https://remote.com/actor/bob is not a member of group") {
 		t.Errorf("Unexpected error message: %v", err)
 	}
+}
+
+func setupGroupStorageMock(mc *minimock.Controller, groupIRI, senderIRI string, savedQuads *bool) *portmock.StoragePortMock {
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
+
+	if savedQuads != nil {
+		mockStorage.SaveQuadsMock.Set(func(ctx context.Context, quads []model.Quad) error {
+			if len(quads) > 0 && quads[0].Subject == groupIRI {
+				*savedQuads = true
+			}
+			return nil
+		})
+	} else {
+		mockStorage.SaveQuadsMock.Return(nil)
+	}
+
+	mockStorage.GetTenantIDByDomainMock.Optional().Return(int32(1), nil)
+	mockStorage.GetActorCredentialsMock.Optional().Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
+
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == groupIRI {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     "server-rsa-private",
+				PrivateKeyEd25519PEM: "server-ed-private",
+			}, nil
+		}
+		return nil, errors.New("not local")
+	})
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
+		if subject == groupIRI {
+			return []model.Quad{
+				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
+			}, nil
+		}
+		if subject == senderIRI {
+			return []model.Quad{
+				{Subject: senderIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/bob/inbox"},
+			}, nil
+		}
+		return nil, nil
+	})
+
+	return mockStorage
 }

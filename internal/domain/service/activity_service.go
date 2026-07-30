@@ -442,10 +442,10 @@ func (s *ActivityService) handleGroupJoin(ctx context.Context, senderIRI, groupI
 	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
 
 	acceptActivity := map[string]interface{}{
-		"@context": model.ContextActivityStreams,
-		"id":       activityIRI,
-		"type":     model.ShortAccept,
-		"actor":    groupIRI,
+		model.JSONLDContext: model.ContextActivityStreams,
+		"id":                activityIRI,
+		"type":              model.ShortAccept,
+		"actor":             groupIRI,
 		"object": map[string]interface{}{
 			"type":   model.ShortJoin,
 			"actor":  senderIRI,
@@ -474,10 +474,10 @@ func (s *ActivityService) handleGroupLeave(ctx context.Context, senderIRI, group
 	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
 
 	acceptActivity := map[string]interface{}{
-		"@context": model.ContextActivityStreams,
-		"id":       activityIRI,
-		"type":     model.ShortAccept,
-		"actor":    groupIRI,
+		model.JSONLDContext: model.ContextActivityStreams,
+		"id":                activityIRI,
+		"type":              model.ShortAccept,
+		"actor":             groupIRI,
 		"object": map[string]interface{}{
 			"type":   model.ShortLeave,
 			"actor":  senderIRI,
@@ -502,12 +502,12 @@ func (s *ActivityService) announceGroupActivity(ctx context.Context, task model.
 	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
 
 	announceActivity := map[string]interface{}{
-		"@context": model.ContextActivityStreams,
-		"id":       activityIRI,
-		"type":     model.ShortAnnounce,
-		"actor":    groupIRI,
-		"object":   task.ActivityIRI,
-		"to":       []string{groupIRI + "/followers"},
+		model.JSONLDContext: model.ContextActivityStreams,
+		"id":                activityIRI,
+		"type":              model.ShortAnnounce,
+		"actor":             groupIRI,
+		"object":            task.ActivityIRI,
+		"to":                []string{groupIRI + "/followers"},
 	}
 	payload, err := json.Marshal(announceActivity)
 	if err != nil {
