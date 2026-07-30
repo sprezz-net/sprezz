@@ -25,6 +25,11 @@ type MinIOConfig struct {
 	UseSSL       bool   `yaml:"use_ssl" env:"MINIO_USE_SSL" env-default:"false"`
 }
 
+type ActivityPubConfig struct {
+	MaxActivitySizeBytes int64 `yaml:"max_activity_size_bytes" env:"MAX_ACTIVITY_SIZE_BYTES" env-default:"102400"`
+	MaxMediaSizeBytes    int64 `yaml:"max_media_size_bytes" env:"MAX_MEDIA_SIZE_BYTES" env-default:"10485760"`
+}
+
 type Config struct {
 	AppEnv      string            `yaml:"app_env" env:"APP_ENV" env-default:"local"`
 	Port        string            `yaml:"port" env:"PORT" env-default:"8080"`
@@ -32,6 +37,7 @@ type Config struct {
 	Database    DatabaseConfig    `yaml:"database"`
 	MinIO       MinIOConfig       `yaml:"minio"`
 	DatabaseURL string            `env:"DATABASE_URL"`
+	ActivityPub ActivityPubConfig `yaml:"activitypub"`
 }
 
 // GetDSN dynamically builds the connection string or prioritizes a raw DATABASE_URL override.

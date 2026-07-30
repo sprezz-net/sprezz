@@ -75,6 +75,12 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Sequential Multi-File Streaming Loop (Preserves tenantID and actorIRI context visibility)
 	for _, fileHeader := range files {
+		if fileHeader.Size > h.maxFileSize {
+			h.executeCompensatingCleanup(completedObjectKeys)
+			h.writeError(w, http.StatusBadRequest, fmt.Sprintf("Attachment %s exceeds maximum file size limit of %d bytes", fileHeader.Filename, h.maxFileSize))
+			return
+		}
+
 		fileStream, err := fileHeader.Open()
 		if err != nil {
 			h.executeCompensatingCleanup(completedObjectKeys)

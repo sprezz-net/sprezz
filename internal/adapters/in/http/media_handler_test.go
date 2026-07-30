@@ -127,6 +127,38 @@ func TestMediaUploadHandler_ServeHTTP_MissingContext(t *testing.T) {
 	}
 }
 
+func TestMediaUploadHandler_ServeHTTP_FileOversized(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	filenames := []string{"large_photo.png"}
+	contents := []string{"too many bytes for this limit"}
+	contentType, body := createMultipartRequest(t, `{"id":"123","object":"abc"}`, filenames, contents)
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	handler := inhttp.NewMediaUploadHandler(svc, 5) // Set size limit of 5 bytes
+
+	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
+	req.Header.Set("Content-Type", contentType)
+
+	ctx := context.WithValue(req.Context(), model.TenantIDKey, "tenant-alpha")
+	ctx = context.WithValue(ctx, model.ActorIRIKey, "https://sprezz.net")
+	req = req.WithContext(ctx)
+
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Errorf("Expected status code %d (BadRequest) for oversized files, got %d. Body: %s", http.StatusBadRequest, rr.Code, rr.Body.String())
+	}
+	if !strings.Contains(rr.Body.String(), "exceeds maximum file size limit") {
+		t.Errorf("Expected error to mention maximum file size limit, got %s", rr.Body.String())
+	}
+}
+
 func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
 	mc := minimock.NewController(t)
 

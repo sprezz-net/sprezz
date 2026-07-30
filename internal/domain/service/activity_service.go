@@ -15,19 +15,21 @@ import (
 var ErrDropAction = errors.New("drop action gracefully")
 
 type ActivityService struct {
-	storage      port.StoragePort
-	mediaStorage port.MediaStoragePort
-	parser       port.JSONLDParserPort
-	forwarder    port.OutboundDispatcher
-	fetcher      port.RemoteFetcher
+	storage              port.StoragePort
+	mediaStorage         port.MediaStoragePort
+	parser               port.JSONLDParserPort
+	forwarder            port.OutboundDispatcher
+	fetcher              port.RemoteFetcher
+	maxActivitySizeBytes int64
 }
 
 func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, fetcher port.RemoteFetcher, forwarders ...port.OutboundDispatcher) *ActivityService {
 	service := &ActivityService{
-		storage:      storage,
-		mediaStorage: media,
-		parser:       parser,
-		fetcher:      fetcher,
+		storage:              storage,
+		mediaStorage:         media,
+		parser:               parser,
+		fetcher:              fetcher,
+		maxActivitySizeBytes: 102400, // 100KB secure default
 	}
 	if len(forwarders) > 0 {
 		service.forwarder = forwarders[0]
@@ -35,10 +37,18 @@ func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, 
 	return service
 }
 
+func (s *ActivityService) SetMaxActivitySizeBytes(size int64) {
+	s.maxActivitySizeBytes = size
+}
+
 var _ port.ActivityServicePort = (*ActivityService)(nil)
 
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
+	if s.maxActivitySizeBytes > 0 && int64(len(task.Payload)) > s.maxActivitySizeBytes {
+		return fmt.Errorf("rejected inbound activity: payload size (%d bytes) exceeds maximum limit (%d bytes)", len(task.Payload), s.maxActivitySizeBytes)
+	}
+
 	var activity struct {
 		Type   string      `json:"type"`
 		Actor  interface{} `json:"actor"`

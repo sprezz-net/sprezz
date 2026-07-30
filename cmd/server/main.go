@@ -133,6 +133,7 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 	federatedSigner := outhttp.NewFederatedSignerAdapter(sharedHTTPClient)
 	remoteFetcher := outhttp.NewRemoteFetcherAdapter(sharedHTTPClient)
 	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, remoteFetcher, federatedSigner)
+	activityService.SetMaxActivitySizeBytes(cfg.ActivityPub.MaxActivitySizeBytes)
 
 	deps := &dependencies{
 		cfg:             cfg,
@@ -177,6 +178,7 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32) {
 	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
 	genericHandler := inhttp.NewGenericHandler(deps.postgresStorage)
+	mediaUploadHandler := inhttp.NewMediaUploadHandler(deps.activityService, deps.cfg.ActivityPub.MaxMediaSizeBytes)
 
 	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{
 		TenantDomainToID: tenantMap,
@@ -193,6 +195,12 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32
 		protected.Use(tenantValidator.Handler)
 
 		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(domains, deps.postgresStorage))
+
+		// Media upload handler
+		protected.Group(func(router chi.Router) {
+			router.Use(signatureValidator.Handler)
+			router.Post("/media/upload", mediaUploadHandler.ServeHTTP)
+		})
 
 		// Unified Greedy Catch-All Endpoint (Handles GET & POST dynamically)
 		protected.Group(func(router chi.Router) {

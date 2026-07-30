@@ -55,6 +55,34 @@ func TestProcessInboundTask_Success(t *testing.T) {
 	}
 }
 
+func TestProcessInboundTask_PayloadSizeLimit(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc.SetMaxActivitySizeBytes(10) // Set a very tiny limit of 10 bytes
+
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/1",
+		ObjectIRI:   "https://remote.com/note/1",
+		Payload:     []byte(`{"this_is_too_long": true}`), // Greater than 10 bytes
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err == nil {
+		t.Fatal("Expected error due to payload size limit, got nil")
+	}
+	if !strings.Contains(err.Error(), "exceeds maximum limit") {
+		t.Fatalf("Expected error message to mention size limit, got: %v", err)
+	}
+}
+
 func TestProcessInboundTask_SharedInboxFanOut(t *testing.T) {
 	mc := minimock.NewController(t)
 
