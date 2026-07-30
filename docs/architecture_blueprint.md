@@ -155,6 +155,7 @@ For incoming HTTP requests, signature validation is dynamically routed based on 
    - If the `Signature` header is absent, verification is bypassed (making signatures optional for ActivityPub `GET` requests).
    - For non-ActivityPub `Content-Type` payloads, signature verification is bypassed.
 4. **Max Activity Payload Size Limit**: Incoming ActivityPub task payloads are strictly capped at a system-wide maximum payload size (defaulting to 100KB) and rejected directly at the verification boundary if they exceed it. This ensures that oversized or deeply nested malicious payloads cannot proceed to memory-intensive unmarshaling, JSON-LD parsing, or quad conversion pipelines, preventing memory-exhaustion Denial of Service (DoS) vectors.
+5. **Strict Domain-Origin Alignment (Spoofing Prevention)**: To completely mitigate actor spoofing, the verification engine does not blindly evaluate the `keyId` URI parameter. In any incoming ActivityPub `POST` request containing a payload body, the verifier extracts the `actor` IRI from the body and strictly compares its host domain with the domain of the signature's `keyId`. If they mismatch, or if either domain cannot be parsed, the engine immediately terminates processing with a clear security violation error. This prevents a rogue instance from signing a high-profile user's activity using their own self-published key ID.
 
 ```mermaid
 flowchart TD
@@ -184,6 +185,7 @@ flowchart TD
 2. **Chronological Key History Window Routing**: If the signature's `keyId` points to a local domain, the system uses a compound index lookup to extract the public key that was valid *at the exact time the message was signed*. If no historical block is archived, it falls back to the current active credentials row.
 3. **Multi-Algorithm Validation Decoupling**: The extracted PEM string is decoded natively. The verification engine branches dynamically: **RSA signatures** are evaluated via `rsa.VerifyPKCS1v15` using pre-calculated SHA-256 digests, while modern **Ed25519 signatures** bypass hashing entirely and verify raw text bytes directly via `ed25519.Verify`.
 4. **Identity Assertion**: Upon successful cryptographic validation, the verifier binds the canonical sender to the request context via the `X-Actor-IRI` header, signaling downstream filters.
+5. **Strict Domain-Origin Alignment (Spoofing Prevention)**: For `POST` requests with activity payloads, the signature verification engine extracts the `actor` IRI from the request body and strictly compares its host domain with the domain of the signature's `keyId`. If they do not match, signature verification instantly fails, blocking the spoofed activity before any remote fetch loops are executed.
 
 ### 4.2 Split Hexagonal Queue Processing Boundaries
 
