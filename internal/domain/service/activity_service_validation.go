@@ -124,6 +124,35 @@ func (s *ActivityService) validateCreateVerb(actorIRI string, object interface{}
 			return fmt.Errorf("security violation: actor domain %s does not match object origin domain %s", actorDomain, objectDomain)
 		}
 	}
+
+	return s.validateActorSelfCreation(actorIRI, object)
+}
+
+// validateActorSelfCreation enforces that only the actor themselves can create/represent their own profile.
+func (s *ActivityService) validateActorSelfCreation(actorIRI string, object interface{}) error {
+	objMap, ok := object.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	objType, ok := objMap["type"].(string)
+	if !ok {
+		return nil
+	}
+
+	if !model.IsShortActorType(objType) && !model.IsActorType(objType) {
+		return nil
+	}
+
+	objID, ok := objMap["id"].(string)
+	if !ok {
+		return nil
+	}
+
+	if actorIRI != objID {
+		return fmt.Errorf("security violation: actor %s is not authorized to create actor profile %s", actorIRI, objID)
+	}
+
 	return nil
 }
 

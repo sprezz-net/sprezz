@@ -123,6 +123,15 @@ func IsActorType(uri string) bool {
 		uri == ActorApplication
 }
 
+// IsShortActorType checks if a given short type string matches any of the valid ActivityPub actor types.
+func IsShortActorType(t string) bool {
+	return t == ShortPerson ||
+		t == ShortService ||
+		t == ShortGroup ||
+		t == ShortOrganization ||
+		t == ShortApplication
+}
+
 // IsCollectionType checks if a given URI string matches standard ActivityPub collection types.
 func IsCollectionType(uri string) bool {
 	return uri == CollectionRegular ||

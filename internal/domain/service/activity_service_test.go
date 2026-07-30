@@ -1112,3 +1112,42 @@ func setupGroupStorageMock(mc *minimock.Controller, groupIRI, senderIRI string, 
 
 	return mockStorage
 }
+
+func TestProcessInboundTask_ActorSpoofing_PathAgnostic(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	// Target object has an arbitrary path IRI (no '/actor/' segment), but its type is "Person" (Actor type)
+	// Bob and Alice are both on "remote.com" (domains match, bypassing domain check), but Bob is not authorized to create Alice's profile.
+	payload := []byte(`{
+		"id": "https://remote.com/activity/create-alice",
+		"type": "Create",
+		"actor": "https://remote.com/actor/bob",
+		"object": {
+			"id": "https://remote.com/@alice",
+			"type": "Person",
+			"preferredUsername": "alice"
+		}
+	}`)
+
+	task := model.InboundTask{
+		ID:          "task-1",
+		ActivityIRI: "https://remote.com/activity/create-alice",
+		ObjectIRI:   "https://remote.com/@alice",
+		Payload:     payload,
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err == nil {
+		t.Fatal("Expected security violation error, got nil")
+	}
+	if !strings.Contains(err.Error(), "is not authorized to create actor profile") {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
