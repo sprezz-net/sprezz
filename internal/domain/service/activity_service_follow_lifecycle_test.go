@@ -41,7 +41,7 @@ func TestActivityService_AcceptFollow_Success(t *testing.T) {
 		PrivateKeyEd25519PEM: "server-ed-private",
 	}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockForwarder)
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockForwarder)
 
 	err := svc.AcceptFollow(ctx, followedActorIRI, followActivityIRI)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestActivityService_RejectFollow_Success(t *testing.T) {
 		PrivateKeyEd25519PEM: "server-ed-private",
 	}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockForwarder)
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockForwarder)
 
 	err := svc.RejectFollow(ctx, followedActorIRI, followActivityIRI)
 	if err != nil {
@@ -99,7 +99,7 @@ func TestActivityService_AcceptFollow_Mismatch_Error(t *testing.T) {
 		{Subject: followActivityIRI, Predicate: "as:object", Object: "https://local.com/actor/charlie"}, // Mismatched!
 	}, nil)
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	err := svc.AcceptFollow(ctx, followedActorIRI, followActivityIRI)
 	if err == nil {

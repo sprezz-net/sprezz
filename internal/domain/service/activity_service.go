@@ -14,6 +14,10 @@ import (
 
 var ErrDropAction = errors.New("drop action gracefully")
 
+type ActivityServiceConfig struct {
+	MaxActivitySizeBytes int64
+}
+
 type ActivityService struct {
 	storage              port.StoragePort
 	mediaStorage         port.MediaStoragePort
@@ -23,22 +27,22 @@ type ActivityService struct {
 	maxActivitySizeBytes int64
 }
 
-func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, fetcher port.RemoteFetcher, forwarders ...port.OutboundDispatcher) *ActivityService {
+func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, fetcher port.RemoteFetcher, cfg ActivityServiceConfig, forwarders ...port.OutboundDispatcher) *ActivityService {
+	maxLimit := cfg.MaxActivitySizeBytes
+	if maxLimit <= 0 {
+		maxLimit = 102400 // 100KB secure fallback default
+	}
 	service := &ActivityService{
 		storage:              storage,
 		mediaStorage:         media,
 		parser:               parser,
 		fetcher:              fetcher,
-		maxActivitySizeBytes: 102400, // 100KB secure default
+		maxActivitySizeBytes: maxLimit,
 	}
 	if len(forwarders) > 0 {
 		service.forwarder = forwarders[0]
 	}
 	return service
-}
-
-func (s *ActivityService) SetMaxActivitySizeBytes(size int64) {
-	s.maxActivitySizeBytes = size
 }
 
 var _ port.ActivityServicePort = (*ActivityService)(nil)

@@ -18,7 +18,7 @@ func TestProcessInboundTask_IsolatedDeletes(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 
 	// Context with Tenant ID 1
 	ctx := context.WithValue(context.Background(), model.TenantIDKey, int32(1))

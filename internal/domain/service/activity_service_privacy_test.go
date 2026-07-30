@@ -17,7 +17,7 @@ func TestActivityService_FilterPublicAndAuthorizedQuads(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	ctx := context.Background()
 
 	readerAlice := "https://sprezz.net/alice"

@@ -132,8 +132,16 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 	sharedHTTPClient := httpclient.New()
 	federatedSigner := outhttp.NewFederatedSignerAdapter(sharedHTTPClient)
 	remoteFetcher := outhttp.NewRemoteFetcherAdapter(sharedHTTPClient)
-	activityService := service.NewActivityService(postgresStorage, jsonldParser, mediaStorage, remoteFetcher, federatedSigner)
-	activityService.SetMaxActivitySizeBytes(cfg.ActivityPub.MaxActivitySizeBytes)
+	activityService := service.NewActivityService(
+		postgresStorage,
+		jsonldParser,
+		mediaStorage,
+		remoteFetcher,
+		service.ActivityServiceConfig{
+			MaxActivitySizeBytes: cfg.ActivityPub.MaxActivitySizeBytes,
+		},
+		federatedSigner,
+	)
 
 	deps := &dependencies{
 		cfg:             cfg,

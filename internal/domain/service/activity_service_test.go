@@ -41,7 +41,7 @@ func TestProcessInboundTask_Success(t *testing.T) {
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/1",
@@ -64,8 +64,7 @@ func TestProcessInboundTask_PayloadSizeLimit(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
-	svc.SetMaxActivitySizeBytes(10) // Set a very tiny limit of 10 bytes
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{MaxActivitySizeBytes: 10}) // Set a very tiny limit of 10 bytes
 
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
@@ -117,7 +116,7 @@ func TestProcessInboundTask_SharedInboxFanOut(t *testing.T) {
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 	task := model.InboundTask{
 		ID:          "018c0000-0000-7000-8000-000000000001",
 		ActivityIRI: "https://remote.com/act/1",
@@ -169,7 +168,7 @@ func TestProcessInboundTask_DirectInboxResolution(t *testing.T) {
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	// Direct Delivery task has objectIRI matching local actor profile.
 	task := model.InboundTask{
@@ -206,7 +205,7 @@ func TestProcessInboundTask_StorageError(t *testing.T) {
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 	task := model.InboundTask{ID: "task-1"}
 
 	err := svc.ProcessInboundTask(ctx, task)
@@ -229,7 +228,7 @@ func TestProcessInboundTask_ParserError(t *testing.T) {
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 	task := model.InboundTask{ID: "task-1"}
 
 	err := svc.ProcessInboundTask(ctx, task)
@@ -261,7 +260,7 @@ func TestGetFollowersTimeline(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	followers, err := svc.GetFollowersTimeline(ctx, actorIRI, 2, 0)
 	if err != nil {
@@ -316,7 +315,7 @@ func TestActivityService_GetCollectionTimeline_PrivacyScoping(t *testing.T) {
 
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	// Test Case 1: Bob reads Alice's outbox timeline
 	bobResults, err := svc.GetCollectionTimeline(ctx, readerBob, actorIRI, "outbox", 10, 0)
@@ -374,7 +373,7 @@ func TestRotateLocalActorKeys_Success(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	resIRI, err := svc.RotateLocalActorKeys(ctx, 1, "server")
 	if err != nil {
@@ -419,7 +418,7 @@ func TestProcessInboundMediaTask_QuotaSuccess(t *testing.T) {
 		*portmock.GraphVersionWriterMock
 	}{mockStorage, mockWriter}
 
-	svc := service.NewActivityService(structMock, mockParser, mockMedia, createTestFetcher(mc))
+	svc := service.NewActivityService(structMock, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	mediaCtx := port.InboundMediaContext{
 		ObjectName:  "tmp/task-abc",
@@ -445,7 +444,7 @@ func TestProcessInboundMediaTask_QuotaBreached(t *testing.T) {
 	// Simulate a strict hard ceiling threshold limit breach event
 	mockStorage.VerifyIncomingQuotaMock.Expect(ctx, tenantID, fileSize).Return(false, nil)
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
 
 	mediaCtx := port.InboundMediaContext{
 		ObjectName:  "tmp/oversized-task",
@@ -528,7 +527,7 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 		return nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockDispatcher)
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockDispatcher)
 
 	payload := []byte(`{
 		"to": ["https://remote.com/actor/bob", "https://remote.com/actor/charlie"],
@@ -648,7 +647,7 @@ func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
 		return nil
 	})
 
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockDispatcher)
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockDispatcher)
 
 	payload := []byte(`{
 		"to": ["https://` + remoteHost + `/actor/bob"]
@@ -748,7 +747,7 @@ func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 		return nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), mockDispatcher)
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockDispatcher)
 
 	// Activity payload addressing a local actor (alice),
 	// a remote actor with a cached relationship,

@@ -77,7 +77,7 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 		return objectName, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -112,7 +112,7 @@ func TestMediaUploadHandler_ServeHTTP_MissingContext(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -138,7 +138,7 @@ func TestMediaUploadHandler_ServeHTTP_FileOversized(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	handler := inhttp.NewMediaUploadHandler(svc, 5) // Set size limit of 5 bytes
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -196,7 +196,7 @@ func TestMediaUploadHandler_ServeHTTP_LoopRollbackOnFailure(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -230,7 +230,7 @@ func TestMediaUploadHandler_ServeHTTP_MissingActivity(t *testing.T) {
 	mockParser := portmock.NewJSONLDParserPortMock(mc)
 	mockMedia := portmock.NewMediaStoragePortMock(mc)
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -281,7 +281,7 @@ func TestMediaUploadHandler_ServeHTTP_DomainProcessingFailure(t *testing.T) {
 		return nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 	handler := inhttp.NewMediaUploadHandler(svc, 10*1024*1024)
 
 	req := httptest.NewRequest(http.MethodPost, "/media/upload", body)
@@ -328,7 +328,7 @@ func TestProcessInboundMediaTask_Success(t *testing.T) {
 		return []model.Quad{{GraphID: graphID, Subject: "obj", Predicate: "pred", Object: "val"}}, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 
 	mediaCtx := port.InboundMediaContext{
 		TenantID:     "tenant-1",
@@ -382,7 +382,7 @@ func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
 		return nil, nil
 	})
 
-	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 
 	mediaCtx := port.InboundMediaContext{
 		ObjectName:  "tmp/failed-task",
@@ -426,7 +426,7 @@ func TestPurgeOrphanedMedia_Success(t *testing.T) {
 	}).Return(nil)
 
 	// Initialize the domain coordinator execution service with type-safe mock nodes
-	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), mockMedia, portmock.NewRemoteFetcherMock(mc))
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), mockMedia, portmock.NewRemoteFetcherMock(mc), service.ActivityServiceConfig{})
 
 	// Execute execution routine target
 	err := svc.PurgeOrphanedMedia(ctx, targetKey)
