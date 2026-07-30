@@ -560,10 +560,11 @@ func (s *ActivityService) handleFollowResponse(ctx context.Context, followedActo
 	if err != nil {
 		return err
 	}
-	activityIRI := fmt.Sprintf("%s/activities/%s-%s", followedActorIRI, strings.ToLower(activityType), id.String())
+	domain := extractDomain(followedActorIRI)
+	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
 
 	responseActivity := map[string]interface{}{
-		"@context": "https://www.w3.org/ns/activitystreams",
+		"@context": model.ContextActivityStreams,
 		"id":       activityIRI,
 		"type":     activityType,
 		"actor":    followedActorIRI,

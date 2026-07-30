@@ -10,6 +10,8 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+
+	"github.com/google/uuid"
 )
 
 var ErrDropAction = errors.New("drop action gracefully")
@@ -81,6 +83,16 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 
 	if _, err := s.saveInboundActivityQuads(ctx, task); err != nil {
 		return err
+	}
+
+	if s.isLocalActorGroup(ctx, task.ObjectIRI) {
+		actorIRI := parseStringOrID(activity.Actor)
+		if err := s.processGroupActivity(ctx, task, activity.Type, actorIRI, task.ObjectIRI); err != nil {
+			return err
+		}
+		if activity.Type == model.ShortJoin || activity.Type == model.ShortLeave {
+			return nil
+		}
 	}
 
 	return s.deliverAndForwardInbound(ctx, task)
@@ -359,4 +371,148 @@ func (s *ActivityService) AcceptFollow(ctx context.Context, followedActorIRI, fo
 
 func (s *ActivityService) RejectFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error {
 	return s.handleFollowResponse(ctx, followedActorIRI, followActivityIRI, false)
+}
+
+func (s *ActivityService) isLocalActorGroup(ctx context.Context, actorIRI string) bool {
+	// A group can only be processed locally if it is a local actor (i.e. has local credentials)
+	if _, err := s.storage.GetActorDualKeys(ctx, actorIRI); err != nil {
+		return false
+	}
+	quads, err := s.storage.StreamQuadsBySubject(ctx, actorIRI)
+	if err != nil || len(quads) == 0 {
+		return false
+	}
+	for _, q := range quads {
+		if q.Predicate == model.RDFType && q.Object == model.ActorGroup {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ActivityService) isGroupMember(ctx context.Context, senderIRI, groupIRI string) (bool, error) {
+	quads, err := s.storage.StreamQuadsBySubject(ctx, groupIRI)
+	if err != nil {
+		return false, err
+	}
+	for _, q := range quads {
+		if q.Predicate == model.PredicateFollower && q.Object == senderIRI {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *ActivityService) processGroupActivity(ctx context.Context, task model.InboundTask, actType, senderIRI, groupIRI string) error {
+	switch actType {
+	case model.ShortJoin:
+		return s.handleGroupJoin(ctx, senderIRI, groupIRI)
+	case model.ShortLeave:
+		return s.handleGroupLeave(ctx, senderIRI, groupIRI)
+	default:
+		isMember, err := s.isGroupMember(ctx, senderIRI, groupIRI)
+		if err != nil {
+			return err
+		}
+		if !isMember {
+			return fmt.Errorf("rejected group activity: sender %s is not a member of group %s", senderIRI, groupIRI)
+		}
+		return s.announceGroupActivity(ctx, task, groupIRI)
+	}
+}
+
+func (s *ActivityService) handleGroupJoin(ctx context.Context, senderIRI, groupIRI string) error {
+	followerQuads := []model.Quad{
+		{
+			Subject:   groupIRI,
+			Predicate: model.PredicateFollower,
+			Object:    senderIRI,
+			ObjType:   model.NamedNode,
+		},
+	}
+	if err := s.storage.SaveQuads(ctx, followerQuads); err != nil {
+		return fmt.Errorf("failed to save group follower relationship: %w", err)
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	domain := extractDomain(groupIRI)
+	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
+
+	acceptActivity := map[string]interface{}{
+		"@context": model.ContextActivityStreams,
+		"id":       activityIRI,
+		"type":     model.ShortAccept,
+		"actor":    groupIRI,
+		"object": map[string]interface{}{
+			"type":   model.ShortJoin,
+			"actor":  senderIRI,
+			"object": groupIRI,
+		},
+		"to": []string{senderIRI},
+	}
+	payload, err := json.Marshal(acceptActivity)
+	if err != nil {
+		return err
+	}
+
+	return s.DispatchOutboundActivity(ctx, activityIRI, groupIRI, payload)
+}
+
+func (s *ActivityService) handleGroupLeave(ctx context.Context, senderIRI, groupIRI string) error {
+	if err := s.storage.RemoveQuadEdge(ctx, groupIRI, model.PredicateFollower, senderIRI); err != nil {
+		return fmt.Errorf("failed to remove group follower relationship: %w", err)
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	domain := extractDomain(groupIRI)
+	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
+
+	acceptActivity := map[string]interface{}{
+		"@context": model.ContextActivityStreams,
+		"id":       activityIRI,
+		"type":     model.ShortAccept,
+		"actor":    groupIRI,
+		"object": map[string]interface{}{
+			"type":   model.ShortLeave,
+			"actor":  senderIRI,
+			"object": groupIRI,
+		},
+		"to": []string{senderIRI},
+	}
+	payload, err := json.Marshal(acceptActivity)
+	if err != nil {
+		return err
+	}
+
+	return s.DispatchOutboundActivity(ctx, activityIRI, groupIRI, payload)
+}
+
+func (s *ActivityService) announceGroupActivity(ctx context.Context, task model.InboundTask, groupIRI string) error {
+	id, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	domain := extractDomain(groupIRI)
+	activityIRI := fmt.Sprintf("https://%s/activity/%s", domain, id.String())
+
+	announceActivity := map[string]interface{}{
+		"@context": model.ContextActivityStreams,
+		"id":       activityIRI,
+		"type":     model.ShortAnnounce,
+		"actor":    groupIRI,
+		"object":   task.ActivityIRI,
+		"to":       []string{groupIRI + "/followers"},
+	}
+	payload, err := json.Marshal(announceActivity)
+	if err != nil {
+		return err
+	}
+
+	return s.DispatchOutboundActivity(ctx, activityIRI, groupIRI, payload)
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"net/http"
@@ -185,6 +186,7 @@ func TestProcessInboundTask_DirectInboxResolution(t *testing.T) {
 	mockStorage.SaveGraphVersionMock.Set(func(ctx context.Context, activityIRI, objectIRI string, payload []byte, quads []model.Quad) error {
 		return nil
 	})
+	mockStorage.StreamQuadsBySubjectMock.Return([]model.Quad{}, nil)
 
 	// Setup GetActorDualKeys expectations for resolving local actors
 	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
@@ -839,5 +841,310 @@ func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 		if strings.Contains(inbox, "blocked.com") {
 			t.Errorf("should not have forwarded to blocked domain: %s", inbox)
 		}
+	}
+}
+
+func TestProcessInboundTask_GroupJoin_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	groupIRI := "https://local.com/actor/group-1"
+	senderIRI := "https://remote.com/actor/bob"
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
+	mockStorage.GetTenantIDByDomainMock.Return(int32(1), nil)
+	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
+
+	// Expect SaveQuads to save group follower relationship
+	savedQuads := false
+	mockStorage.SaveQuadsMock.Set(func(ctx context.Context, quads []model.Quad) error {
+		for _, q := range quads {
+			if q.Subject == groupIRI && q.Predicate == model.PredicateFollower && q.Object == senderIRI {
+				savedQuads = true
+			}
+		}
+		return nil
+	})
+
+	// Dispatch outbound Accept(Join) expectations
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == groupIRI {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     "server-rsa-private",
+				PrivateKeyEd25519PEM: "server-ed-private",
+			}, nil
+		}
+		return nil, errors.New("not local")
+	})
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
+		if subject == groupIRI {
+			return []model.Quad{
+				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
+			}, nil
+		}
+		if subject == senderIRI {
+			return []model.Quad{
+				{Subject: senderIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/bob/inbox"},
+			}, nil
+		}
+		return nil, nil
+	})
+
+	dispatchedAccept := false
+	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
+	mockDispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		var activity map[string]interface{}
+		_ = json.Unmarshal(payload, &activity)
+		if activity["type"] == "Accept" && targetInbox == "https://remote.com/actor/bob/inbox" {
+			dispatchedAccept = true
+		}
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockDispatcher)
+
+	payload := []byte(`{
+		"id": "https://remote.com/activity/join-1",
+		"type": "Join",
+		"actor": "https://remote.com/actor/bob",
+		"object": "https://local.com/actor/group-1"
+	}`)
+
+	task := model.InboundTask{
+		ActivityIRI: "https://remote.com/activity/join-1",
+		ObjectIRI:   groupIRI,
+		Payload:     payload,
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err != nil {
+		t.Fatalf("Expected success, got err: %v", err)
+	}
+
+	if !savedQuads {
+		t.Error("Expected group follower relationship to be saved in database")
+	}
+	if !dispatchedAccept {
+		t.Error("Expected Accept(Join) activity to be dispatched outbound")
+	}
+}
+
+func TestProcessInboundTask_GroupLeave_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	groupIRI := "https://local.com/actor/group-1"
+	senderIRI := "https://remote.com/actor/bob"
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
+	mockStorage.SaveQuadsMock.Return(nil)
+	mockStorage.GetTenantIDByDomainMock.Return(int32(1), nil)
+	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
+		if subject == groupIRI {
+			return []model.Quad{
+				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
+			}, nil
+		}
+		if subject == senderIRI {
+			return []model.Quad{
+				{Subject: senderIRI, Predicate: model.PredicateInbox, Object: "https://remote.com/actor/bob/inbox"},
+			}, nil
+		}
+		return nil, nil
+	})
+
+	// Expect RemoveQuadEdge to be called to prune relationship
+	removedEdge := false
+	mockStorage.RemoveQuadEdgeMock.Set(func(ctx context.Context, subject, predicate, object string) error {
+		if subject == groupIRI && predicate == model.PredicateFollower && object == senderIRI {
+			removedEdge = true
+		}
+		return nil
+	})
+
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == groupIRI {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     "server-rsa-private",
+				PrivateKeyEd25519PEM: "server-ed-private",
+			}, nil
+		}
+		return nil, errors.New("not local")
+	})
+
+	dispatchedAccept := false
+	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
+	mockDispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		var activity map[string]interface{}
+		_ = json.Unmarshal(payload, &activity)
+		if activity["type"] == "Accept" && targetInbox == "https://remote.com/actor/bob/inbox" {
+			dispatchedAccept = true
+		}
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockDispatcher)
+
+	payload := []byte(`{
+		"id": "https://remote.com/activity/leave-1",
+		"type": "Leave",
+		"actor": "https://remote.com/actor/bob",
+		"object": "https://local.com/actor/group-1"
+	}`)
+
+	task := model.InboundTask{
+		ActivityIRI: "https://remote.com/activity/leave-1",
+		ObjectIRI:   groupIRI,
+		Payload:     payload,
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err != nil {
+		t.Fatalf("Expected success, got err: %v", err)
+	}
+
+	if !removedEdge {
+		t.Error("Expected group follower relationship to be removed from database")
+	}
+	if !dispatchedAccept {
+		t.Error("Expected Accept(Leave) activity to be dispatched outbound")
+	}
+}
+
+func TestProcessInboundTask_GroupAnnounce_Success(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	groupIRI := "https://local.com/actor/group-1"
+	senderIRI := "https://remote.com/actor/bob"
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
+	mockStorage.SaveQuadsMock.Return(nil)
+	mockStorage.GetTenantIDByDomainMock.Return(int32(1), nil)
+	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{PrivateKeyRSAPEM: "server-rsa-private"}, nil)
+	mockStorage.RecordActorInboxDeliveryMock.Return(nil)
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
+		if subject == groupIRI {
+			return []model.Quad{
+				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
+				// BOB is a member (follower) of the Group!
+				{Subject: groupIRI, Predicate: model.PredicateFollower, Object: senderIRI},
+				{Subject: groupIRI, Predicate: model.PredicateFollower, Object: "https://remote-2.com/actor/charlie"},
+			}, nil
+		}
+		if subject == "https://remote-2.com/actor/charlie" {
+			return []model.Quad{
+				{Subject: "https://remote-2.com/actor/charlie", Predicate: model.PredicateInbox, Object: "https://remote-2.com/actor/charlie/inbox"},
+			}, nil
+		}
+		return nil, nil
+	})
+
+	mockStorage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == groupIRI {
+			return &model.ActorDualKeys{
+				PrivateKeyRSAPEM:     "server-rsa-private",
+				PrivateKeyEd25519PEM: "server-ed-private",
+			}, nil
+		}
+		return nil, errors.New("not local")
+	})
+
+	dispatchedAnnounce := false
+	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
+	mockDispatcher.ForwardFederatedActivityMock.Set(func(ctx context.Context, targetInbox, actorKeyID, rsaPEM, edPEM string, payload []byte) error {
+		var activity map[string]interface{}
+		_ = json.Unmarshal(payload, &activity)
+		if activity["type"] == "Announce" && targetInbox == "https://remote-2.com/actor/charlie/inbox" {
+			dispatchedAnnounce = true
+		}
+		return nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{}, mockDispatcher)
+
+	payload := []byte(`{
+		"id": "https://remote.com/activity/create-1",
+		"type": "Create",
+		"actor": "https://remote.com/actor/bob",
+		"object": "https://remote.com/note/123"
+	}`)
+
+	task := model.InboundTask{
+		ActivityIRI: "https://remote.com/activity/create-1",
+		ObjectIRI:   groupIRI,
+		Payload:     payload,
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err != nil {
+		t.Fatalf("Expected success, got err: %v", err)
+	}
+
+	if !dispatchedAnnounce {
+		t.Error("Expected inbound post to be auto-announced out to group members")
+	}
+}
+
+func TestProcessInboundTask_GroupAnnounce_NonMemberRejected(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	groupIRI := "https://local.com/actor/group-1"
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.CreateGraphVersionMock.Return(int64(123), nil)
+	mockStorage.SaveQuadsMock.Return(nil)
+	mockStorage.GetActorDualKeysMock.Return(&model.ActorDualKeys{}, nil)
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subject string) ([]model.Quad, error) {
+		if subject == groupIRI {
+			return []model.Quad{
+				{Subject: groupIRI, Predicate: model.RDFType, Object: model.ActorGroup},
+				// Bob is NOT in the followers collection (not a member)
+			}, nil
+		}
+		return nil, nil
+	})
+
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	payload := []byte(`{
+		"id": "https://remote.com/activity/create-1",
+		"type": "Create",
+		"actor": "https://remote.com/actor/bob",
+		"object": "https://remote.com/note/123"
+	}`)
+
+	task := model.InboundTask{
+		ActivityIRI: "https://remote.com/activity/create-1",
+		ObjectIRI:   groupIRI,
+		Payload:     payload,
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err == nil {
+		t.Fatal("Expected error when non-member attempts to post to Group, got nil")
+	}
+	if !strings.Contains(err.Error(), "sender https://remote.com/actor/bob is not a member of group") {
+		t.Errorf("Unexpected error message: %v", err)
 	}
 }

@@ -1,6 +1,9 @@
 package model
 
 const (
+	// Canonical context URIs
+	ContextActivityStreams = "https://www.w3.org/ns/activitystreams"
+
 	// Canonical namespace URIs
 	NamespaceActivityStreams = "https://www.w3.org/ns/activitystreams#"
 	NamespaceRDF             = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
