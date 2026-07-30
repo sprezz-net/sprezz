@@ -374,7 +374,7 @@ func TestProcessInboundTask_JoinLeave_GroupSuccess(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/groups/tech" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: model.RDFType, Object: "as:Group"},
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.RDFType, Object: model.ActorGroup},
 			}, nil
 		}
 		return nil, nil
@@ -411,7 +411,7 @@ func TestProcessInboundTask_JoinLeave_NotGroupFail(t *testing.T) {
 		}
 		if subjectIRI == "https://remote.com/note/1" {
 			return []model.Quad{
-				{GraphID: 2, Subject: subjectIRI, Predicate: model.RDFType, Object: "as:Note"}, // Note, not Group!
+				{GraphID: 2, Subject: subjectIRI, Predicate: model.RDFType, Object: model.TypeNote}, // Note, not Group!
 			}, nil
 		}
 		return nil, nil

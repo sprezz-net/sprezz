@@ -775,7 +775,13 @@ func (s *PostgresStorage) StreamQuadsBySubject(ctx context.Context, subjectIRI s
 		if row.IsLiteral != nil && *row.IsLiteral {
 			objType = model.Literal
 		}
-		quads = append(quads, model.Quad{GraphID: row.GraphID, Subject: subjectIRI, Predicate: row.Predicate, Object: row.Object, ObjType: objType})
+		quads = append(quads, model.Quad{
+			GraphID:   row.GraphID,
+			Subject:   subjectIRI,
+			Predicate: row.Predicate,
+			Object:    row.Object,
+			ObjType:   objType,
+		})
 	}
 	return quads, nil
 }

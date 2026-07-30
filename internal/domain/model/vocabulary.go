@@ -1,7 +1,5 @@
 package model
 
-import "strings"
-
 const (
 	// Canonical namespace URIs
 	NamespaceActivityStreams = "https://www.w3.org/ns/activitystreams#"
@@ -95,6 +93,7 @@ const (
 	PredicateFollowers    = NamespaceActivityStreams + "followers"
 	PredicateEndTime      = NamespaceActivityStreams + "endTime"
 	PredicateVoted        = NamespaceActivityStreams + "voted"
+	PredicateLiked        = NamespaceActivityStreams + "liked"
 
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"
@@ -120,15 +119,18 @@ func IsActorType(uri string) bool {
 
 // IsCollectionType checks if a given URI string matches standard ActivityPub collection types.
 func IsCollectionType(uri string) bool {
-	cleanURI := strings.Trim(uri, `"'`)
-	return cleanURI == CollectionRegular ||
-		cleanURI == CollectionOrdered ||
-		cleanURI == CollectionPageRegular ||
-		cleanURI == CollectionPageOrdered
+	return uri == CollectionRegular ||
+		uri == CollectionOrdered ||
+		uri == CollectionPageRegular ||
+		uri == CollectionPageOrdered
 }
 
-// IsGroupOrCollection checks if a given type string is a Group or any Collection variety (case-insensitive).
+// IsGroupOrCollection checks if a given type string is a Group or any Collection variety exactly.
 func IsGroupOrCollection(t string) bool {
-	clean := strings.ToLower(strings.Trim(t, `"'`))
-	return strings.Contains(clean, "group") || strings.Contains(clean, "collection")
+	return t == ShortGroup ||
+		t == ActorGroup ||
+		t == CollectionRegular ||
+		t == CollectionOrdered ||
+		t == CollectionPageRegular ||
+		t == CollectionPageOrdered
 }

@@ -402,7 +402,7 @@ func (s *ActivityService) validateLikeDislikeVerb(ctx context.Context, actorIRI,
 		actorMap.mu.RLock()
 		alreadyLiked := false
 		for pred, objects := range actorMap.m {
-			if strings.Contains(pred, "liked") {
+			if pred == model.PredicateLiked {
 				for _, obj := range objects {
 					if strings.Trim(obj, `"'`) == targetIRI {
 						alreadyLiked = true
