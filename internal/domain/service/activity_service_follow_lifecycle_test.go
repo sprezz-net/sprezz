@@ -35,7 +35,7 @@ func TestActivityService_AcceptFollow_Success(t *testing.T) {
 	setupSaveQuadsMockAccept(t, mockStorage, followActivityIRI, followedActorIRI, followerActorIRI)
 	setupStreamQuadsBySubjectMock(mockStorage, followActivityIRI, followerActorIRI, followedActorIRI)
 
-	mockStorage.GetOrCreateTenantByDomainMock.Return(1, nil)
+	mockStorage.GetTenantIDByDomainMock.Return(1, nil)
 	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{
 		PrivateKeyRSAPEM:     "server-rsa-private",
 		PrivateKeyEd25519PEM: "server-ed-private",
@@ -69,7 +69,7 @@ func TestActivityService_RejectFollow_Success(t *testing.T) {
 	setupSaveQuadsMockReject(t, mockStorage, followActivityIRI)
 	setupStreamQuadsBySubjectMock(mockStorage, followActivityIRI, followerActorIRI, followedActorIRI)
 
-	mockStorage.GetOrCreateTenantByDomainMock.Return(1, nil)
+	mockStorage.GetTenantIDByDomainMock.Return(1, nil)
 	mockStorage.GetActorCredentialsMock.Return("https://local.com/actor/server", &model.ActorDualKeys{
 		PrivateKeyRSAPEM:     "server-rsa-private",
 		PrivateKeyEd25519PEM: "server-ed-private",

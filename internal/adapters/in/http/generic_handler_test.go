@@ -11,6 +11,7 @@ import (
 	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
+	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
 )
 
@@ -46,12 +47,12 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 	mc := minimock.NewController(t)
 
 	storage := portmock.NewStoragePortMock(mc)
-	storage.EnqueueInboundMock.Inspect(func(ctx context.Context, id, activityIRI, objectIRI, targetDomain string, payload []byte) {
+	storage.EnqueueInboundMock.Inspect(func(ctx context.Context, id, activityIRI, objectIRI string, tenantID int32, payload []byte) {
 		if activityIRI != "https://remote.com/activity-1" {
 			t.Errorf("expected activityIRI to be 'https://remote.com/activity-1', got %s", activityIRI)
 		}
-		if targetDomain != "local.example" {
-			t.Errorf("expected targetDomain to be 'local.example', got %s", targetDomain)
+		if tenantID != 1 {
+			t.Errorf("expected tenantID to be 1, got %v", tenantID)
 		}
 	}).Return(nil)
 
@@ -63,6 +64,7 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	ctx := context.WithValue(req.Context(), middleware.AuthenticatedActorKey, "https://remote.com/actor")
+	ctx = context.WithValue(ctx, model.TenantIDKey, int32(1))
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(rec, req)
@@ -117,15 +119,15 @@ func TestGenericHandler_PostDirectInbox_Success(t *testing.T) {
 	mc := minimock.NewController(t)
 
 	storage := portmock.NewStoragePortMock(mc)
-	storage.EnqueueInboundMock.Inspect(func(ctx context.Context, id, activityIRI, objectIRI, targetDomain string, payload []byte) {
+	storage.EnqueueInboundMock.Inspect(func(ctx context.Context, id, activityIRI, objectIRI string, tenantID int32, payload []byte) {
 		if activityIRI != "https://remote.com/activity-1" {
 			t.Errorf("expected activityIRI to be 'https://remote.com/activity-1', got %s", activityIRI)
 		}
 		if objectIRI != "https://remote.com/object-1" {
 			t.Errorf("expected objectIRI to be 'https://remote.com/object-1', got %s", objectIRI)
 		}
-		if targetDomain != "local.example" {
-			t.Errorf("expected targetDomain to be 'local.example', got %s", targetDomain)
+		if tenantID != 1 {
+			t.Errorf("expected tenantID to be 1, got %v", tenantID)
 		}
 	}).Return(nil)
 
@@ -137,6 +139,7 @@ func TestGenericHandler_PostDirectInbox_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	ctx := context.WithValue(req.Context(), middleware.AuthenticatedActorKey, "https://remote.com/actor")
+	ctx = context.WithValue(ctx, model.TenantIDKey, int32(1))
 	req = req.WithContext(ctx)
 
 	handler.ServeHTTP(rec, req)

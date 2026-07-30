@@ -7,10 +7,13 @@ SELECT EXISTS(
 SELECT id, domain_name FROM server_tenants WHERE domain_name = $1;
 
 -- name: InsertTenant :one
-INSERT INTO server_tenants (domain_name)
-VALUES ($1)
-ON CONFLICT (domain_name) DO UPDATE SET domain_name = EXCLUDED.domain_name
-RETURNING id, domain_name;
+INSERT INTO server_tenants (tenant_uuid, domain_name)
+VALUES ($1, $2)
+ON CONFLICT (domain_name) DO UPDATE SET tenant_uuid = EXCLUDED.tenant_uuid
+RETURNING id, tenant_uuid, domain_name;
+
+-- name: GetAllTenants :many
+SELECT id, tenant_uuid, domain_name FROM server_tenants;
 
 -- name: GetActorCredentialsByUsername :one
 SELECT actor_iri, tenant_id, username, private_key_rsa_pem, private_key_ed25519_pem

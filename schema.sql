@@ -3,6 +3,7 @@ CREATE TYPE activity_status AS ENUM ('pending', 'processing', 'completed', 'fail
 -- Domain Multi-Tenancy Management
 CREATE TABLE server_tenants (
     id SERIAL PRIMARY KEY,
+    tenant_uuid UUID UNIQUE NOT NULL DEFAULT gen_random_uuid(),
     domain_name TEXT UNIQUE NOT NULL,
     storage_ceiling_bytes BIGINT NOT NULL DEFAULT 1073741824 -- Default to 1GB per tenant
 );

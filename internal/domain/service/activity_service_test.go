@@ -442,7 +442,10 @@ func TestDispatchOutboundActivity_SharedInboxConsolidation(t *testing.T) {
 
 	mockStorage := portmock.NewStoragePortMock(mc)
 
-	mockStorage.GetOrCreateTenantByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+	mockStorage.GetTenantIDByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+		return 1, nil
+	})
+	mockStorage.GetTenantIDByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
 		return 1, nil
 	})
 	mockStorage.GetActorCredentialsMock.Set(func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {
@@ -560,7 +563,7 @@ func TestDispatchOutboundActivity_FEPD556Discovery(t *testing.T) {
 
 	mockStorage := portmock.NewStoragePortMock(mc)
 
-	mockStorage.GetOrCreateTenantByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+	mockStorage.GetTenantIDByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
 		return 1, nil
 	})
 
@@ -641,7 +644,7 @@ func TestProcessInboundTask_InboxForwarding(t *testing.T) {
 	mockDispatcher := portmock.NewOutboundDispatcherMock(mc)
 
 	// Mock Storage Setups
-	mockStorage.GetOrCreateTenantByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
+	mockStorage.GetTenantIDByDomainMock.Set(func(ctx context.Context, domain string) (int32, error) {
 		return 1, nil
 	})
 	mockStorage.GetActorCredentialsMock.Set(func(ctx context.Context, tenantID int32, username string) (string, *model.ActorDualKeys, error) {

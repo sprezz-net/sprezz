@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"strings"
+
+	"sprezz/internal/domain/model"
 )
 
 type contextKey string
@@ -11,20 +13,20 @@ type contextKey string
 const TenantDomainKey contextKey = "tenant_domain"
 
 type TenantConfig struct {
-	TenantDomains []string
+	TenantDomainToID map[string]int32
 }
 
 // TenantValidator enforces that the incoming request host is explicitly registered.
 type TenantValidator struct {
-	allowedDomains map[string]struct{}
+	tenantIDs map[string]int32
 }
 
 func NewTenantValidator(cfg TenantConfig) *TenantValidator {
-	domains := make(map[string]struct{}, len(cfg.TenantDomains))
-	for _, domain := range cfg.TenantDomains {
-		domains[strings.ToLower(strings.TrimSpace(domain))] = struct{}{}
+	domains := make(map[string]int32, len(cfg.TenantDomainToID))
+	for domain, id := range cfg.TenantDomainToID {
+		domains[strings.ToLower(strings.TrimSpace(domain))] = id
 	}
-	return &TenantValidator{allowedDomains: domains}
+	return &TenantValidator{tenantIDs: domains}
 }
 
 // Handler is a native Chi-compatible middleware that validates multi-tenant boundaries.
@@ -36,13 +38,15 @@ func (v *TenantValidator) Handler(next http.Handler) http.Handler {
 		}
 		host = strings.ToLower(strings.TrimSpace(host))
 
-		if _, allowed := v.allowedDomains[host]; !allowed {
+		tenantID, allowed := v.tenantIDs[host]
+		if !allowed {
 			http.Error(w, "Access Denied: Host domain is not an authorized tenant on this instance", http.StatusNotFound)
 			return
 		}
 
-		// Inject the validated domain string into the request context for lower layers to read
+		// Inject the validated domain string and tenant ID into the request context for lower layers to read
 		ctx := context.WithValue(r.Context(), TenantDomainKey, host)
+		ctx = context.WithValue(ctx, model.TenantIDKey, tenantID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

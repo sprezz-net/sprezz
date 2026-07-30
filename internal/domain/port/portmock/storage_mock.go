@@ -55,9 +55,9 @@ type StoragePortMock struct {
 	beforeCreateGraphVersionCounter uint64
 	CreateGraphVersionMock          mStoragePortMockCreateGraphVersion
 
-	funcEnqueueInbound          func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) (err error)
+	funcEnqueueInbound          func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error)
 	funcEnqueueInboundOrigin    string
-	inspectFuncEnqueueInbound   func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte)
+	inspectFuncEnqueueInbound   func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte)
 	afterEnqueueInboundCounter  uint64
 	beforeEnqueueInboundCounter uint64
 	EnqueueInboundMock          mStoragePortMockEnqueueInbound
@@ -104,6 +104,13 @@ type StoragePortMock struct {
 	beforeGetActorProfileFromGraphCounter uint64
 	GetActorProfileFromGraphMock          mStoragePortMockGetActorProfileFromGraph
 
+	funcGetAllTenants          func(ctx context.Context) (m1 map[string]int32, err error)
+	funcGetAllTenantsOrigin    string
+	inspectFuncGetAllTenants   func(ctx context.Context)
+	afterGetAllTenantsCounter  uint64
+	beforeGetAllTenantsCounter uint64
+	GetAllTenantsMock          mStoragePortMockGetAllTenants
+
 	funcGetCollectionPayloads          func(ctx context.Context, actorIRI string, collection string, limit int, offset int) (baa1 [][]byte, err error)
 	funcGetCollectionPayloadsOrigin    string
 	inspectFuncGetCollectionPayloads   func(ctx context.Context, actorIRI string, collection string, limit int, offset int)
@@ -139,13 +146,6 @@ type StoragePortMock struct {
 	beforeGetNomadicIdentityCounter uint64
 	GetNomadicIdentityMock          mStoragePortMockGetNomadicIdentity
 
-	funcGetOrCreateTenantByDomain          func(ctx context.Context, domainName string) (i1 int32, err error)
-	funcGetOrCreateTenantByDomainOrigin    string
-	inspectFuncGetOrCreateTenantByDomain   func(ctx context.Context, domainName string)
-	afterGetOrCreateTenantByDomainCounter  uint64
-	beforeGetOrCreateTenantByDomainCounter uint64
-	GetOrCreateTenantByDomainMock          mStoragePortMockGetOrCreateTenantByDomain
-
 	funcGetRepliesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
 	funcGetRepliesForObjectOrigin    string
 	inspectFuncGetRepliesForObject   func(ctx context.Context, objectIRI string)
@@ -173,6 +173,13 @@ type StoragePortMock struct {
 	afterGetTenantIDByActivityIRICounter  uint64
 	beforeGetTenantIDByActivityIRICounter uint64
 	GetTenantIDByActivityIRIMock          mStoragePortMockGetTenantIDByActivityIRI
+
+	funcGetTenantIDByDomain          func(ctx context.Context, domainName string) (i1 int32, err error)
+	funcGetTenantIDByDomainOrigin    string
+	inspectFuncGetTenantIDByDomain   func(ctx context.Context, domainName string)
+	afterGetTenantIDByDomainCounter  uint64
+	beforeGetTenantIDByDomainCounter uint64
+	GetTenantIDByDomainMock          mStoragePortMockGetTenantIDByDomain
 
 	funcHasActorCredential          func(ctx context.Context, tenantID int32, username string) (b1 bool, err error)
 	funcHasActorCredentialOrigin    string
@@ -265,6 +272,13 @@ type StoragePortMock struct {
 	beforeStreamQuadsBySubjectCounter uint64
 	StreamQuadsBySubjectMock          mStoragePortMockStreamQuadsBySubject
 
+	funcUpsertConfiguredTenant          func(ctx context.Context, tenantUUID string, domainName string) (i1 int32, err error)
+	funcUpsertConfiguredTenantOrigin    string
+	inspectFuncUpsertConfiguredTenant   func(ctx context.Context, tenantUUID string, domainName string)
+	afterUpsertConfiguredTenantCounter  uint64
+	beforeUpsertConfiguredTenantCounter uint64
+	UpsertConfiguredTenantMock          mStoragePortMockUpsertConfiguredTenant
+
 	funcUpsertNomadicIdentity          func(ctx context.Context, identity *model.NomadicIdentity) (err error)
 	funcUpsertNomadicIdentityOrigin    string
 	inspectFuncUpsertNomadicIdentity   func(ctx context.Context, identity *model.NomadicIdentity)
@@ -324,6 +338,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 	m.GetActorProfileFromGraphMock = mStoragePortMockGetActorProfileFromGraph{mock: m}
 	m.GetActorProfileFromGraphMock.callArgs = []*StoragePortMockGetActorProfileFromGraphParams{}
 
+	m.GetAllTenantsMock = mStoragePortMockGetAllTenants{mock: m}
+	m.GetAllTenantsMock.callArgs = []*StoragePortMockGetAllTenantsParams{}
+
 	m.GetCollectionPayloadsMock = mStoragePortMockGetCollectionPayloads{mock: m}
 	m.GetCollectionPayloadsMock.callArgs = []*StoragePortMockGetCollectionPayloadsParams{}
 
@@ -339,9 +356,6 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 	m.GetNomadicIdentityMock = mStoragePortMockGetNomadicIdentity{mock: m}
 	m.GetNomadicIdentityMock.callArgs = []*StoragePortMockGetNomadicIdentityParams{}
 
-	m.GetOrCreateTenantByDomainMock = mStoragePortMockGetOrCreateTenantByDomain{mock: m}
-	m.GetOrCreateTenantByDomainMock.callArgs = []*StoragePortMockGetOrCreateTenantByDomainParams{}
-
 	m.GetRepliesForObjectMock = mStoragePortMockGetRepliesForObject{mock: m}
 	m.GetRepliesForObjectMock.callArgs = []*StoragePortMockGetRepliesForObjectParams{}
 
@@ -353,6 +367,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.GetTenantIDByActivityIRIMock = mStoragePortMockGetTenantIDByActivityIRI{mock: m}
 	m.GetTenantIDByActivityIRIMock.callArgs = []*StoragePortMockGetTenantIDByActivityIRIParams{}
+
+	m.GetTenantIDByDomainMock = mStoragePortMockGetTenantIDByDomain{mock: m}
+	m.GetTenantIDByDomainMock.callArgs = []*StoragePortMockGetTenantIDByDomainParams{}
 
 	m.HasActorCredentialMock = mStoragePortMockHasActorCredential{mock: m}
 	m.HasActorCredentialMock.callArgs = []*StoragePortMockHasActorCredentialParams{}
@@ -392,6 +409,9 @@ func NewStoragePortMock(t minimock.Tester) *StoragePortMock {
 
 	m.StreamQuadsBySubjectMock = mStoragePortMockStreamQuadsBySubject{mock: m}
 	m.StreamQuadsBySubjectMock.callArgs = []*StoragePortMockStreamQuadsBySubjectParams{}
+
+	m.UpsertConfiguredTenantMock = mStoragePortMockUpsertConfiguredTenant{mock: m}
+	m.UpsertConfiguredTenantMock.callArgs = []*StoragePortMockUpsertConfiguredTenantParams{}
 
 	m.UpsertNomadicIdentityMock = mStoragePortMockUpsertNomadicIdentity{mock: m}
 	m.UpsertNomadicIdentityMock.callArgs = []*StoragePortMockUpsertNomadicIdentityParams{}
@@ -2453,22 +2473,22 @@ type StoragePortMockEnqueueInboundExpectation struct {
 
 // StoragePortMockEnqueueInboundParams contains parameters of the StoragePort.EnqueueInbound
 type StoragePortMockEnqueueInboundParams struct {
-	ctx          context.Context
-	id           string
-	activityIRI  string
-	objectIRI    string
-	targetDomain string
-	payload      []byte
+	ctx         context.Context
+	id          string
+	activityIRI string
+	objectIRI   string
+	tenantID    int32
+	payload     []byte
 }
 
 // StoragePortMockEnqueueInboundParamPtrs contains pointers to parameters of the StoragePort.EnqueueInbound
 type StoragePortMockEnqueueInboundParamPtrs struct {
-	ctx          *context.Context
-	id           *string
-	activityIRI  *string
-	objectIRI    *string
-	targetDomain *string
-	payload      *[]byte
+	ctx         *context.Context
+	id          *string
+	activityIRI *string
+	objectIRI   *string
+	tenantID    *int32
+	payload     *[]byte
 }
 
 // StoragePortMockEnqueueInboundResults contains results of the StoragePort.EnqueueInbound
@@ -2478,13 +2498,13 @@ type StoragePortMockEnqueueInboundResults struct {
 
 // StoragePortMockEnqueueInboundOrigins contains origins of expectations of the StoragePort.EnqueueInbound
 type StoragePortMockEnqueueInboundExpectationOrigins struct {
-	origin             string
-	originCtx          string
-	originId           string
-	originActivityIRI  string
-	originObjectIRI    string
-	originTargetDomain string
-	originPayload      string
+	origin            string
+	originCtx         string
+	originId          string
+	originActivityIRI string
+	originObjectIRI   string
+	originTenantID    string
+	originPayload     string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -2498,7 +2518,7 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Optional() *mStoragePort
 }
 
 // Expect sets up expected params for StoragePort.EnqueueInbound
-func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Expect(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) *mStoragePortMockEnqueueInbound {
+func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Expect(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) *mStoragePortMockEnqueueInbound {
 	if mmEnqueueInbound.mock.funcEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("StoragePortMock.EnqueueInbound mock is already set by Set")
 	}
@@ -2511,7 +2531,7 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Expect(ctx context.Conte
 		mmEnqueueInbound.mock.t.Fatalf("StoragePortMock.EnqueueInbound mock is already set by ExpectParams functions")
 	}
 
-	mmEnqueueInbound.defaultExpectation.params = &StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload}
+	mmEnqueueInbound.defaultExpectation.params = &StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload}
 	mmEnqueueInbound.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmEnqueueInbound.expectations {
 		if minimock.Equal(e.params, mmEnqueueInbound.defaultExpectation.params) {
@@ -2614,8 +2634,8 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) ExpectObjectIRIParam4(ob
 	return mmEnqueueInbound
 }
 
-// ExpectTargetDomainParam5 sets up expected param targetDomain for StoragePort.EnqueueInbound
-func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) ExpectTargetDomainParam5(targetDomain string) *mStoragePortMockEnqueueInbound {
+// ExpectTenantIDParam5 sets up expected param tenantID for StoragePort.EnqueueInbound
+func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) ExpectTenantIDParam5(tenantID int32) *mStoragePortMockEnqueueInbound {
 	if mmEnqueueInbound.mock.funcEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("StoragePortMock.EnqueueInbound mock is already set by Set")
 	}
@@ -2631,8 +2651,8 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) ExpectTargetDomainParam5
 	if mmEnqueueInbound.defaultExpectation.paramPtrs == nil {
 		mmEnqueueInbound.defaultExpectation.paramPtrs = &StoragePortMockEnqueueInboundParamPtrs{}
 	}
-	mmEnqueueInbound.defaultExpectation.paramPtrs.targetDomain = &targetDomain
-	mmEnqueueInbound.defaultExpectation.expectationOrigins.originTargetDomain = minimock.CallerInfo(1)
+	mmEnqueueInbound.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmEnqueueInbound.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
 
 	return mmEnqueueInbound
 }
@@ -2661,7 +2681,7 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) ExpectPayloadParam6(payl
 }
 
 // Inspect accepts an inspector function that has same arguments as the StoragePort.EnqueueInbound
-func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Inspect(f func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte)) *mStoragePortMockEnqueueInbound {
+func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Inspect(f func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte)) *mStoragePortMockEnqueueInbound {
 	if mmEnqueueInbound.mock.inspectFuncEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("Inspect function is already set for StoragePortMock.EnqueueInbound")
 	}
@@ -2686,7 +2706,7 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Return(err error) *Stora
 }
 
 // Set uses given function f to mock the StoragePort.EnqueueInbound method
-func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Set(f func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) (err error)) *StoragePortMock {
+func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Set(f func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error)) *StoragePortMock {
 	if mmEnqueueInbound.defaultExpectation != nil {
 		mmEnqueueInbound.mock.t.Fatalf("Default expectation is already set for the StoragePort.EnqueueInbound method")
 	}
@@ -2702,14 +2722,14 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) Set(f func(ctx context.C
 
 // When sets expectation for the StoragePort.EnqueueInbound which will trigger the result defined by the following
 // Then helper
-func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) When(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) *StoragePortMockEnqueueInboundExpectation {
+func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) When(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) *StoragePortMockEnqueueInboundExpectation {
 	if mmEnqueueInbound.mock.funcEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("StoragePortMock.EnqueueInbound mock is already set by Set")
 	}
 
 	expectation := &StoragePortMockEnqueueInboundExpectation{
 		mock:               mmEnqueueInbound.mock,
-		params:             &StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload},
+		params:             &StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload},
 		expectationOrigins: StoragePortMockEnqueueInboundExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmEnqueueInbound.expectations = append(mmEnqueueInbound.expectations, expectation)
@@ -2744,17 +2764,17 @@ func (mmEnqueueInbound *mStoragePortMockEnqueueInbound) invocationsDone() bool {
 }
 
 // EnqueueInbound implements mm_port.StoragePort
-func (mmEnqueueInbound *StoragePortMock) EnqueueInbound(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) (err error) {
+func (mmEnqueueInbound *StoragePortMock) EnqueueInbound(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error) {
 	mm_atomic.AddUint64(&mmEnqueueInbound.beforeEnqueueInboundCounter, 1)
 	defer mm_atomic.AddUint64(&mmEnqueueInbound.afterEnqueueInboundCounter, 1)
 
 	mmEnqueueInbound.t.Helper()
 
 	if mmEnqueueInbound.inspectFuncEnqueueInbound != nil {
-		mmEnqueueInbound.inspectFuncEnqueueInbound(ctx, id, activityIRI, objectIRI, targetDomain, payload)
+		mmEnqueueInbound.inspectFuncEnqueueInbound(ctx, id, activityIRI, objectIRI, tenantID, payload)
 	}
 
-	mm_params := StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload}
+	mm_params := StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload}
 
 	// Record call args
 	mmEnqueueInbound.EnqueueInboundMock.mutex.Lock()
@@ -2773,7 +2793,7 @@ func (mmEnqueueInbound *StoragePortMock) EnqueueInbound(ctx context.Context, id 
 		mm_want := mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.params
 		mm_want_ptrs := mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.paramPtrs
 
-		mm_got := StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload}
+		mm_got := StoragePortMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload}
 
 		if mm_want_ptrs != nil {
 
@@ -2797,9 +2817,9 @@ func (mmEnqueueInbound *StoragePortMock) EnqueueInbound(ctx context.Context, id 
 					mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
 			}
 
-			if mm_want_ptrs.targetDomain != nil && !minimock.Equal(*mm_want_ptrs.targetDomain, mm_got.targetDomain) {
-				mmEnqueueInbound.t.Errorf("StoragePortMock.EnqueueInbound got unexpected parameter targetDomain, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.expectationOrigins.originTargetDomain, *mm_want_ptrs.targetDomain, mm_got.targetDomain, minimock.Diff(*mm_want_ptrs.targetDomain, mm_got.targetDomain))
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmEnqueueInbound.t.Errorf("StoragePortMock.EnqueueInbound got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.payload != nil && !minimock.Equal(*mm_want_ptrs.payload, mm_got.payload) {
@@ -2819,9 +2839,9 @@ func (mmEnqueueInbound *StoragePortMock) EnqueueInbound(ctx context.Context, id 
 		return (*mm_results).err
 	}
 	if mmEnqueueInbound.funcEnqueueInbound != nil {
-		return mmEnqueueInbound.funcEnqueueInbound(ctx, id, activityIRI, objectIRI, targetDomain, payload)
+		return mmEnqueueInbound.funcEnqueueInbound(ctx, id, activityIRI, objectIRI, tenantID, payload)
 	}
-	mmEnqueueInbound.t.Fatalf("Unexpected call to StoragePortMock.EnqueueInbound. %v %v %v %v %v %v", ctx, id, activityIRI, objectIRI, targetDomain, payload)
+	mmEnqueueInbound.t.Fatalf("Unexpected call to StoragePortMock.EnqueueInbound. %v %v %v %v %v %v", ctx, id, activityIRI, objectIRI, tenantID, payload)
 	return
 }
 
@@ -5076,6 +5096,318 @@ func (m *StoragePortMock) MinimockGetActorProfileFromGraphInspect() {
 	}
 }
 
+type mStoragePortMockGetAllTenants struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetAllTenantsExpectation
+	expectations       []*StoragePortMockGetAllTenantsExpectation
+
+	callArgs []*StoragePortMockGetAllTenantsParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetAllTenantsExpectation specifies expectation struct of the StoragePort.GetAllTenants
+type StoragePortMockGetAllTenantsExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetAllTenantsParams
+	paramPtrs          *StoragePortMockGetAllTenantsParamPtrs
+	expectationOrigins StoragePortMockGetAllTenantsExpectationOrigins
+	results            *StoragePortMockGetAllTenantsResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetAllTenantsParams contains parameters of the StoragePort.GetAllTenants
+type StoragePortMockGetAllTenantsParams struct {
+	ctx context.Context
+}
+
+// StoragePortMockGetAllTenantsParamPtrs contains pointers to parameters of the StoragePort.GetAllTenants
+type StoragePortMockGetAllTenantsParamPtrs struct {
+	ctx *context.Context
+}
+
+// StoragePortMockGetAllTenantsResults contains results of the StoragePort.GetAllTenants
+type StoragePortMockGetAllTenantsResults struct {
+	m1  map[string]int32
+	err error
+}
+
+// StoragePortMockGetAllTenantsOrigins contains origins of expectations of the StoragePort.GetAllTenants
+type StoragePortMockGetAllTenantsExpectationOrigins struct {
+	origin    string
+	originCtx string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Optional() *mStoragePortMockGetAllTenants {
+	mmGetAllTenants.optional = true
+	return mmGetAllTenants
+}
+
+// Expect sets up expected params for StoragePort.GetAllTenants
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Expect(ctx context.Context) *mStoragePortMockGetAllTenants {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StoragePortMock.GetAllTenants mock is already set by Set")
+	}
+
+	if mmGetAllTenants.defaultExpectation == nil {
+		mmGetAllTenants.defaultExpectation = &StoragePortMockGetAllTenantsExpectation{}
+	}
+
+	if mmGetAllTenants.defaultExpectation.paramPtrs != nil {
+		mmGetAllTenants.mock.t.Fatalf("StoragePortMock.GetAllTenants mock is already set by ExpectParams functions")
+	}
+
+	mmGetAllTenants.defaultExpectation.params = &StoragePortMockGetAllTenantsParams{ctx}
+	mmGetAllTenants.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetAllTenants.expectations {
+		if minimock.Equal(e.params, mmGetAllTenants.defaultExpectation.params) {
+			mmGetAllTenants.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetAllTenants.defaultExpectation.params)
+		}
+	}
+
+	return mmGetAllTenants
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetAllTenants
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetAllTenants {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StoragePortMock.GetAllTenants mock is already set by Set")
+	}
+
+	if mmGetAllTenants.defaultExpectation == nil {
+		mmGetAllTenants.defaultExpectation = &StoragePortMockGetAllTenantsExpectation{}
+	}
+
+	if mmGetAllTenants.defaultExpectation.params != nil {
+		mmGetAllTenants.mock.t.Fatalf("StoragePortMock.GetAllTenants mock is already set by Expect")
+	}
+
+	if mmGetAllTenants.defaultExpectation.paramPtrs == nil {
+		mmGetAllTenants.defaultExpectation.paramPtrs = &StoragePortMockGetAllTenantsParamPtrs{}
+	}
+	mmGetAllTenants.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetAllTenants.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetAllTenants
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetAllTenants
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Inspect(f func(ctx context.Context)) *mStoragePortMockGetAllTenants {
+	if mmGetAllTenants.mock.inspectFuncGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetAllTenants")
+	}
+
+	mmGetAllTenants.mock.inspectFuncGetAllTenants = f
+
+	return mmGetAllTenants
+}
+
+// Return sets up results that will be returned by StoragePort.GetAllTenants
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Return(m1 map[string]int32, err error) *StoragePortMock {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StoragePortMock.GetAllTenants mock is already set by Set")
+	}
+
+	if mmGetAllTenants.defaultExpectation == nil {
+		mmGetAllTenants.defaultExpectation = &StoragePortMockGetAllTenantsExpectation{mock: mmGetAllTenants.mock}
+	}
+	mmGetAllTenants.defaultExpectation.results = &StoragePortMockGetAllTenantsResults{m1, err}
+	mmGetAllTenants.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenants.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetAllTenants method
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Set(f func(ctx context.Context) (m1 map[string]int32, err error)) *StoragePortMock {
+	if mmGetAllTenants.defaultExpectation != nil {
+		mmGetAllTenants.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetAllTenants method")
+	}
+
+	if len(mmGetAllTenants.expectations) > 0 {
+		mmGetAllTenants.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetAllTenants method")
+	}
+
+	mmGetAllTenants.mock.funcGetAllTenants = f
+	mmGetAllTenants.mock.funcGetAllTenantsOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenants.mock
+}
+
+// When sets expectation for the StoragePort.GetAllTenants which will trigger the result defined by the following
+// Then helper
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) When(ctx context.Context) *StoragePortMockGetAllTenantsExpectation {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StoragePortMock.GetAllTenants mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetAllTenantsExpectation{
+		mock:               mmGetAllTenants.mock,
+		params:             &StoragePortMockGetAllTenantsParams{ctx},
+		expectationOrigins: StoragePortMockGetAllTenantsExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetAllTenants.expectations = append(mmGetAllTenants.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetAllTenants return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetAllTenantsExpectation) Then(m1 map[string]int32, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetAllTenantsResults{m1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetAllTenants should be invoked
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Times(n uint64) *mStoragePortMockGetAllTenants {
+	if n == 0 {
+		mmGetAllTenants.mock.t.Fatalf("Times of StoragePortMock.GetAllTenants mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetAllTenants.expectedInvocations, n)
+	mmGetAllTenants.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenants
+}
+
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) invocationsDone() bool {
+	if len(mmGetAllTenants.expectations) == 0 && mmGetAllTenants.defaultExpectation == nil && mmGetAllTenants.mock.funcGetAllTenants == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetAllTenants.mock.afterGetAllTenantsCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetAllTenants.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetAllTenants implements mm_port.StoragePort
+func (mmGetAllTenants *StoragePortMock) GetAllTenants(ctx context.Context) (m1 map[string]int32, err error) {
+	mm_atomic.AddUint64(&mmGetAllTenants.beforeGetAllTenantsCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetAllTenants.afterGetAllTenantsCounter, 1)
+
+	mmGetAllTenants.t.Helper()
+
+	if mmGetAllTenants.inspectFuncGetAllTenants != nil {
+		mmGetAllTenants.inspectFuncGetAllTenants(ctx)
+	}
+
+	mm_params := StoragePortMockGetAllTenantsParams{ctx}
+
+	// Record call args
+	mmGetAllTenants.GetAllTenantsMock.mutex.Lock()
+	mmGetAllTenants.GetAllTenantsMock.callArgs = append(mmGetAllTenants.GetAllTenantsMock.callArgs, &mm_params)
+	mmGetAllTenants.GetAllTenantsMock.mutex.Unlock()
+
+	for _, e := range mmGetAllTenants.GetAllTenantsMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.m1, e.results.err
+		}
+	}
+
+	if mmGetAllTenants.GetAllTenantsMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetAllTenants.GetAllTenantsMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetAllTenants.GetAllTenantsMock.defaultExpectation.params
+		mm_want_ptrs := mmGetAllTenants.GetAllTenantsMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetAllTenantsParams{ctx}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetAllTenants.t.Errorf("StoragePortMock.GetAllTenants got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAllTenants.GetAllTenantsMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetAllTenants.t.Errorf("StoragePortMock.GetAllTenants got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetAllTenants.GetAllTenantsMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetAllTenants.GetAllTenantsMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetAllTenants.t.Fatal("No results are set for the StoragePortMock.GetAllTenants")
+		}
+		return (*mm_results).m1, (*mm_results).err
+	}
+	if mmGetAllTenants.funcGetAllTenants != nil {
+		return mmGetAllTenants.funcGetAllTenants(ctx)
+	}
+	mmGetAllTenants.t.Fatalf("Unexpected call to StoragePortMock.GetAllTenants. %v", ctx)
+	return
+}
+
+// GetAllTenantsAfterCounter returns a count of finished StoragePortMock.GetAllTenants invocations
+func (mmGetAllTenants *StoragePortMock) GetAllTenantsAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAllTenants.afterGetAllTenantsCounter)
+}
+
+// GetAllTenantsBeforeCounter returns a count of StoragePortMock.GetAllTenants invocations
+func (mmGetAllTenants *StoragePortMock) GetAllTenantsBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAllTenants.beforeGetAllTenantsCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetAllTenants.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetAllTenants *mStoragePortMockGetAllTenants) Calls() []*StoragePortMockGetAllTenantsParams {
+	mmGetAllTenants.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetAllTenantsParams, len(mmGetAllTenants.callArgs))
+	copy(argCopy, mmGetAllTenants.callArgs)
+
+	mmGetAllTenants.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetAllTenantsDone returns true if the count of the GetAllTenants invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetAllTenantsDone() bool {
+	if m.GetAllTenantsMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetAllTenantsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetAllTenantsMock.invocationsDone()
+}
+
+// MinimockGetAllTenantsInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetAllTenantsInspect() {
+	for _, e := range m.GetAllTenantsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetAllTenants at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetAllTenantsCounter := mm_atomic.LoadUint64(&m.afterGetAllTenantsCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetAllTenantsMock.defaultExpectation != nil && afterGetAllTenantsCounter < 1 {
+		if m.GetAllTenantsMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetAllTenants at\n%s", m.GetAllTenantsMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetAllTenants at\n%s with params: %#v", m.GetAllTenantsMock.defaultExpectation.expectationOrigins.origin, *m.GetAllTenantsMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetAllTenants != nil && afterGetAllTenantsCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetAllTenants at\n%s", m.funcGetAllTenantsOrigin)
+	}
+
+	if !m.GetAllTenantsMock.invocationsDone() && afterGetAllTenantsCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetAllTenants at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetAllTenantsMock.expectedInvocations), m.GetAllTenantsMock.expectedInvocationsOrigin, afterGetAllTenantsCounter)
+	}
+}
+
 type mStoragePortMockGetCollectionPayloads struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -6946,349 +7278,6 @@ func (m *StoragePortMock) MinimockGetNomadicIdentityInspect() {
 	}
 }
 
-type mStoragePortMockGetOrCreateTenantByDomain struct {
-	optional           bool
-	mock               *StoragePortMock
-	defaultExpectation *StoragePortMockGetOrCreateTenantByDomainExpectation
-	expectations       []*StoragePortMockGetOrCreateTenantByDomainExpectation
-
-	callArgs []*StoragePortMockGetOrCreateTenantByDomainParams
-	mutex    sync.RWMutex
-
-	expectedInvocations       uint64
-	expectedInvocationsOrigin string
-}
-
-// StoragePortMockGetOrCreateTenantByDomainExpectation specifies expectation struct of the StoragePort.GetOrCreateTenantByDomain
-type StoragePortMockGetOrCreateTenantByDomainExpectation struct {
-	mock               *StoragePortMock
-	params             *StoragePortMockGetOrCreateTenantByDomainParams
-	paramPtrs          *StoragePortMockGetOrCreateTenantByDomainParamPtrs
-	expectationOrigins StoragePortMockGetOrCreateTenantByDomainExpectationOrigins
-	results            *StoragePortMockGetOrCreateTenantByDomainResults
-	returnOrigin       string
-	Counter            uint64
-}
-
-// StoragePortMockGetOrCreateTenantByDomainParams contains parameters of the StoragePort.GetOrCreateTenantByDomain
-type StoragePortMockGetOrCreateTenantByDomainParams struct {
-	ctx        context.Context
-	domainName string
-}
-
-// StoragePortMockGetOrCreateTenantByDomainParamPtrs contains pointers to parameters of the StoragePort.GetOrCreateTenantByDomain
-type StoragePortMockGetOrCreateTenantByDomainParamPtrs struct {
-	ctx        *context.Context
-	domainName *string
-}
-
-// StoragePortMockGetOrCreateTenantByDomainResults contains results of the StoragePort.GetOrCreateTenantByDomain
-type StoragePortMockGetOrCreateTenantByDomainResults struct {
-	i1  int32
-	err error
-}
-
-// StoragePortMockGetOrCreateTenantByDomainOrigins contains origins of expectations of the StoragePort.GetOrCreateTenantByDomain
-type StoragePortMockGetOrCreateTenantByDomainExpectationOrigins struct {
-	origin           string
-	originCtx        string
-	originDomainName string
-}
-
-// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
-// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
-// Optional() makes method check to work in '0 or more' mode.
-// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
-// catch the problems when the expected method call is totally skipped during test run.
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Optional() *mStoragePortMockGetOrCreateTenantByDomain {
-	mmGetOrCreateTenantByDomain.optional = true
-	return mmGetOrCreateTenantByDomain
-}
-
-// Expect sets up expected params for StoragePort.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Expect(ctx context.Context, domainName string) *mStoragePortMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StoragePortMockGetOrCreateTenantByDomainExpectation{}
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by ExpectParams functions")
-	}
-
-	mmGetOrCreateTenantByDomain.defaultExpectation.params = &StoragePortMockGetOrCreateTenantByDomainParams{ctx, domainName}
-	mmGetOrCreateTenantByDomain.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
-	for _, e := range mmGetOrCreateTenantByDomain.expectations {
-		if minimock.Equal(e.params, mmGetOrCreateTenantByDomain.defaultExpectation.params) {
-			mmGetOrCreateTenantByDomain.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetOrCreateTenantByDomain.defaultExpectation.params)
-		}
-	}
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StoragePortMockGetOrCreateTenantByDomainExpectation{}
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.params != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Expect")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs = &StoragePortMockGetOrCreateTenantByDomainParamPtrs{}
-	}
-	mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs.ctx = &ctx
-	mmGetOrCreateTenantByDomain.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// ExpectDomainNameParam2 sets up expected param domainName for StoragePort.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) ExpectDomainNameParam2(domainName string) *mStoragePortMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StoragePortMockGetOrCreateTenantByDomainExpectation{}
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.params != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Expect")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs = &StoragePortMockGetOrCreateTenantByDomainParamPtrs{}
-	}
-	mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs.domainName = &domainName
-	mmGetOrCreateTenantByDomain.defaultExpectation.expectationOrigins.originDomainName = minimock.CallerInfo(1)
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// Inspect accepts an inspector function that has same arguments as the StoragePort.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Inspect(f func(ctx context.Context, domainName string)) *mStoragePortMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.inspectFuncGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetOrCreateTenantByDomain")
-	}
-
-	mmGetOrCreateTenantByDomain.mock.inspectFuncGetOrCreateTenantByDomain = f
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// Return sets up results that will be returned by StoragePort.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Return(i1 int32, err error) *StoragePortMock {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StoragePortMockGetOrCreateTenantByDomainExpectation{mock: mmGetOrCreateTenantByDomain.mock}
-	}
-	mmGetOrCreateTenantByDomain.defaultExpectation.results = &StoragePortMockGetOrCreateTenantByDomainResults{i1, err}
-	mmGetOrCreateTenantByDomain.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
-	return mmGetOrCreateTenantByDomain.mock
-}
-
-// Set uses given function f to mock the StoragePort.GetOrCreateTenantByDomain method
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Set(f func(ctx context.Context, domainName string) (i1 int32, err error)) *StoragePortMock {
-	if mmGetOrCreateTenantByDomain.defaultExpectation != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetOrCreateTenantByDomain method")
-	}
-
-	if len(mmGetOrCreateTenantByDomain.expectations) > 0 {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetOrCreateTenantByDomain method")
-	}
-
-	mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain = f
-	mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomainOrigin = minimock.CallerInfo(1)
-	return mmGetOrCreateTenantByDomain.mock
-}
-
-// When sets expectation for the StoragePort.GetOrCreateTenantByDomain which will trigger the result defined by the following
-// Then helper
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) When(ctx context.Context, domainName string) *StoragePortMockGetOrCreateTenantByDomainExpectation {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StoragePortMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	expectation := &StoragePortMockGetOrCreateTenantByDomainExpectation{
-		mock:               mmGetOrCreateTenantByDomain.mock,
-		params:             &StoragePortMockGetOrCreateTenantByDomainParams{ctx, domainName},
-		expectationOrigins: StoragePortMockGetOrCreateTenantByDomainExpectationOrigins{origin: minimock.CallerInfo(1)},
-	}
-	mmGetOrCreateTenantByDomain.expectations = append(mmGetOrCreateTenantByDomain.expectations, expectation)
-	return expectation
-}
-
-// Then sets up StoragePort.GetOrCreateTenantByDomain return parameters for the expectation previously defined by the When method
-func (e *StoragePortMockGetOrCreateTenantByDomainExpectation) Then(i1 int32, err error) *StoragePortMock {
-	e.results = &StoragePortMockGetOrCreateTenantByDomainResults{i1, err}
-	return e.mock
-}
-
-// Times sets number of times StoragePort.GetOrCreateTenantByDomain should be invoked
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Times(n uint64) *mStoragePortMockGetOrCreateTenantByDomain {
-	if n == 0 {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Times of StoragePortMock.GetOrCreateTenantByDomain mock can not be zero")
-	}
-	mm_atomic.StoreUint64(&mmGetOrCreateTenantByDomain.expectedInvocations, n)
-	mmGetOrCreateTenantByDomain.expectedInvocationsOrigin = minimock.CallerInfo(1)
-	return mmGetOrCreateTenantByDomain
-}
-
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) invocationsDone() bool {
-	if len(mmGetOrCreateTenantByDomain.expectations) == 0 && mmGetOrCreateTenantByDomain.defaultExpectation == nil && mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain == nil {
-		return true
-	}
-
-	totalInvocations := mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.mock.afterGetOrCreateTenantByDomainCounter)
-	expectedInvocations := mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.expectedInvocations)
-
-	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
-}
-
-// GetOrCreateTenantByDomain implements mm_port.StoragePort
-func (mmGetOrCreateTenantByDomain *StoragePortMock) GetOrCreateTenantByDomain(ctx context.Context, domainName string) (i1 int32, err error) {
-	mm_atomic.AddUint64(&mmGetOrCreateTenantByDomain.beforeGetOrCreateTenantByDomainCounter, 1)
-	defer mm_atomic.AddUint64(&mmGetOrCreateTenantByDomain.afterGetOrCreateTenantByDomainCounter, 1)
-
-	mmGetOrCreateTenantByDomain.t.Helper()
-
-	if mmGetOrCreateTenantByDomain.inspectFuncGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.inspectFuncGetOrCreateTenantByDomain(ctx, domainName)
-	}
-
-	mm_params := StoragePortMockGetOrCreateTenantByDomainParams{ctx, domainName}
-
-	// Record call args
-	mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.mutex.Lock()
-	mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.callArgs = append(mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.callArgs, &mm_params)
-	mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.mutex.Unlock()
-
-	for _, e := range mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.expectations {
-		if minimock.Equal(*e.params, mm_params) {
-			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.i1, e.results.err
-		}
-	}
-
-	if mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation != nil {
-		mm_atomic.AddUint64(&mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.Counter, 1)
-		mm_want := mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.params
-		mm_want_ptrs := mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.paramPtrs
-
-		mm_got := StoragePortMockGetOrCreateTenantByDomainParams{ctx, domainName}
-
-		if mm_want_ptrs != nil {
-
-			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmGetOrCreateTenantByDomain.t.Errorf("StoragePortMock.GetOrCreateTenantByDomain got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
-			}
-
-			if mm_want_ptrs.domainName != nil && !minimock.Equal(*mm_want_ptrs.domainName, mm_got.domainName) {
-				mmGetOrCreateTenantByDomain.t.Errorf("StoragePortMock.GetOrCreateTenantByDomain got unexpected parameter domainName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.originDomainName, *mm_want_ptrs.domainName, mm_got.domainName, minimock.Diff(*mm_want_ptrs.domainName, mm_got.domainName))
-			}
-
-		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmGetOrCreateTenantByDomain.t.Errorf("StoragePortMock.GetOrCreateTenantByDomain got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-				mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
-		}
-
-		mm_results := mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.results
-		if mm_results == nil {
-			mmGetOrCreateTenantByDomain.t.Fatal("No results are set for the StoragePortMock.GetOrCreateTenantByDomain")
-		}
-		return (*mm_results).i1, (*mm_results).err
-	}
-	if mmGetOrCreateTenantByDomain.funcGetOrCreateTenantByDomain != nil {
-		return mmGetOrCreateTenantByDomain.funcGetOrCreateTenantByDomain(ctx, domainName)
-	}
-	mmGetOrCreateTenantByDomain.t.Fatalf("Unexpected call to StoragePortMock.GetOrCreateTenantByDomain. %v %v", ctx, domainName)
-	return
-}
-
-// GetOrCreateTenantByDomainAfterCounter returns a count of finished StoragePortMock.GetOrCreateTenantByDomain invocations
-func (mmGetOrCreateTenantByDomain *StoragePortMock) GetOrCreateTenantByDomainAfterCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.afterGetOrCreateTenantByDomainCounter)
-}
-
-// GetOrCreateTenantByDomainBeforeCounter returns a count of StoragePortMock.GetOrCreateTenantByDomain invocations
-func (mmGetOrCreateTenantByDomain *StoragePortMock) GetOrCreateTenantByDomainBeforeCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.beforeGetOrCreateTenantByDomainCounter)
-}
-
-// Calls returns a list of arguments used in each call to StoragePortMock.GetOrCreateTenantByDomain.
-// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmGetOrCreateTenantByDomain *mStoragePortMockGetOrCreateTenantByDomain) Calls() []*StoragePortMockGetOrCreateTenantByDomainParams {
-	mmGetOrCreateTenantByDomain.mutex.RLock()
-
-	argCopy := make([]*StoragePortMockGetOrCreateTenantByDomainParams, len(mmGetOrCreateTenantByDomain.callArgs))
-	copy(argCopy, mmGetOrCreateTenantByDomain.callArgs)
-
-	mmGetOrCreateTenantByDomain.mutex.RUnlock()
-
-	return argCopy
-}
-
-// MinimockGetOrCreateTenantByDomainDone returns true if the count of the GetOrCreateTenantByDomain invocations corresponds
-// the number of defined expectations
-func (m *StoragePortMock) MinimockGetOrCreateTenantByDomainDone() bool {
-	if m.GetOrCreateTenantByDomainMock.optional {
-		// Optional methods provide '0 or more' call count restriction.
-		return true
-	}
-
-	for _, e := range m.GetOrCreateTenantByDomainMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			return false
-		}
-	}
-
-	return m.GetOrCreateTenantByDomainMock.invocationsDone()
-}
-
-// MinimockGetOrCreateTenantByDomainInspect logs each unmet expectation
-func (m *StoragePortMock) MinimockGetOrCreateTenantByDomainInspect() {
-	for _, e := range m.GetOrCreateTenantByDomainMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to StoragePortMock.GetOrCreateTenantByDomain at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
-		}
-	}
-
-	afterGetOrCreateTenantByDomainCounter := mm_atomic.LoadUint64(&m.afterGetOrCreateTenantByDomainCounter)
-	// if default expectation was set then invocations count should be greater than zero
-	if m.GetOrCreateTenantByDomainMock.defaultExpectation != nil && afterGetOrCreateTenantByDomainCounter < 1 {
-		if m.GetOrCreateTenantByDomainMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to StoragePortMock.GetOrCreateTenantByDomain at\n%s", m.GetOrCreateTenantByDomainMock.defaultExpectation.returnOrigin)
-		} else {
-			m.t.Errorf("Expected call to StoragePortMock.GetOrCreateTenantByDomain at\n%s with params: %#v", m.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.origin, *m.GetOrCreateTenantByDomainMock.defaultExpectation.params)
-		}
-	}
-	// if func was set then invocations count should be greater than zero
-	if m.funcGetOrCreateTenantByDomain != nil && afterGetOrCreateTenantByDomainCounter < 1 {
-		m.t.Errorf("Expected call to StoragePortMock.GetOrCreateTenantByDomain at\n%s", m.funcGetOrCreateTenantByDomainOrigin)
-	}
-
-	if !m.GetOrCreateTenantByDomainMock.invocationsDone() && afterGetOrCreateTenantByDomainCounter > 0 {
-		m.t.Errorf("Expected %d calls to StoragePortMock.GetOrCreateTenantByDomain at\n%s but found %d calls",
-			mm_atomic.LoadUint64(&m.GetOrCreateTenantByDomainMock.expectedInvocations), m.GetOrCreateTenantByDomainMock.expectedInvocationsOrigin, afterGetOrCreateTenantByDomainCounter)
-	}
-}
-
 type mStoragePortMockGetRepliesForObject struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -8689,6 +8678,349 @@ func (m *StoragePortMock) MinimockGetTenantIDByActivityIRIInspect() {
 	if !m.GetTenantIDByActivityIRIMock.invocationsDone() && afterGetTenantIDByActivityIRICounter > 0 {
 		m.t.Errorf("Expected %d calls to StoragePortMock.GetTenantIDByActivityIRI at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetTenantIDByActivityIRIMock.expectedInvocations), m.GetTenantIDByActivityIRIMock.expectedInvocationsOrigin, afterGetTenantIDByActivityIRICounter)
+	}
+}
+
+type mStoragePortMockGetTenantIDByDomain struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockGetTenantIDByDomainExpectation
+	expectations       []*StoragePortMockGetTenantIDByDomainExpectation
+
+	callArgs []*StoragePortMockGetTenantIDByDomainParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockGetTenantIDByDomainExpectation specifies expectation struct of the StoragePort.GetTenantIDByDomain
+type StoragePortMockGetTenantIDByDomainExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockGetTenantIDByDomainParams
+	paramPtrs          *StoragePortMockGetTenantIDByDomainParamPtrs
+	expectationOrigins StoragePortMockGetTenantIDByDomainExpectationOrigins
+	results            *StoragePortMockGetTenantIDByDomainResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockGetTenantIDByDomainParams contains parameters of the StoragePort.GetTenantIDByDomain
+type StoragePortMockGetTenantIDByDomainParams struct {
+	ctx        context.Context
+	domainName string
+}
+
+// StoragePortMockGetTenantIDByDomainParamPtrs contains pointers to parameters of the StoragePort.GetTenantIDByDomain
+type StoragePortMockGetTenantIDByDomainParamPtrs struct {
+	ctx        *context.Context
+	domainName *string
+}
+
+// StoragePortMockGetTenantIDByDomainResults contains results of the StoragePort.GetTenantIDByDomain
+type StoragePortMockGetTenantIDByDomainResults struct {
+	i1  int32
+	err error
+}
+
+// StoragePortMockGetTenantIDByDomainOrigins contains origins of expectations of the StoragePort.GetTenantIDByDomain
+type StoragePortMockGetTenantIDByDomainExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originDomainName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Optional() *mStoragePortMockGetTenantIDByDomain {
+	mmGetTenantIDByDomain.optional = true
+	return mmGetTenantIDByDomain
+}
+
+// Expect sets up expected params for StoragePort.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Expect(ctx context.Context, domainName string) *mStoragePortMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StoragePortMockGetTenantIDByDomainExpectation{}
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.paramPtrs != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by ExpectParams functions")
+	}
+
+	mmGetTenantIDByDomain.defaultExpectation.params = &StoragePortMockGetTenantIDByDomainParams{ctx, domainName}
+	mmGetTenantIDByDomain.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetTenantIDByDomain.expectations {
+		if minimock.Equal(e.params, mmGetTenantIDByDomain.defaultExpectation.params) {
+			mmGetTenantIDByDomain.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetTenantIDByDomain.defaultExpectation.params)
+		}
+	}
+
+	return mmGetTenantIDByDomain
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) ExpectCtxParam1(ctx context.Context) *mStoragePortMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StoragePortMockGetTenantIDByDomainExpectation{}
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.params != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByDomain.defaultExpectation.paramPtrs = &StoragePortMockGetTenantIDByDomainParamPtrs{}
+	}
+	mmGetTenantIDByDomain.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetTenantIDByDomain.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByDomain
+}
+
+// ExpectDomainNameParam2 sets up expected param domainName for StoragePort.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) ExpectDomainNameParam2(domainName string) *mStoragePortMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StoragePortMockGetTenantIDByDomainExpectation{}
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.params != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByDomain.defaultExpectation.paramPtrs = &StoragePortMockGetTenantIDByDomainParamPtrs{}
+	}
+	mmGetTenantIDByDomain.defaultExpectation.paramPtrs.domainName = &domainName
+	mmGetTenantIDByDomain.defaultExpectation.expectationOrigins.originDomainName = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByDomain
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Inspect(f func(ctx context.Context, domainName string)) *mStoragePortMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.inspectFuncGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Inspect function is already set for StoragePortMock.GetTenantIDByDomain")
+	}
+
+	mmGetTenantIDByDomain.mock.inspectFuncGetTenantIDByDomain = f
+
+	return mmGetTenantIDByDomain
+}
+
+// Return sets up results that will be returned by StoragePort.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Return(i1 int32, err error) *StoragePortMock {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StoragePortMockGetTenantIDByDomainExpectation{mock: mmGetTenantIDByDomain.mock}
+	}
+	mmGetTenantIDByDomain.defaultExpectation.results = &StoragePortMockGetTenantIDByDomainResults{i1, err}
+	mmGetTenantIDByDomain.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByDomain.mock
+}
+
+// Set uses given function f to mock the StoragePort.GetTenantIDByDomain method
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Set(f func(ctx context.Context, domainName string) (i1 int32, err error)) *StoragePortMock {
+	if mmGetTenantIDByDomain.defaultExpectation != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Default expectation is already set for the StoragePort.GetTenantIDByDomain method")
+	}
+
+	if len(mmGetTenantIDByDomain.expectations) > 0 {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Some expectations are already set for the StoragePort.GetTenantIDByDomain method")
+	}
+
+	mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain = f
+	mmGetTenantIDByDomain.mock.funcGetTenantIDByDomainOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByDomain.mock
+}
+
+// When sets expectation for the StoragePort.GetTenantIDByDomain which will trigger the result defined by the following
+// Then helper
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) When(ctx context.Context, domainName string) *StoragePortMockGetTenantIDByDomainExpectation {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StoragePortMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockGetTenantIDByDomainExpectation{
+		mock:               mmGetTenantIDByDomain.mock,
+		params:             &StoragePortMockGetTenantIDByDomainParams{ctx, domainName},
+		expectationOrigins: StoragePortMockGetTenantIDByDomainExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetTenantIDByDomain.expectations = append(mmGetTenantIDByDomain.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.GetTenantIDByDomain return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockGetTenantIDByDomainExpectation) Then(i1 int32, err error) *StoragePortMock {
+	e.results = &StoragePortMockGetTenantIDByDomainResults{i1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.GetTenantIDByDomain should be invoked
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Times(n uint64) *mStoragePortMockGetTenantIDByDomain {
+	if n == 0 {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Times of StoragePortMock.GetTenantIDByDomain mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetTenantIDByDomain.expectedInvocations, n)
+	mmGetTenantIDByDomain.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByDomain
+}
+
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) invocationsDone() bool {
+	if len(mmGetTenantIDByDomain.expectations) == 0 && mmGetTenantIDByDomain.defaultExpectation == nil && mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByDomain.mock.afterGetTenantIDByDomainCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByDomain.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetTenantIDByDomain implements mm_port.StoragePort
+func (mmGetTenantIDByDomain *StoragePortMock) GetTenantIDByDomain(ctx context.Context, domainName string) (i1 int32, err error) {
+	mm_atomic.AddUint64(&mmGetTenantIDByDomain.beforeGetTenantIDByDomainCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetTenantIDByDomain.afterGetTenantIDByDomainCounter, 1)
+
+	mmGetTenantIDByDomain.t.Helper()
+
+	if mmGetTenantIDByDomain.inspectFuncGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.inspectFuncGetTenantIDByDomain(ctx, domainName)
+	}
+
+	mm_params := StoragePortMockGetTenantIDByDomainParams{ctx, domainName}
+
+	// Record call args
+	mmGetTenantIDByDomain.GetTenantIDByDomainMock.mutex.Lock()
+	mmGetTenantIDByDomain.GetTenantIDByDomainMock.callArgs = append(mmGetTenantIDByDomain.GetTenantIDByDomainMock.callArgs, &mm_params)
+	mmGetTenantIDByDomain.GetTenantIDByDomainMock.mutex.Unlock()
+
+	for _, e := range mmGetTenantIDByDomain.GetTenantIDByDomainMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.i1, e.results.err
+		}
+	}
+
+	if mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.params
+		mm_want_ptrs := mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockGetTenantIDByDomainParams{ctx, domainName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetTenantIDByDomain.t.Errorf("StoragePortMock.GetTenantIDByDomain got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.domainName != nil && !minimock.Equal(*mm_want_ptrs.domainName, mm_got.domainName) {
+				mmGetTenantIDByDomain.t.Errorf("StoragePortMock.GetTenantIDByDomain got unexpected parameter domainName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.originDomainName, *mm_want_ptrs.domainName, mm_got.domainName, minimock.Diff(*mm_want_ptrs.domainName, mm_got.domainName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetTenantIDByDomain.t.Errorf("StoragePortMock.GetTenantIDByDomain got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetTenantIDByDomain.t.Fatal("No results are set for the StoragePortMock.GetTenantIDByDomain")
+		}
+		return (*mm_results).i1, (*mm_results).err
+	}
+	if mmGetTenantIDByDomain.funcGetTenantIDByDomain != nil {
+		return mmGetTenantIDByDomain.funcGetTenantIDByDomain(ctx, domainName)
+	}
+	mmGetTenantIDByDomain.t.Fatalf("Unexpected call to StoragePortMock.GetTenantIDByDomain. %v %v", ctx, domainName)
+	return
+}
+
+// GetTenantIDByDomainAfterCounter returns a count of finished StoragePortMock.GetTenantIDByDomain invocations
+func (mmGetTenantIDByDomain *StoragePortMock) GetTenantIDByDomainAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByDomain.afterGetTenantIDByDomainCounter)
+}
+
+// GetTenantIDByDomainBeforeCounter returns a count of StoragePortMock.GetTenantIDByDomain invocations
+func (mmGetTenantIDByDomain *StoragePortMock) GetTenantIDByDomainBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByDomain.beforeGetTenantIDByDomainCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.GetTenantIDByDomain.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetTenantIDByDomain *mStoragePortMockGetTenantIDByDomain) Calls() []*StoragePortMockGetTenantIDByDomainParams {
+	mmGetTenantIDByDomain.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockGetTenantIDByDomainParams, len(mmGetTenantIDByDomain.callArgs))
+	copy(argCopy, mmGetTenantIDByDomain.callArgs)
+
+	mmGetTenantIDByDomain.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetTenantIDByDomainDone returns true if the count of the GetTenantIDByDomain invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockGetTenantIDByDomainDone() bool {
+	if m.GetTenantIDByDomainMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetTenantIDByDomainMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetTenantIDByDomainMock.invocationsDone()
+}
+
+// MinimockGetTenantIDByDomainInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockGetTenantIDByDomainInspect() {
+	for _, e := range m.GetTenantIDByDomainMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByDomain at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetTenantIDByDomainCounter := mm_atomic.LoadUint64(&m.afterGetTenantIDByDomainCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetTenantIDByDomainMock.defaultExpectation != nil && afterGetTenantIDByDomainCounter < 1 {
+		if m.GetTenantIDByDomainMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByDomain at\n%s", m.GetTenantIDByDomainMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByDomain at\n%s with params: %#v", m.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.origin, *m.GetTenantIDByDomainMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetTenantIDByDomain != nil && afterGetTenantIDByDomainCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.GetTenantIDByDomain at\n%s", m.funcGetTenantIDByDomainOrigin)
+	}
+
+	if !m.GetTenantIDByDomainMock.invocationsDone() && afterGetTenantIDByDomainCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.GetTenantIDByDomain at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetTenantIDByDomainMock.expectedInvocations), m.GetTenantIDByDomainMock.expectedInvocationsOrigin, afterGetTenantIDByDomainCounter)
 	}
 }
 
@@ -13389,6 +13721,380 @@ func (m *StoragePortMock) MinimockStreamQuadsBySubjectInspect() {
 	}
 }
 
+type mStoragePortMockUpsertConfiguredTenant struct {
+	optional           bool
+	mock               *StoragePortMock
+	defaultExpectation *StoragePortMockUpsertConfiguredTenantExpectation
+	expectations       []*StoragePortMockUpsertConfiguredTenantExpectation
+
+	callArgs []*StoragePortMockUpsertConfiguredTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StoragePortMockUpsertConfiguredTenantExpectation specifies expectation struct of the StoragePort.UpsertConfiguredTenant
+type StoragePortMockUpsertConfiguredTenantExpectation struct {
+	mock               *StoragePortMock
+	params             *StoragePortMockUpsertConfiguredTenantParams
+	paramPtrs          *StoragePortMockUpsertConfiguredTenantParamPtrs
+	expectationOrigins StoragePortMockUpsertConfiguredTenantExpectationOrigins
+	results            *StoragePortMockUpsertConfiguredTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StoragePortMockUpsertConfiguredTenantParams contains parameters of the StoragePort.UpsertConfiguredTenant
+type StoragePortMockUpsertConfiguredTenantParams struct {
+	ctx        context.Context
+	tenantUUID string
+	domainName string
+}
+
+// StoragePortMockUpsertConfiguredTenantParamPtrs contains pointers to parameters of the StoragePort.UpsertConfiguredTenant
+type StoragePortMockUpsertConfiguredTenantParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *string
+	domainName *string
+}
+
+// StoragePortMockUpsertConfiguredTenantResults contains results of the StoragePort.UpsertConfiguredTenant
+type StoragePortMockUpsertConfiguredTenantResults struct {
+	i1  int32
+	err error
+}
+
+// StoragePortMockUpsertConfiguredTenantOrigins contains origins of expectations of the StoragePort.UpsertConfiguredTenant
+type StoragePortMockUpsertConfiguredTenantExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+	originDomainName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Optional() *mStoragePortMockUpsertConfiguredTenant {
+	mmUpsertConfiguredTenant.optional = true
+	return mmUpsertConfiguredTenant
+}
+
+// Expect sets up expected params for StoragePort.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Expect(ctx context.Context, tenantUUID string, domainName string) *mStoragePortMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StoragePortMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by ExpectParams functions")
+	}
+
+	mmUpsertConfiguredTenant.defaultExpectation.params = &StoragePortMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName}
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmUpsertConfiguredTenant.expectations {
+		if minimock.Equal(e.params, mmUpsertConfiguredTenant.defaultExpectation.params) {
+			mmUpsertConfiguredTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmUpsertConfiguredTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmUpsertConfiguredTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StoragePort.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) ExpectCtxParam1(ctx context.Context) *mStoragePortMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StoragePortMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.params != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Expect")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs == nil {
+		mmUpsertConfiguredTenant.defaultExpectation.paramPtrs = &StoragePortMockUpsertConfiguredTenantParamPtrs{}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmUpsertConfiguredTenant
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for StoragePort.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) ExpectTenantUUIDParam2(tenantUUID string) *mStoragePortMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StoragePortMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.params != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Expect")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs == nil {
+		mmUpsertConfiguredTenant.defaultExpectation.paramPtrs = &StoragePortMockUpsertConfiguredTenantParamPtrs{}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmUpsertConfiguredTenant
+}
+
+// ExpectDomainNameParam3 sets up expected param domainName for StoragePort.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) ExpectDomainNameParam3(domainName string) *mStoragePortMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StoragePortMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.params != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Expect")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs == nil {
+		mmUpsertConfiguredTenant.defaultExpectation.paramPtrs = &StoragePortMockUpsertConfiguredTenantParamPtrs{}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.paramPtrs.domainName = &domainName
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.originDomainName = minimock.CallerInfo(1)
+
+	return mmUpsertConfiguredTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the StoragePort.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Inspect(f func(ctx context.Context, tenantUUID string, domainName string)) *mStoragePortMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.inspectFuncUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Inspect function is already set for StoragePortMock.UpsertConfiguredTenant")
+	}
+
+	mmUpsertConfiguredTenant.mock.inspectFuncUpsertConfiguredTenant = f
+
+	return mmUpsertConfiguredTenant
+}
+
+// Return sets up results that will be returned by StoragePort.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Return(i1 int32, err error) *StoragePortMock {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StoragePortMockUpsertConfiguredTenantExpectation{mock: mmUpsertConfiguredTenant.mock}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.results = &StoragePortMockUpsertConfiguredTenantResults{i1, err}
+	mmUpsertConfiguredTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmUpsertConfiguredTenant.mock
+}
+
+// Set uses given function f to mock the StoragePort.UpsertConfiguredTenant method
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Set(f func(ctx context.Context, tenantUUID string, domainName string) (i1 int32, err error)) *StoragePortMock {
+	if mmUpsertConfiguredTenant.defaultExpectation != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Default expectation is already set for the StoragePort.UpsertConfiguredTenant method")
+	}
+
+	if len(mmUpsertConfiguredTenant.expectations) > 0 {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Some expectations are already set for the StoragePort.UpsertConfiguredTenant method")
+	}
+
+	mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant = f
+	mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenantOrigin = minimock.CallerInfo(1)
+	return mmUpsertConfiguredTenant.mock
+}
+
+// When sets expectation for the StoragePort.UpsertConfiguredTenant which will trigger the result defined by the following
+// Then helper
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) When(ctx context.Context, tenantUUID string, domainName string) *StoragePortMockUpsertConfiguredTenantExpectation {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StoragePortMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	expectation := &StoragePortMockUpsertConfiguredTenantExpectation{
+		mock:               mmUpsertConfiguredTenant.mock,
+		params:             &StoragePortMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName},
+		expectationOrigins: StoragePortMockUpsertConfiguredTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmUpsertConfiguredTenant.expectations = append(mmUpsertConfiguredTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StoragePort.UpsertConfiguredTenant return parameters for the expectation previously defined by the When method
+func (e *StoragePortMockUpsertConfiguredTenantExpectation) Then(i1 int32, err error) *StoragePortMock {
+	e.results = &StoragePortMockUpsertConfiguredTenantResults{i1, err}
+	return e.mock
+}
+
+// Times sets number of times StoragePort.UpsertConfiguredTenant should be invoked
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Times(n uint64) *mStoragePortMockUpsertConfiguredTenant {
+	if n == 0 {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Times of StoragePortMock.UpsertConfiguredTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmUpsertConfiguredTenant.expectedInvocations, n)
+	mmUpsertConfiguredTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmUpsertConfiguredTenant
+}
+
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) invocationsDone() bool {
+	if len(mmUpsertConfiguredTenant.expectations) == 0 && mmUpsertConfiguredTenant.defaultExpectation == nil && mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.mock.afterUpsertConfiguredTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// UpsertConfiguredTenant implements mm_port.StoragePort
+func (mmUpsertConfiguredTenant *StoragePortMock) UpsertConfiguredTenant(ctx context.Context, tenantUUID string, domainName string) (i1 int32, err error) {
+	mm_atomic.AddUint64(&mmUpsertConfiguredTenant.beforeUpsertConfiguredTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmUpsertConfiguredTenant.afterUpsertConfiguredTenantCounter, 1)
+
+	mmUpsertConfiguredTenant.t.Helper()
+
+	if mmUpsertConfiguredTenant.inspectFuncUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.inspectFuncUpsertConfiguredTenant(ctx, tenantUUID, domainName)
+	}
+
+	mm_params := StoragePortMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName}
+
+	// Record call args
+	mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.mutex.Lock()
+	mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.callArgs = append(mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.callArgs, &mm_params)
+	mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.mutex.Unlock()
+
+	for _, e := range mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.i1, e.results.err
+		}
+	}
+
+	if mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := StoragePortMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmUpsertConfiguredTenant.t.Errorf("StoragePortMock.UpsertConfiguredTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmUpsertConfiguredTenant.t.Errorf("StoragePortMock.UpsertConfiguredTenant got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+			if mm_want_ptrs.domainName != nil && !minimock.Equal(*mm_want_ptrs.domainName, mm_got.domainName) {
+				mmUpsertConfiguredTenant.t.Errorf("StoragePortMock.UpsertConfiguredTenant got unexpected parameter domainName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.originDomainName, *mm_want_ptrs.domainName, mm_got.domainName, minimock.Diff(*mm_want_ptrs.domainName, mm_got.domainName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmUpsertConfiguredTenant.t.Errorf("StoragePortMock.UpsertConfiguredTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmUpsertConfiguredTenant.t.Fatal("No results are set for the StoragePortMock.UpsertConfiguredTenant")
+		}
+		return (*mm_results).i1, (*mm_results).err
+	}
+	if mmUpsertConfiguredTenant.funcUpsertConfiguredTenant != nil {
+		return mmUpsertConfiguredTenant.funcUpsertConfiguredTenant(ctx, tenantUUID, domainName)
+	}
+	mmUpsertConfiguredTenant.t.Fatalf("Unexpected call to StoragePortMock.UpsertConfiguredTenant. %v %v %v", ctx, tenantUUID, domainName)
+	return
+}
+
+// UpsertConfiguredTenantAfterCounter returns a count of finished StoragePortMock.UpsertConfiguredTenant invocations
+func (mmUpsertConfiguredTenant *StoragePortMock) UpsertConfiguredTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.afterUpsertConfiguredTenantCounter)
+}
+
+// UpsertConfiguredTenantBeforeCounter returns a count of StoragePortMock.UpsertConfiguredTenant invocations
+func (mmUpsertConfiguredTenant *StoragePortMock) UpsertConfiguredTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.beforeUpsertConfiguredTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to StoragePortMock.UpsertConfiguredTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmUpsertConfiguredTenant *mStoragePortMockUpsertConfiguredTenant) Calls() []*StoragePortMockUpsertConfiguredTenantParams {
+	mmUpsertConfiguredTenant.mutex.RLock()
+
+	argCopy := make([]*StoragePortMockUpsertConfiguredTenantParams, len(mmUpsertConfiguredTenant.callArgs))
+	copy(argCopy, mmUpsertConfiguredTenant.callArgs)
+
+	mmUpsertConfiguredTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockUpsertConfiguredTenantDone returns true if the count of the UpsertConfiguredTenant invocations corresponds
+// the number of defined expectations
+func (m *StoragePortMock) MinimockUpsertConfiguredTenantDone() bool {
+	if m.UpsertConfiguredTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.UpsertConfiguredTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.UpsertConfiguredTenantMock.invocationsDone()
+}
+
+// MinimockUpsertConfiguredTenantInspect logs each unmet expectation
+func (m *StoragePortMock) MinimockUpsertConfiguredTenantInspect() {
+	for _, e := range m.UpsertConfiguredTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StoragePortMock.UpsertConfiguredTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterUpsertConfiguredTenantCounter := mm_atomic.LoadUint64(&m.afterUpsertConfiguredTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.UpsertConfiguredTenantMock.defaultExpectation != nil && afterUpsertConfiguredTenantCounter < 1 {
+		if m.UpsertConfiguredTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StoragePortMock.UpsertConfiguredTenant at\n%s", m.UpsertConfiguredTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StoragePortMock.UpsertConfiguredTenant at\n%s with params: %#v", m.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.origin, *m.UpsertConfiguredTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcUpsertConfiguredTenant != nil && afterUpsertConfiguredTenantCounter < 1 {
+		m.t.Errorf("Expected call to StoragePortMock.UpsertConfiguredTenant at\n%s", m.funcUpsertConfiguredTenantOrigin)
+	}
+
+	if !m.UpsertConfiguredTenantMock.invocationsDone() && afterUpsertConfiguredTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to StoragePortMock.UpsertConfiguredTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.UpsertConfiguredTenantMock.expectedInvocations), m.UpsertConfiguredTenantMock.expectedInvocationsOrigin, afterUpsertConfiguredTenantCounter)
+	}
+}
+
 type mStoragePortMockUpsertNomadicIdentity struct {
 	optional           bool
 	mock               *StoragePortMock
@@ -14133,6 +14839,8 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockGetActorProfileFromGraphInspect()
 
+			m.MinimockGetAllTenantsInspect()
+
 			m.MinimockGetCollectionPayloadsInspect()
 
 			m.MinimockGetHistoricalKeyInspect()
@@ -14143,8 +14851,6 @@ func (m *StoragePortMock) MinimockFinish() {
 
 			m.MinimockGetNomadicIdentityInspect()
 
-			m.MinimockGetOrCreateTenantByDomainInspect()
-
 			m.MinimockGetRepliesForObjectInspect()
 
 			m.MinimockGetSharesForObjectInspect()
@@ -14152,6 +14858,8 @@ func (m *StoragePortMock) MinimockFinish() {
 			m.MinimockGetStatementsBySubjectIsolatedInspect()
 
 			m.MinimockGetTenantIDByActivityIRIInspect()
+
+			m.MinimockGetTenantIDByDomainInspect()
 
 			m.MinimockHasActorCredentialInspect()
 
@@ -14178,6 +14886,8 @@ func (m *StoragePortMock) MinimockFinish() {
 			m.MinimockSaveQuadsInspect()
 
 			m.MinimockStreamQuadsBySubjectInspect()
+
+			m.MinimockUpsertConfiguredTenantInspect()
 
 			m.MinimockUpsertNomadicIdentityInspect()
 
@@ -14217,16 +14927,17 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockGetActorIRIByUsernameDone() &&
 		m.MinimockGetActorProfileByIRIDone() &&
 		m.MinimockGetActorProfileFromGraphDone() &&
+		m.MinimockGetAllTenantsDone() &&
 		m.MinimockGetCollectionPayloadsDone() &&
 		m.MinimockGetHistoricalKeyDone() &&
 		m.MinimockGetLatestPayloadDone() &&
 		m.MinimockGetLikesForObjectDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
-		m.MinimockGetOrCreateTenantByDomainDone() &&
 		m.MinimockGetRepliesForObjectDone() &&
 		m.MinimockGetSharesForObjectDone() &&
 		m.MinimockGetStatementsBySubjectIsolatedDone() &&
 		m.MinimockGetTenantIDByActivityIRIDone() &&
+		m.MinimockGetTenantIDByDomainDone() &&
 		m.MinimockHasActorCredentialDone() &&
 		m.MinimockIsDomainBlockedDone() &&
 		m.MinimockMarkInboundCompleteDone() &&
@@ -14240,6 +14951,7 @@ func (m *StoragePortMock) minimockDone() bool {
 		m.MinimockSaveQuadIDsDone() &&
 		m.MinimockSaveQuadsDone() &&
 		m.MinimockStreamQuadsBySubjectDone() &&
+		m.MinimockUpsertConfiguredTenantDone() &&
 		m.MinimockUpsertNomadicIdentityDone() &&
 		m.MinimockVerifyIncomingQuotaDone()
 }

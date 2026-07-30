@@ -10,7 +10,10 @@ import (
 
 func TestTenantValidator_Handler(t *testing.T) {
 	cfg := middleware.TenantConfig{
-		TenantDomains: []string{"sprezz.net", "social.example.org"},
+		TenantDomainToID: map[string]int32{
+			"sprezz.net":         1,
+			"social.example.org": 2,
+		},
 	}
 	validator := middleware.NewTenantValidator(cfg)
 

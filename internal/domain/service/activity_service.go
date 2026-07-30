@@ -1287,7 +1287,7 @@ func (s *ActivityService) getLocalServerCredentials(ctx context.Context, senderA
 		return "", nil, fmt.Errorf("invalid sender actor IRI format")
 	}
 
-	tenantID, err := s.storage.GetOrCreateTenantByDomain(ctx, senderHost)
+	tenantID, err := s.storage.GetTenantIDByDomain(ctx, senderHost)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to get tenant ID: %w", err)
 	}

@@ -21,25 +21,28 @@ func NewBootstrapService(sp port.StoragePort) *BootstrapService {
 }
 
 // BootstrapTenantsAndServerActors checks and maps configured domains cleanly.
-func (s *BootstrapService) BootstrapTenantsAndServerActors(ctx context.Context, configuredDomains []string) error {
-	for _, domain := range configuredDomains {
-		tenantID, err := s.storagePort.GetOrCreateTenantByDomain(ctx, domain)
+func (s *BootstrapService) BootstrapTenantsAndServerActors(ctx context.Context, configuredTenants map[string]string) (map[string]int32, error) {
+	tenantMap := make(map[string]int32)
+	for tUUID, domain := range configuredTenants {
+		tenantID, err := s.storagePort.UpsertConfiguredTenant(ctx, tUUID, domain)
 		if err != nil {
-			return fmt.Errorf("failed to reconcile tenant for domain %s: %w", domain, err)
+			return nil, fmt.Errorf("failed to reconcile tenant for domain %s: %w", domain, err)
 		}
+
+		tenantMap[domain] = tenantID
 
 		exists, err := s.storagePort.HasActorCredential(ctx, tenantID, "server")
 		if err != nil {
-			return fmt.Errorf("failed to verify server actor status for %s: %w", domain, err)
+			return nil, fmt.Errorf("failed to verify server actor status for %s: %w", domain, err)
 		}
 
 		if !exists {
 			if err := s.provisionServerActor(ctx, domain, tenantID); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
-	return nil
+	return tenantMap, nil
 }
 
 func (s *BootstrapService) provisionServerActor(ctx context.Context, domain string, tenantID int32) error {

@@ -56,9 +56,9 @@ type StorageAndGraphWriterMock struct {
 	beforeCreateGraphVersionCounter uint64
 	CreateGraphVersionMock          mStorageAndGraphWriterMockCreateGraphVersion
 
-	funcEnqueueInbound          func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) (err error)
+	funcEnqueueInbound          func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error)
 	funcEnqueueInboundOrigin    string
-	inspectFuncEnqueueInbound   func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte)
+	inspectFuncEnqueueInbound   func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte)
 	afterEnqueueInboundCounter  uint64
 	beforeEnqueueInboundCounter uint64
 	EnqueueInboundMock          mStorageAndGraphWriterMockEnqueueInbound
@@ -105,6 +105,13 @@ type StorageAndGraphWriterMock struct {
 	beforeGetActorProfileFromGraphCounter uint64
 	GetActorProfileFromGraphMock          mStorageAndGraphWriterMockGetActorProfileFromGraph
 
+	funcGetAllTenants          func(ctx context.Context) (m1 map[string]int32, err error)
+	funcGetAllTenantsOrigin    string
+	inspectFuncGetAllTenants   func(ctx context.Context)
+	afterGetAllTenantsCounter  uint64
+	beforeGetAllTenantsCounter uint64
+	GetAllTenantsMock          mStorageAndGraphWriterMockGetAllTenants
+
 	funcGetCollectionPayloads          func(ctx context.Context, actorIRI string, collection string, limit int, offset int) (baa1 [][]byte, err error)
 	funcGetCollectionPayloadsOrigin    string
 	inspectFuncGetCollectionPayloads   func(ctx context.Context, actorIRI string, collection string, limit int, offset int)
@@ -140,13 +147,6 @@ type StorageAndGraphWriterMock struct {
 	beforeGetNomadicIdentityCounter uint64
 	GetNomadicIdentityMock          mStorageAndGraphWriterMockGetNomadicIdentity
 
-	funcGetOrCreateTenantByDomain          func(ctx context.Context, domainName string) (i1 int32, err error)
-	funcGetOrCreateTenantByDomainOrigin    string
-	inspectFuncGetOrCreateTenantByDomain   func(ctx context.Context, domainName string)
-	afterGetOrCreateTenantByDomainCounter  uint64
-	beforeGetOrCreateTenantByDomainCounter uint64
-	GetOrCreateTenantByDomainMock          mStorageAndGraphWriterMockGetOrCreateTenantByDomain
-
 	funcGetRepliesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
 	funcGetRepliesForObjectOrigin    string
 	inspectFuncGetRepliesForObject   func(ctx context.Context, objectIRI string)
@@ -174,6 +174,13 @@ type StorageAndGraphWriterMock struct {
 	afterGetTenantIDByActivityIRICounter  uint64
 	beforeGetTenantIDByActivityIRICounter uint64
 	GetTenantIDByActivityIRIMock          mStorageAndGraphWriterMockGetTenantIDByActivityIRI
+
+	funcGetTenantIDByDomain          func(ctx context.Context, domainName string) (i1 int32, err error)
+	funcGetTenantIDByDomainOrigin    string
+	inspectFuncGetTenantIDByDomain   func(ctx context.Context, domainName string)
+	afterGetTenantIDByDomainCounter  uint64
+	beforeGetTenantIDByDomainCounter uint64
+	GetTenantIDByDomainMock          mStorageAndGraphWriterMockGetTenantIDByDomain
 
 	funcHasActorCredential          func(ctx context.Context, tenantID int32, username string) (b1 bool, err error)
 	funcHasActorCredentialOrigin    string
@@ -280,6 +287,13 @@ type StorageAndGraphWriterMock struct {
 	beforeStreamQuadsBySubjectCounter uint64
 	StreamQuadsBySubjectMock          mStorageAndGraphWriterMockStreamQuadsBySubject
 
+	funcUpsertConfiguredTenant          func(ctx context.Context, tenantUUID string, domainName string) (i1 int32, err error)
+	funcUpsertConfiguredTenantOrigin    string
+	inspectFuncUpsertConfiguredTenant   func(ctx context.Context, tenantUUID string, domainName string)
+	afterUpsertConfiguredTenantCounter  uint64
+	beforeUpsertConfiguredTenantCounter uint64
+	UpsertConfiguredTenantMock          mStorageAndGraphWriterMockUpsertConfiguredTenant
+
 	funcUpsertNomadicIdentity          func(ctx context.Context, identity *model.NomadicIdentity) (err error)
 	funcUpsertNomadicIdentityOrigin    string
 	inspectFuncUpsertNomadicIdentity   func(ctx context.Context, identity *model.NomadicIdentity)
@@ -339,6 +353,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 	m.GetActorProfileFromGraphMock = mStorageAndGraphWriterMockGetActorProfileFromGraph{mock: m}
 	m.GetActorProfileFromGraphMock.callArgs = []*StorageAndGraphWriterMockGetActorProfileFromGraphParams{}
 
+	m.GetAllTenantsMock = mStorageAndGraphWriterMockGetAllTenants{mock: m}
+	m.GetAllTenantsMock.callArgs = []*StorageAndGraphWriterMockGetAllTenantsParams{}
+
 	m.GetCollectionPayloadsMock = mStorageAndGraphWriterMockGetCollectionPayloads{mock: m}
 	m.GetCollectionPayloadsMock.callArgs = []*StorageAndGraphWriterMockGetCollectionPayloadsParams{}
 
@@ -354,9 +371,6 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 	m.GetNomadicIdentityMock = mStorageAndGraphWriterMockGetNomadicIdentity{mock: m}
 	m.GetNomadicIdentityMock.callArgs = []*StorageAndGraphWriterMockGetNomadicIdentityParams{}
 
-	m.GetOrCreateTenantByDomainMock = mStorageAndGraphWriterMockGetOrCreateTenantByDomain{mock: m}
-	m.GetOrCreateTenantByDomainMock.callArgs = []*StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{}
-
 	m.GetRepliesForObjectMock = mStorageAndGraphWriterMockGetRepliesForObject{mock: m}
 	m.GetRepliesForObjectMock.callArgs = []*StorageAndGraphWriterMockGetRepliesForObjectParams{}
 
@@ -368,6 +382,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.GetTenantIDByActivityIRIMock = mStorageAndGraphWriterMockGetTenantIDByActivityIRI{mock: m}
 	m.GetTenantIDByActivityIRIMock.callArgs = []*StorageAndGraphWriterMockGetTenantIDByActivityIRIParams{}
+
+	m.GetTenantIDByDomainMock = mStorageAndGraphWriterMockGetTenantIDByDomain{mock: m}
+	m.GetTenantIDByDomainMock.callArgs = []*StorageAndGraphWriterMockGetTenantIDByDomainParams{}
 
 	m.HasActorCredentialMock = mStorageAndGraphWriterMockHasActorCredential{mock: m}
 	m.HasActorCredentialMock.callArgs = []*StorageAndGraphWriterMockHasActorCredentialParams{}
@@ -413,6 +430,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.StreamQuadsBySubjectMock = mStorageAndGraphWriterMockStreamQuadsBySubject{mock: m}
 	m.StreamQuadsBySubjectMock.callArgs = []*StorageAndGraphWriterMockStreamQuadsBySubjectParams{}
+
+	m.UpsertConfiguredTenantMock = mStorageAndGraphWriterMockUpsertConfiguredTenant{mock: m}
+	m.UpsertConfiguredTenantMock.callArgs = []*StorageAndGraphWriterMockUpsertConfiguredTenantParams{}
 
 	m.UpsertNomadicIdentityMock = mStorageAndGraphWriterMockUpsertNomadicIdentity{mock: m}
 	m.UpsertNomadicIdentityMock.callArgs = []*StorageAndGraphWriterMockUpsertNomadicIdentityParams{}
@@ -2474,22 +2494,22 @@ type StorageAndGraphWriterMockEnqueueInboundExpectation struct {
 
 // StorageAndGraphWriterMockEnqueueInboundParams contains parameters of the StorageAndGraphWriter.EnqueueInbound
 type StorageAndGraphWriterMockEnqueueInboundParams struct {
-	ctx          context.Context
-	id           string
-	activityIRI  string
-	objectIRI    string
-	targetDomain string
-	payload      []byte
+	ctx         context.Context
+	id          string
+	activityIRI string
+	objectIRI   string
+	tenantID    int32
+	payload     []byte
 }
 
 // StorageAndGraphWriterMockEnqueueInboundParamPtrs contains pointers to parameters of the StorageAndGraphWriter.EnqueueInbound
 type StorageAndGraphWriterMockEnqueueInboundParamPtrs struct {
-	ctx          *context.Context
-	id           *string
-	activityIRI  *string
-	objectIRI    *string
-	targetDomain *string
-	payload      *[]byte
+	ctx         *context.Context
+	id          *string
+	activityIRI *string
+	objectIRI   *string
+	tenantID    *int32
+	payload     *[]byte
 }
 
 // StorageAndGraphWriterMockEnqueueInboundResults contains results of the StorageAndGraphWriter.EnqueueInbound
@@ -2499,13 +2519,13 @@ type StorageAndGraphWriterMockEnqueueInboundResults struct {
 
 // StorageAndGraphWriterMockEnqueueInboundOrigins contains origins of expectations of the StorageAndGraphWriter.EnqueueInbound
 type StorageAndGraphWriterMockEnqueueInboundExpectationOrigins struct {
-	origin             string
-	originCtx          string
-	originId           string
-	originActivityIRI  string
-	originObjectIRI    string
-	originTargetDomain string
-	originPayload      string
+	origin            string
+	originCtx         string
+	originId          string
+	originActivityIRI string
+	originObjectIRI   string
+	originTenantID    string
+	originPayload     string
 }
 
 // Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
@@ -2519,7 +2539,7 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Optional() *mS
 }
 
 // Expect sets up expected params for StorageAndGraphWriter.EnqueueInbound
-func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Expect(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) *mStorageAndGraphWriterMockEnqueueInbound {
+func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Expect(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) *mStorageAndGraphWriterMockEnqueueInbound {
 	if mmEnqueueInbound.mock.funcEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("StorageAndGraphWriterMock.EnqueueInbound mock is already set by Set")
 	}
@@ -2532,7 +2552,7 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Expect(ctx con
 		mmEnqueueInbound.mock.t.Fatalf("StorageAndGraphWriterMock.EnqueueInbound mock is already set by ExpectParams functions")
 	}
 
-	mmEnqueueInbound.defaultExpectation.params = &StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload}
+	mmEnqueueInbound.defaultExpectation.params = &StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload}
 	mmEnqueueInbound.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
 	for _, e := range mmEnqueueInbound.expectations {
 		if minimock.Equal(e.params, mmEnqueueInbound.defaultExpectation.params) {
@@ -2635,8 +2655,8 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) ExpectObjectIR
 	return mmEnqueueInbound
 }
 
-// ExpectTargetDomainParam5 sets up expected param targetDomain for StorageAndGraphWriter.EnqueueInbound
-func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) ExpectTargetDomainParam5(targetDomain string) *mStorageAndGraphWriterMockEnqueueInbound {
+// ExpectTenantIDParam5 sets up expected param tenantID for StorageAndGraphWriter.EnqueueInbound
+func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) ExpectTenantIDParam5(tenantID int32) *mStorageAndGraphWriterMockEnqueueInbound {
 	if mmEnqueueInbound.mock.funcEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("StorageAndGraphWriterMock.EnqueueInbound mock is already set by Set")
 	}
@@ -2652,8 +2672,8 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) ExpectTargetDo
 	if mmEnqueueInbound.defaultExpectation.paramPtrs == nil {
 		mmEnqueueInbound.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockEnqueueInboundParamPtrs{}
 	}
-	mmEnqueueInbound.defaultExpectation.paramPtrs.targetDomain = &targetDomain
-	mmEnqueueInbound.defaultExpectation.expectationOrigins.originTargetDomain = minimock.CallerInfo(1)
+	mmEnqueueInbound.defaultExpectation.paramPtrs.tenantID = &tenantID
+	mmEnqueueInbound.defaultExpectation.expectationOrigins.originTenantID = minimock.CallerInfo(1)
 
 	return mmEnqueueInbound
 }
@@ -2682,7 +2702,7 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) ExpectPayloadP
 }
 
 // Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.EnqueueInbound
-func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Inspect(f func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte)) *mStorageAndGraphWriterMockEnqueueInbound {
+func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Inspect(f func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte)) *mStorageAndGraphWriterMockEnqueueInbound {
 	if mmEnqueueInbound.mock.inspectFuncEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.EnqueueInbound")
 	}
@@ -2707,7 +2727,7 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Return(err err
 }
 
 // Set uses given function f to mock the StorageAndGraphWriter.EnqueueInbound method
-func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Set(f func(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) (err error)) *StorageAndGraphWriterMock {
+func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Set(f func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error)) *StorageAndGraphWriterMock {
 	if mmEnqueueInbound.defaultExpectation != nil {
 		mmEnqueueInbound.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.EnqueueInbound method")
 	}
@@ -2723,14 +2743,14 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) Set(f func(ctx
 
 // When sets expectation for the StorageAndGraphWriter.EnqueueInbound which will trigger the result defined by the following
 // Then helper
-func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) When(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) *StorageAndGraphWriterMockEnqueueInboundExpectation {
+func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) When(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) *StorageAndGraphWriterMockEnqueueInboundExpectation {
 	if mmEnqueueInbound.mock.funcEnqueueInbound != nil {
 		mmEnqueueInbound.mock.t.Fatalf("StorageAndGraphWriterMock.EnqueueInbound mock is already set by Set")
 	}
 
 	expectation := &StorageAndGraphWriterMockEnqueueInboundExpectation{
 		mock:               mmEnqueueInbound.mock,
-		params:             &StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload},
+		params:             &StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload},
 		expectationOrigins: StorageAndGraphWriterMockEnqueueInboundExpectationOrigins{origin: minimock.CallerInfo(1)},
 	}
 	mmEnqueueInbound.expectations = append(mmEnqueueInbound.expectations, expectation)
@@ -2765,17 +2785,17 @@ func (mmEnqueueInbound *mStorageAndGraphWriterMockEnqueueInbound) invocationsDon
 }
 
 // EnqueueInbound implements mm_port.StorageAndGraphWriter
-func (mmEnqueueInbound *StorageAndGraphWriterMock) EnqueueInbound(ctx context.Context, id string, activityIRI string, objectIRI string, targetDomain string, payload []byte) (err error) {
+func (mmEnqueueInbound *StorageAndGraphWriterMock) EnqueueInbound(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error) {
 	mm_atomic.AddUint64(&mmEnqueueInbound.beforeEnqueueInboundCounter, 1)
 	defer mm_atomic.AddUint64(&mmEnqueueInbound.afterEnqueueInboundCounter, 1)
 
 	mmEnqueueInbound.t.Helper()
 
 	if mmEnqueueInbound.inspectFuncEnqueueInbound != nil {
-		mmEnqueueInbound.inspectFuncEnqueueInbound(ctx, id, activityIRI, objectIRI, targetDomain, payload)
+		mmEnqueueInbound.inspectFuncEnqueueInbound(ctx, id, activityIRI, objectIRI, tenantID, payload)
 	}
 
-	mm_params := StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload}
+	mm_params := StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload}
 
 	// Record call args
 	mmEnqueueInbound.EnqueueInboundMock.mutex.Lock()
@@ -2794,7 +2814,7 @@ func (mmEnqueueInbound *StorageAndGraphWriterMock) EnqueueInbound(ctx context.Co
 		mm_want := mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.params
 		mm_want_ptrs := mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.paramPtrs
 
-		mm_got := StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, targetDomain, payload}
+		mm_got := StorageAndGraphWriterMockEnqueueInboundParams{ctx, id, activityIRI, objectIRI, tenantID, payload}
 
 		if mm_want_ptrs != nil {
 
@@ -2818,9 +2838,9 @@ func (mmEnqueueInbound *StorageAndGraphWriterMock) EnqueueInbound(ctx context.Co
 					mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.expectationOrigins.originObjectIRI, *mm_want_ptrs.objectIRI, mm_got.objectIRI, minimock.Diff(*mm_want_ptrs.objectIRI, mm_got.objectIRI))
 			}
 
-			if mm_want_ptrs.targetDomain != nil && !minimock.Equal(*mm_want_ptrs.targetDomain, mm_got.targetDomain) {
-				mmEnqueueInbound.t.Errorf("StorageAndGraphWriterMock.EnqueueInbound got unexpected parameter targetDomain, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.expectationOrigins.originTargetDomain, *mm_want_ptrs.targetDomain, mm_got.targetDomain, minimock.Diff(*mm_want_ptrs.targetDomain, mm_got.targetDomain))
+			if mm_want_ptrs.tenantID != nil && !minimock.Equal(*mm_want_ptrs.tenantID, mm_got.tenantID) {
+				mmEnqueueInbound.t.Errorf("StorageAndGraphWriterMock.EnqueueInbound got unexpected parameter tenantID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmEnqueueInbound.EnqueueInboundMock.defaultExpectation.expectationOrigins.originTenantID, *mm_want_ptrs.tenantID, mm_got.tenantID, minimock.Diff(*mm_want_ptrs.tenantID, mm_got.tenantID))
 			}
 
 			if mm_want_ptrs.payload != nil && !minimock.Equal(*mm_want_ptrs.payload, mm_got.payload) {
@@ -2840,9 +2860,9 @@ func (mmEnqueueInbound *StorageAndGraphWriterMock) EnqueueInbound(ctx context.Co
 		return (*mm_results).err
 	}
 	if mmEnqueueInbound.funcEnqueueInbound != nil {
-		return mmEnqueueInbound.funcEnqueueInbound(ctx, id, activityIRI, objectIRI, targetDomain, payload)
+		return mmEnqueueInbound.funcEnqueueInbound(ctx, id, activityIRI, objectIRI, tenantID, payload)
 	}
-	mmEnqueueInbound.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.EnqueueInbound. %v %v %v %v %v %v", ctx, id, activityIRI, objectIRI, targetDomain, payload)
+	mmEnqueueInbound.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.EnqueueInbound. %v %v %v %v %v %v", ctx, id, activityIRI, objectIRI, tenantID, payload)
 	return
 }
 
@@ -5097,6 +5117,318 @@ func (m *StorageAndGraphWriterMock) MinimockGetActorProfileFromGraphInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockGetAllTenants struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetAllTenantsExpectation
+	expectations       []*StorageAndGraphWriterMockGetAllTenantsExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetAllTenantsParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetAllTenantsExpectation specifies expectation struct of the StorageAndGraphWriter.GetAllTenants
+type StorageAndGraphWriterMockGetAllTenantsExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetAllTenantsParams
+	paramPtrs          *StorageAndGraphWriterMockGetAllTenantsParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetAllTenantsExpectationOrigins
+	results            *StorageAndGraphWriterMockGetAllTenantsResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetAllTenantsParams contains parameters of the StorageAndGraphWriter.GetAllTenants
+type StorageAndGraphWriterMockGetAllTenantsParams struct {
+	ctx context.Context
+}
+
+// StorageAndGraphWriterMockGetAllTenantsParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetAllTenants
+type StorageAndGraphWriterMockGetAllTenantsParamPtrs struct {
+	ctx *context.Context
+}
+
+// StorageAndGraphWriterMockGetAllTenantsResults contains results of the StorageAndGraphWriter.GetAllTenants
+type StorageAndGraphWriterMockGetAllTenantsResults struct {
+	m1  map[string]int32
+	err error
+}
+
+// StorageAndGraphWriterMockGetAllTenantsOrigins contains origins of expectations of the StorageAndGraphWriter.GetAllTenants
+type StorageAndGraphWriterMockGetAllTenantsExpectationOrigins struct {
+	origin    string
+	originCtx string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Optional() *mStorageAndGraphWriterMockGetAllTenants {
+	mmGetAllTenants.optional = true
+	return mmGetAllTenants
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetAllTenants
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Expect(ctx context.Context) *mStorageAndGraphWriterMockGetAllTenants {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StorageAndGraphWriterMock.GetAllTenants mock is already set by Set")
+	}
+
+	if mmGetAllTenants.defaultExpectation == nil {
+		mmGetAllTenants.defaultExpectation = &StorageAndGraphWriterMockGetAllTenantsExpectation{}
+	}
+
+	if mmGetAllTenants.defaultExpectation.paramPtrs != nil {
+		mmGetAllTenants.mock.t.Fatalf("StorageAndGraphWriterMock.GetAllTenants mock is already set by ExpectParams functions")
+	}
+
+	mmGetAllTenants.defaultExpectation.params = &StorageAndGraphWriterMockGetAllTenantsParams{ctx}
+	mmGetAllTenants.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetAllTenants.expectations {
+		if minimock.Equal(e.params, mmGetAllTenants.defaultExpectation.params) {
+			mmGetAllTenants.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetAllTenants.defaultExpectation.params)
+		}
+	}
+
+	return mmGetAllTenants
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetAllTenants
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetAllTenants {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StorageAndGraphWriterMock.GetAllTenants mock is already set by Set")
+	}
+
+	if mmGetAllTenants.defaultExpectation == nil {
+		mmGetAllTenants.defaultExpectation = &StorageAndGraphWriterMockGetAllTenantsExpectation{}
+	}
+
+	if mmGetAllTenants.defaultExpectation.params != nil {
+		mmGetAllTenants.mock.t.Fatalf("StorageAndGraphWriterMock.GetAllTenants mock is already set by Expect")
+	}
+
+	if mmGetAllTenants.defaultExpectation.paramPtrs == nil {
+		mmGetAllTenants.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetAllTenantsParamPtrs{}
+	}
+	mmGetAllTenants.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetAllTenants.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetAllTenants
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetAllTenants
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Inspect(f func(ctx context.Context)) *mStorageAndGraphWriterMockGetAllTenants {
+	if mmGetAllTenants.mock.inspectFuncGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetAllTenants")
+	}
+
+	mmGetAllTenants.mock.inspectFuncGetAllTenants = f
+
+	return mmGetAllTenants
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetAllTenants
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Return(m1 map[string]int32, err error) *StorageAndGraphWriterMock {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StorageAndGraphWriterMock.GetAllTenants mock is already set by Set")
+	}
+
+	if mmGetAllTenants.defaultExpectation == nil {
+		mmGetAllTenants.defaultExpectation = &StorageAndGraphWriterMockGetAllTenantsExpectation{mock: mmGetAllTenants.mock}
+	}
+	mmGetAllTenants.defaultExpectation.results = &StorageAndGraphWriterMockGetAllTenantsResults{m1, err}
+	mmGetAllTenants.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenants.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetAllTenants method
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Set(f func(ctx context.Context) (m1 map[string]int32, err error)) *StorageAndGraphWriterMock {
+	if mmGetAllTenants.defaultExpectation != nil {
+		mmGetAllTenants.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetAllTenants method")
+	}
+
+	if len(mmGetAllTenants.expectations) > 0 {
+		mmGetAllTenants.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetAllTenants method")
+	}
+
+	mmGetAllTenants.mock.funcGetAllTenants = f
+	mmGetAllTenants.mock.funcGetAllTenantsOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenants.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetAllTenants which will trigger the result defined by the following
+// Then helper
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) When(ctx context.Context) *StorageAndGraphWriterMockGetAllTenantsExpectation {
+	if mmGetAllTenants.mock.funcGetAllTenants != nil {
+		mmGetAllTenants.mock.t.Fatalf("StorageAndGraphWriterMock.GetAllTenants mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetAllTenantsExpectation{
+		mock:               mmGetAllTenants.mock,
+		params:             &StorageAndGraphWriterMockGetAllTenantsParams{ctx},
+		expectationOrigins: StorageAndGraphWriterMockGetAllTenantsExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetAllTenants.expectations = append(mmGetAllTenants.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetAllTenants return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetAllTenantsExpectation) Then(m1 map[string]int32, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetAllTenantsResults{m1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetAllTenants should be invoked
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Times(n uint64) *mStorageAndGraphWriterMockGetAllTenants {
+	if n == 0 {
+		mmGetAllTenants.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetAllTenants mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetAllTenants.expectedInvocations, n)
+	mmGetAllTenants.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetAllTenants
+}
+
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) invocationsDone() bool {
+	if len(mmGetAllTenants.expectations) == 0 && mmGetAllTenants.defaultExpectation == nil && mmGetAllTenants.mock.funcGetAllTenants == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetAllTenants.mock.afterGetAllTenantsCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetAllTenants.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetAllTenants implements mm_port.StorageAndGraphWriter
+func (mmGetAllTenants *StorageAndGraphWriterMock) GetAllTenants(ctx context.Context) (m1 map[string]int32, err error) {
+	mm_atomic.AddUint64(&mmGetAllTenants.beforeGetAllTenantsCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetAllTenants.afterGetAllTenantsCounter, 1)
+
+	mmGetAllTenants.t.Helper()
+
+	if mmGetAllTenants.inspectFuncGetAllTenants != nil {
+		mmGetAllTenants.inspectFuncGetAllTenants(ctx)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetAllTenantsParams{ctx}
+
+	// Record call args
+	mmGetAllTenants.GetAllTenantsMock.mutex.Lock()
+	mmGetAllTenants.GetAllTenantsMock.callArgs = append(mmGetAllTenants.GetAllTenantsMock.callArgs, &mm_params)
+	mmGetAllTenants.GetAllTenantsMock.mutex.Unlock()
+
+	for _, e := range mmGetAllTenants.GetAllTenantsMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.m1, e.results.err
+		}
+	}
+
+	if mmGetAllTenants.GetAllTenantsMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetAllTenants.GetAllTenantsMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetAllTenants.GetAllTenantsMock.defaultExpectation.params
+		mm_want_ptrs := mmGetAllTenants.GetAllTenantsMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetAllTenantsParams{ctx}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetAllTenants.t.Errorf("StorageAndGraphWriterMock.GetAllTenants got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetAllTenants.GetAllTenantsMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetAllTenants.t.Errorf("StorageAndGraphWriterMock.GetAllTenants got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetAllTenants.GetAllTenantsMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetAllTenants.GetAllTenantsMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetAllTenants.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetAllTenants")
+		}
+		return (*mm_results).m1, (*mm_results).err
+	}
+	if mmGetAllTenants.funcGetAllTenants != nil {
+		return mmGetAllTenants.funcGetAllTenants(ctx)
+	}
+	mmGetAllTenants.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetAllTenants. %v", ctx)
+	return
+}
+
+// GetAllTenantsAfterCounter returns a count of finished StorageAndGraphWriterMock.GetAllTenants invocations
+func (mmGetAllTenants *StorageAndGraphWriterMock) GetAllTenantsAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAllTenants.afterGetAllTenantsCounter)
+}
+
+// GetAllTenantsBeforeCounter returns a count of StorageAndGraphWriterMock.GetAllTenants invocations
+func (mmGetAllTenants *StorageAndGraphWriterMock) GetAllTenantsBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetAllTenants.beforeGetAllTenantsCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetAllTenants.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetAllTenants *mStorageAndGraphWriterMockGetAllTenants) Calls() []*StorageAndGraphWriterMockGetAllTenantsParams {
+	mmGetAllTenants.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetAllTenantsParams, len(mmGetAllTenants.callArgs))
+	copy(argCopy, mmGetAllTenants.callArgs)
+
+	mmGetAllTenants.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetAllTenantsDone returns true if the count of the GetAllTenants invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetAllTenantsDone() bool {
+	if m.GetAllTenantsMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetAllTenantsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetAllTenantsMock.invocationsDone()
+}
+
+// MinimockGetAllTenantsInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetAllTenantsInspect() {
+	for _, e := range m.GetAllTenantsMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetAllTenants at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetAllTenantsCounter := mm_atomic.LoadUint64(&m.afterGetAllTenantsCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetAllTenantsMock.defaultExpectation != nil && afterGetAllTenantsCounter < 1 {
+		if m.GetAllTenantsMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetAllTenants at\n%s", m.GetAllTenantsMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetAllTenants at\n%s with params: %#v", m.GetAllTenantsMock.defaultExpectation.expectationOrigins.origin, *m.GetAllTenantsMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetAllTenants != nil && afterGetAllTenantsCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetAllTenants at\n%s", m.funcGetAllTenantsOrigin)
+	}
+
+	if !m.GetAllTenantsMock.invocationsDone() && afterGetAllTenantsCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetAllTenants at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetAllTenantsMock.expectedInvocations), m.GetAllTenantsMock.expectedInvocationsOrigin, afterGetAllTenantsCounter)
+	}
+}
+
 type mStorageAndGraphWriterMockGetCollectionPayloads struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -6967,349 +7299,6 @@ func (m *StorageAndGraphWriterMock) MinimockGetNomadicIdentityInspect() {
 	}
 }
 
-type mStorageAndGraphWriterMockGetOrCreateTenantByDomain struct {
-	optional           bool
-	mock               *StorageAndGraphWriterMock
-	defaultExpectation *StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation
-	expectations       []*StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation
-
-	callArgs []*StorageAndGraphWriterMockGetOrCreateTenantByDomainParams
-	mutex    sync.RWMutex
-
-	expectedInvocations       uint64
-	expectedInvocationsOrigin string
-}
-
-// StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation specifies expectation struct of the StorageAndGraphWriter.GetOrCreateTenantByDomain
-type StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation struct {
-	mock               *StorageAndGraphWriterMock
-	params             *StorageAndGraphWriterMockGetOrCreateTenantByDomainParams
-	paramPtrs          *StorageAndGraphWriterMockGetOrCreateTenantByDomainParamPtrs
-	expectationOrigins StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectationOrigins
-	results            *StorageAndGraphWriterMockGetOrCreateTenantByDomainResults
-	returnOrigin       string
-	Counter            uint64
-}
-
-// StorageAndGraphWriterMockGetOrCreateTenantByDomainParams contains parameters of the StorageAndGraphWriter.GetOrCreateTenantByDomain
-type StorageAndGraphWriterMockGetOrCreateTenantByDomainParams struct {
-	ctx        context.Context
-	domainName string
-}
-
-// StorageAndGraphWriterMockGetOrCreateTenantByDomainParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetOrCreateTenantByDomain
-type StorageAndGraphWriterMockGetOrCreateTenantByDomainParamPtrs struct {
-	ctx        *context.Context
-	domainName *string
-}
-
-// StorageAndGraphWriterMockGetOrCreateTenantByDomainResults contains results of the StorageAndGraphWriter.GetOrCreateTenantByDomain
-type StorageAndGraphWriterMockGetOrCreateTenantByDomainResults struct {
-	i1  int32
-	err error
-}
-
-// StorageAndGraphWriterMockGetOrCreateTenantByDomainOrigins contains origins of expectations of the StorageAndGraphWriter.GetOrCreateTenantByDomain
-type StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectationOrigins struct {
-	origin           string
-	originCtx        string
-	originDomainName string
-}
-
-// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
-// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
-// Optional() makes method check to work in '0 or more' mode.
-// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
-// catch the problems when the expected method call is totally skipped during test run.
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Optional() *mStorageAndGraphWriterMockGetOrCreateTenantByDomain {
-	mmGetOrCreateTenantByDomain.optional = true
-	return mmGetOrCreateTenantByDomain
-}
-
-// Expect sets up expected params for StorageAndGraphWriter.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Expect(ctx context.Context, domainName string) *mStorageAndGraphWriterMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation{}
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by ExpectParams functions")
-	}
-
-	mmGetOrCreateTenantByDomain.defaultExpectation.params = &StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{ctx, domainName}
-	mmGetOrCreateTenantByDomain.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
-	for _, e := range mmGetOrCreateTenantByDomain.expectations {
-		if minimock.Equal(e.params, mmGetOrCreateTenantByDomain.defaultExpectation.params) {
-			mmGetOrCreateTenantByDomain.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetOrCreateTenantByDomain.defaultExpectation.params)
-		}
-	}
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation{}
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.params != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Expect")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetOrCreateTenantByDomainParamPtrs{}
-	}
-	mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs.ctx = &ctx
-	mmGetOrCreateTenantByDomain.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// ExpectDomainNameParam2 sets up expected param domainName for StorageAndGraphWriter.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) ExpectDomainNameParam2(domainName string) *mStorageAndGraphWriterMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation{}
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.params != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Expect")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetOrCreateTenantByDomainParamPtrs{}
-	}
-	mmGetOrCreateTenantByDomain.defaultExpectation.paramPtrs.domainName = &domainName
-	mmGetOrCreateTenantByDomain.defaultExpectation.expectationOrigins.originDomainName = minimock.CallerInfo(1)
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Inspect(f func(ctx context.Context, domainName string)) *mStorageAndGraphWriterMockGetOrCreateTenantByDomain {
-	if mmGetOrCreateTenantByDomain.mock.inspectFuncGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetOrCreateTenantByDomain")
-	}
-
-	mmGetOrCreateTenantByDomain.mock.inspectFuncGetOrCreateTenantByDomain = f
-
-	return mmGetOrCreateTenantByDomain
-}
-
-// Return sets up results that will be returned by StorageAndGraphWriter.GetOrCreateTenantByDomain
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Return(i1 int32, err error) *StorageAndGraphWriterMock {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	if mmGetOrCreateTenantByDomain.defaultExpectation == nil {
-		mmGetOrCreateTenantByDomain.defaultExpectation = &StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation{mock: mmGetOrCreateTenantByDomain.mock}
-	}
-	mmGetOrCreateTenantByDomain.defaultExpectation.results = &StorageAndGraphWriterMockGetOrCreateTenantByDomainResults{i1, err}
-	mmGetOrCreateTenantByDomain.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
-	return mmGetOrCreateTenantByDomain.mock
-}
-
-// Set uses given function f to mock the StorageAndGraphWriter.GetOrCreateTenantByDomain method
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Set(f func(ctx context.Context, domainName string) (i1 int32, err error)) *StorageAndGraphWriterMock {
-	if mmGetOrCreateTenantByDomain.defaultExpectation != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetOrCreateTenantByDomain method")
-	}
-
-	if len(mmGetOrCreateTenantByDomain.expectations) > 0 {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetOrCreateTenantByDomain method")
-	}
-
-	mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain = f
-	mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomainOrigin = minimock.CallerInfo(1)
-	return mmGetOrCreateTenantByDomain.mock
-}
-
-// When sets expectation for the StorageAndGraphWriter.GetOrCreateTenantByDomain which will trigger the result defined by the following
-// Then helper
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) When(ctx context.Context, domainName string) *StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation {
-	if mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock is already set by Set")
-	}
-
-	expectation := &StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation{
-		mock:               mmGetOrCreateTenantByDomain.mock,
-		params:             &StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{ctx, domainName},
-		expectationOrigins: StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectationOrigins{origin: minimock.CallerInfo(1)},
-	}
-	mmGetOrCreateTenantByDomain.expectations = append(mmGetOrCreateTenantByDomain.expectations, expectation)
-	return expectation
-}
-
-// Then sets up StorageAndGraphWriter.GetOrCreateTenantByDomain return parameters for the expectation previously defined by the When method
-func (e *StorageAndGraphWriterMockGetOrCreateTenantByDomainExpectation) Then(i1 int32, err error) *StorageAndGraphWriterMock {
-	e.results = &StorageAndGraphWriterMockGetOrCreateTenantByDomainResults{i1, err}
-	return e.mock
-}
-
-// Times sets number of times StorageAndGraphWriter.GetOrCreateTenantByDomain should be invoked
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Times(n uint64) *mStorageAndGraphWriterMockGetOrCreateTenantByDomain {
-	if n == 0 {
-		mmGetOrCreateTenantByDomain.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetOrCreateTenantByDomain mock can not be zero")
-	}
-	mm_atomic.StoreUint64(&mmGetOrCreateTenantByDomain.expectedInvocations, n)
-	mmGetOrCreateTenantByDomain.expectedInvocationsOrigin = minimock.CallerInfo(1)
-	return mmGetOrCreateTenantByDomain
-}
-
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) invocationsDone() bool {
-	if len(mmGetOrCreateTenantByDomain.expectations) == 0 && mmGetOrCreateTenantByDomain.defaultExpectation == nil && mmGetOrCreateTenantByDomain.mock.funcGetOrCreateTenantByDomain == nil {
-		return true
-	}
-
-	totalInvocations := mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.mock.afterGetOrCreateTenantByDomainCounter)
-	expectedInvocations := mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.expectedInvocations)
-
-	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
-}
-
-// GetOrCreateTenantByDomain implements mm_port.StorageAndGraphWriter
-func (mmGetOrCreateTenantByDomain *StorageAndGraphWriterMock) GetOrCreateTenantByDomain(ctx context.Context, domainName string) (i1 int32, err error) {
-	mm_atomic.AddUint64(&mmGetOrCreateTenantByDomain.beforeGetOrCreateTenantByDomainCounter, 1)
-	defer mm_atomic.AddUint64(&mmGetOrCreateTenantByDomain.afterGetOrCreateTenantByDomainCounter, 1)
-
-	mmGetOrCreateTenantByDomain.t.Helper()
-
-	if mmGetOrCreateTenantByDomain.inspectFuncGetOrCreateTenantByDomain != nil {
-		mmGetOrCreateTenantByDomain.inspectFuncGetOrCreateTenantByDomain(ctx, domainName)
-	}
-
-	mm_params := StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{ctx, domainName}
-
-	// Record call args
-	mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.mutex.Lock()
-	mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.callArgs = append(mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.callArgs, &mm_params)
-	mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.mutex.Unlock()
-
-	for _, e := range mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.expectations {
-		if minimock.Equal(*e.params, mm_params) {
-			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.i1, e.results.err
-		}
-	}
-
-	if mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation != nil {
-		mm_atomic.AddUint64(&mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.Counter, 1)
-		mm_want := mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.params
-		mm_want_ptrs := mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.paramPtrs
-
-		mm_got := StorageAndGraphWriterMockGetOrCreateTenantByDomainParams{ctx, domainName}
-
-		if mm_want_ptrs != nil {
-
-			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
-				mmGetOrCreateTenantByDomain.t.Errorf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
-			}
-
-			if mm_want_ptrs.domainName != nil && !minimock.Equal(*mm_want_ptrs.domainName, mm_got.domainName) {
-				mmGetOrCreateTenantByDomain.t.Errorf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain got unexpected parameter domainName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-					mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.originDomainName, *mm_want_ptrs.domainName, mm_got.domainName, minimock.Diff(*mm_want_ptrs.domainName, mm_got.domainName))
-			}
-
-		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
-			mmGetOrCreateTenantByDomain.t.Errorf("StorageAndGraphWriterMock.GetOrCreateTenantByDomain got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
-				mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
-		}
-
-		mm_results := mmGetOrCreateTenantByDomain.GetOrCreateTenantByDomainMock.defaultExpectation.results
-		if mm_results == nil {
-			mmGetOrCreateTenantByDomain.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetOrCreateTenantByDomain")
-		}
-		return (*mm_results).i1, (*mm_results).err
-	}
-	if mmGetOrCreateTenantByDomain.funcGetOrCreateTenantByDomain != nil {
-		return mmGetOrCreateTenantByDomain.funcGetOrCreateTenantByDomain(ctx, domainName)
-	}
-	mmGetOrCreateTenantByDomain.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetOrCreateTenantByDomain. %v %v", ctx, domainName)
-	return
-}
-
-// GetOrCreateTenantByDomainAfterCounter returns a count of finished StorageAndGraphWriterMock.GetOrCreateTenantByDomain invocations
-func (mmGetOrCreateTenantByDomain *StorageAndGraphWriterMock) GetOrCreateTenantByDomainAfterCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.afterGetOrCreateTenantByDomainCounter)
-}
-
-// GetOrCreateTenantByDomainBeforeCounter returns a count of StorageAndGraphWriterMock.GetOrCreateTenantByDomain invocations
-func (mmGetOrCreateTenantByDomain *StorageAndGraphWriterMock) GetOrCreateTenantByDomainBeforeCounter() uint64 {
-	return mm_atomic.LoadUint64(&mmGetOrCreateTenantByDomain.beforeGetOrCreateTenantByDomainCounter)
-}
-
-// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetOrCreateTenantByDomain.
-// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
-func (mmGetOrCreateTenantByDomain *mStorageAndGraphWriterMockGetOrCreateTenantByDomain) Calls() []*StorageAndGraphWriterMockGetOrCreateTenantByDomainParams {
-	mmGetOrCreateTenantByDomain.mutex.RLock()
-
-	argCopy := make([]*StorageAndGraphWriterMockGetOrCreateTenantByDomainParams, len(mmGetOrCreateTenantByDomain.callArgs))
-	copy(argCopy, mmGetOrCreateTenantByDomain.callArgs)
-
-	mmGetOrCreateTenantByDomain.mutex.RUnlock()
-
-	return argCopy
-}
-
-// MinimockGetOrCreateTenantByDomainDone returns true if the count of the GetOrCreateTenantByDomain invocations corresponds
-// the number of defined expectations
-func (m *StorageAndGraphWriterMock) MinimockGetOrCreateTenantByDomainDone() bool {
-	if m.GetOrCreateTenantByDomainMock.optional {
-		// Optional methods provide '0 or more' call count restriction.
-		return true
-	}
-
-	for _, e := range m.GetOrCreateTenantByDomainMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			return false
-		}
-	}
-
-	return m.GetOrCreateTenantByDomainMock.invocationsDone()
-}
-
-// MinimockGetOrCreateTenantByDomainInspect logs each unmet expectation
-func (m *StorageAndGraphWriterMock) MinimockGetOrCreateTenantByDomainInspect() {
-	for _, e := range m.GetOrCreateTenantByDomainMock.expectations {
-		if mm_atomic.LoadUint64(&e.Counter) < 1 {
-			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetOrCreateTenantByDomain at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
-		}
-	}
-
-	afterGetOrCreateTenantByDomainCounter := mm_atomic.LoadUint64(&m.afterGetOrCreateTenantByDomainCounter)
-	// if default expectation was set then invocations count should be greater than zero
-	if m.GetOrCreateTenantByDomainMock.defaultExpectation != nil && afterGetOrCreateTenantByDomainCounter < 1 {
-		if m.GetOrCreateTenantByDomainMock.defaultExpectation.params == nil {
-			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetOrCreateTenantByDomain at\n%s", m.GetOrCreateTenantByDomainMock.defaultExpectation.returnOrigin)
-		} else {
-			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetOrCreateTenantByDomain at\n%s with params: %#v", m.GetOrCreateTenantByDomainMock.defaultExpectation.expectationOrigins.origin, *m.GetOrCreateTenantByDomainMock.defaultExpectation.params)
-		}
-	}
-	// if func was set then invocations count should be greater than zero
-	if m.funcGetOrCreateTenantByDomain != nil && afterGetOrCreateTenantByDomainCounter < 1 {
-		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetOrCreateTenantByDomain at\n%s", m.funcGetOrCreateTenantByDomainOrigin)
-	}
-
-	if !m.GetOrCreateTenantByDomainMock.invocationsDone() && afterGetOrCreateTenantByDomainCounter > 0 {
-		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetOrCreateTenantByDomain at\n%s but found %d calls",
-			mm_atomic.LoadUint64(&m.GetOrCreateTenantByDomainMock.expectedInvocations), m.GetOrCreateTenantByDomainMock.expectedInvocationsOrigin, afterGetOrCreateTenantByDomainCounter)
-	}
-}
-
 type mStorageAndGraphWriterMockGetRepliesForObject struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -8710,6 +8699,349 @@ func (m *StorageAndGraphWriterMock) MinimockGetTenantIDByActivityIRIInspect() {
 	if !m.GetTenantIDByActivityIRIMock.invocationsDone() && afterGetTenantIDByActivityIRICounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetTenantIDByActivityIRI at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetTenantIDByActivityIRIMock.expectedInvocations), m.GetTenantIDByActivityIRIMock.expectedInvocationsOrigin, afterGetTenantIDByActivityIRICounter)
+	}
+}
+
+type mStorageAndGraphWriterMockGetTenantIDByDomain struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetTenantIDByDomainExpectation
+	expectations       []*StorageAndGraphWriterMockGetTenantIDByDomainExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetTenantIDByDomainParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetTenantIDByDomainExpectation specifies expectation struct of the StorageAndGraphWriter.GetTenantIDByDomain
+type StorageAndGraphWriterMockGetTenantIDByDomainExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetTenantIDByDomainParams
+	paramPtrs          *StorageAndGraphWriterMockGetTenantIDByDomainParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetTenantIDByDomainExpectationOrigins
+	results            *StorageAndGraphWriterMockGetTenantIDByDomainResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetTenantIDByDomainParams contains parameters of the StorageAndGraphWriter.GetTenantIDByDomain
+type StorageAndGraphWriterMockGetTenantIDByDomainParams struct {
+	ctx        context.Context
+	domainName string
+}
+
+// StorageAndGraphWriterMockGetTenantIDByDomainParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetTenantIDByDomain
+type StorageAndGraphWriterMockGetTenantIDByDomainParamPtrs struct {
+	ctx        *context.Context
+	domainName *string
+}
+
+// StorageAndGraphWriterMockGetTenantIDByDomainResults contains results of the StorageAndGraphWriter.GetTenantIDByDomain
+type StorageAndGraphWriterMockGetTenantIDByDomainResults struct {
+	i1  int32
+	err error
+}
+
+// StorageAndGraphWriterMockGetTenantIDByDomainOrigins contains origins of expectations of the StorageAndGraphWriter.GetTenantIDByDomain
+type StorageAndGraphWriterMockGetTenantIDByDomainExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originDomainName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Optional() *mStorageAndGraphWriterMockGetTenantIDByDomain {
+	mmGetTenantIDByDomain.optional = true
+	return mmGetTenantIDByDomain
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Expect(ctx context.Context, domainName string) *mStorageAndGraphWriterMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByDomainExpectation{}
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.paramPtrs != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by ExpectParams functions")
+	}
+
+	mmGetTenantIDByDomain.defaultExpectation.params = &StorageAndGraphWriterMockGetTenantIDByDomainParams{ctx, domainName}
+	mmGetTenantIDByDomain.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetTenantIDByDomain.expectations {
+		if minimock.Equal(e.params, mmGetTenantIDByDomain.defaultExpectation.params) {
+			mmGetTenantIDByDomain.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetTenantIDByDomain.defaultExpectation.params)
+		}
+	}
+
+	return mmGetTenantIDByDomain
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByDomainExpectation{}
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.params != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByDomain.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetTenantIDByDomainParamPtrs{}
+	}
+	mmGetTenantIDByDomain.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetTenantIDByDomain.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByDomain
+}
+
+// ExpectDomainNameParam2 sets up expected param domainName for StorageAndGraphWriter.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) ExpectDomainNameParam2(domainName string) *mStorageAndGraphWriterMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByDomainExpectation{}
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.params != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Expect")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation.paramPtrs == nil {
+		mmGetTenantIDByDomain.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetTenantIDByDomainParamPtrs{}
+	}
+	mmGetTenantIDByDomain.defaultExpectation.paramPtrs.domainName = &domainName
+	mmGetTenantIDByDomain.defaultExpectation.expectationOrigins.originDomainName = minimock.CallerInfo(1)
+
+	return mmGetTenantIDByDomain
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Inspect(f func(ctx context.Context, domainName string)) *mStorageAndGraphWriterMockGetTenantIDByDomain {
+	if mmGetTenantIDByDomain.mock.inspectFuncGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetTenantIDByDomain")
+	}
+
+	mmGetTenantIDByDomain.mock.inspectFuncGetTenantIDByDomain = f
+
+	return mmGetTenantIDByDomain
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetTenantIDByDomain
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Return(i1 int32, err error) *StorageAndGraphWriterMock {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	if mmGetTenantIDByDomain.defaultExpectation == nil {
+		mmGetTenantIDByDomain.defaultExpectation = &StorageAndGraphWriterMockGetTenantIDByDomainExpectation{mock: mmGetTenantIDByDomain.mock}
+	}
+	mmGetTenantIDByDomain.defaultExpectation.results = &StorageAndGraphWriterMockGetTenantIDByDomainResults{i1, err}
+	mmGetTenantIDByDomain.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByDomain.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetTenantIDByDomain method
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Set(f func(ctx context.Context, domainName string) (i1 int32, err error)) *StorageAndGraphWriterMock {
+	if mmGetTenantIDByDomain.defaultExpectation != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetTenantIDByDomain method")
+	}
+
+	if len(mmGetTenantIDByDomain.expectations) > 0 {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetTenantIDByDomain method")
+	}
+
+	mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain = f
+	mmGetTenantIDByDomain.mock.funcGetTenantIDByDomainOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByDomain.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetTenantIDByDomain which will trigger the result defined by the following
+// Then helper
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) When(ctx context.Context, domainName string) *StorageAndGraphWriterMockGetTenantIDByDomainExpectation {
+	if mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.mock.t.Fatalf("StorageAndGraphWriterMock.GetTenantIDByDomain mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetTenantIDByDomainExpectation{
+		mock:               mmGetTenantIDByDomain.mock,
+		params:             &StorageAndGraphWriterMockGetTenantIDByDomainParams{ctx, domainName},
+		expectationOrigins: StorageAndGraphWriterMockGetTenantIDByDomainExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetTenantIDByDomain.expectations = append(mmGetTenantIDByDomain.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetTenantIDByDomain return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetTenantIDByDomainExpectation) Then(i1 int32, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetTenantIDByDomainResults{i1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetTenantIDByDomain should be invoked
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Times(n uint64) *mStorageAndGraphWriterMockGetTenantIDByDomain {
+	if n == 0 {
+		mmGetTenantIDByDomain.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetTenantIDByDomain mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetTenantIDByDomain.expectedInvocations, n)
+	mmGetTenantIDByDomain.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetTenantIDByDomain
+}
+
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) invocationsDone() bool {
+	if len(mmGetTenantIDByDomain.expectations) == 0 && mmGetTenantIDByDomain.defaultExpectation == nil && mmGetTenantIDByDomain.mock.funcGetTenantIDByDomain == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByDomain.mock.afterGetTenantIDByDomainCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetTenantIDByDomain.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetTenantIDByDomain implements mm_port.StorageAndGraphWriter
+func (mmGetTenantIDByDomain *StorageAndGraphWriterMock) GetTenantIDByDomain(ctx context.Context, domainName string) (i1 int32, err error) {
+	mm_atomic.AddUint64(&mmGetTenantIDByDomain.beforeGetTenantIDByDomainCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetTenantIDByDomain.afterGetTenantIDByDomainCounter, 1)
+
+	mmGetTenantIDByDomain.t.Helper()
+
+	if mmGetTenantIDByDomain.inspectFuncGetTenantIDByDomain != nil {
+		mmGetTenantIDByDomain.inspectFuncGetTenantIDByDomain(ctx, domainName)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetTenantIDByDomainParams{ctx, domainName}
+
+	// Record call args
+	mmGetTenantIDByDomain.GetTenantIDByDomainMock.mutex.Lock()
+	mmGetTenantIDByDomain.GetTenantIDByDomainMock.callArgs = append(mmGetTenantIDByDomain.GetTenantIDByDomainMock.callArgs, &mm_params)
+	mmGetTenantIDByDomain.GetTenantIDByDomainMock.mutex.Unlock()
+
+	for _, e := range mmGetTenantIDByDomain.GetTenantIDByDomainMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.i1, e.results.err
+		}
+	}
+
+	if mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.params
+		mm_want_ptrs := mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetTenantIDByDomainParams{ctx, domainName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetTenantIDByDomain.t.Errorf("StorageAndGraphWriterMock.GetTenantIDByDomain got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.domainName != nil && !minimock.Equal(*mm_want_ptrs.domainName, mm_got.domainName) {
+				mmGetTenantIDByDomain.t.Errorf("StorageAndGraphWriterMock.GetTenantIDByDomain got unexpected parameter domainName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.originDomainName, *mm_want_ptrs.domainName, mm_got.domainName, minimock.Diff(*mm_want_ptrs.domainName, mm_got.domainName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetTenantIDByDomain.t.Errorf("StorageAndGraphWriterMock.GetTenantIDByDomain got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetTenantIDByDomain.GetTenantIDByDomainMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetTenantIDByDomain.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetTenantIDByDomain")
+		}
+		return (*mm_results).i1, (*mm_results).err
+	}
+	if mmGetTenantIDByDomain.funcGetTenantIDByDomain != nil {
+		return mmGetTenantIDByDomain.funcGetTenantIDByDomain(ctx, domainName)
+	}
+	mmGetTenantIDByDomain.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetTenantIDByDomain. %v %v", ctx, domainName)
+	return
+}
+
+// GetTenantIDByDomainAfterCounter returns a count of finished StorageAndGraphWriterMock.GetTenantIDByDomain invocations
+func (mmGetTenantIDByDomain *StorageAndGraphWriterMock) GetTenantIDByDomainAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByDomain.afterGetTenantIDByDomainCounter)
+}
+
+// GetTenantIDByDomainBeforeCounter returns a count of StorageAndGraphWriterMock.GetTenantIDByDomain invocations
+func (mmGetTenantIDByDomain *StorageAndGraphWriterMock) GetTenantIDByDomainBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetTenantIDByDomain.beforeGetTenantIDByDomainCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetTenantIDByDomain.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetTenantIDByDomain *mStorageAndGraphWriterMockGetTenantIDByDomain) Calls() []*StorageAndGraphWriterMockGetTenantIDByDomainParams {
+	mmGetTenantIDByDomain.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetTenantIDByDomainParams, len(mmGetTenantIDByDomain.callArgs))
+	copy(argCopy, mmGetTenantIDByDomain.callArgs)
+
+	mmGetTenantIDByDomain.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetTenantIDByDomainDone returns true if the count of the GetTenantIDByDomain invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetTenantIDByDomainDone() bool {
+	if m.GetTenantIDByDomainMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetTenantIDByDomainMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetTenantIDByDomainMock.invocationsDone()
+}
+
+// MinimockGetTenantIDByDomainInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetTenantIDByDomainInspect() {
+	for _, e := range m.GetTenantIDByDomainMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByDomain at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetTenantIDByDomainCounter := mm_atomic.LoadUint64(&m.afterGetTenantIDByDomainCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetTenantIDByDomainMock.defaultExpectation != nil && afterGetTenantIDByDomainCounter < 1 {
+		if m.GetTenantIDByDomainMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByDomain at\n%s", m.GetTenantIDByDomainMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByDomain at\n%s with params: %#v", m.GetTenantIDByDomainMock.defaultExpectation.expectationOrigins.origin, *m.GetTenantIDByDomainMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetTenantIDByDomain != nil && afterGetTenantIDByDomainCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetTenantIDByDomain at\n%s", m.funcGetTenantIDByDomainOrigin)
+	}
+
+	if !m.GetTenantIDByDomainMock.invocationsDone() && afterGetTenantIDByDomainCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetTenantIDByDomain at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetTenantIDByDomainMock.expectedInvocations), m.GetTenantIDByDomainMock.expectedInvocationsOrigin, afterGetTenantIDByDomainCounter)
 	}
 }
 
@@ -14187,6 +14519,380 @@ func (m *StorageAndGraphWriterMock) MinimockStreamQuadsBySubjectInspect() {
 	}
 }
 
+type mStorageAndGraphWriterMockUpsertConfiguredTenant struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockUpsertConfiguredTenantExpectation
+	expectations       []*StorageAndGraphWriterMockUpsertConfiguredTenantExpectation
+
+	callArgs []*StorageAndGraphWriterMockUpsertConfiguredTenantParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockUpsertConfiguredTenantExpectation specifies expectation struct of the StorageAndGraphWriter.UpsertConfiguredTenant
+type StorageAndGraphWriterMockUpsertConfiguredTenantExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockUpsertConfiguredTenantParams
+	paramPtrs          *StorageAndGraphWriterMockUpsertConfiguredTenantParamPtrs
+	expectationOrigins StorageAndGraphWriterMockUpsertConfiguredTenantExpectationOrigins
+	results            *StorageAndGraphWriterMockUpsertConfiguredTenantResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockUpsertConfiguredTenantParams contains parameters of the StorageAndGraphWriter.UpsertConfiguredTenant
+type StorageAndGraphWriterMockUpsertConfiguredTenantParams struct {
+	ctx        context.Context
+	tenantUUID string
+	domainName string
+}
+
+// StorageAndGraphWriterMockUpsertConfiguredTenantParamPtrs contains pointers to parameters of the StorageAndGraphWriter.UpsertConfiguredTenant
+type StorageAndGraphWriterMockUpsertConfiguredTenantParamPtrs struct {
+	ctx        *context.Context
+	tenantUUID *string
+	domainName *string
+}
+
+// StorageAndGraphWriterMockUpsertConfiguredTenantResults contains results of the StorageAndGraphWriter.UpsertConfiguredTenant
+type StorageAndGraphWriterMockUpsertConfiguredTenantResults struct {
+	i1  int32
+	err error
+}
+
+// StorageAndGraphWriterMockUpsertConfiguredTenantOrigins contains origins of expectations of the StorageAndGraphWriter.UpsertConfiguredTenant
+type StorageAndGraphWriterMockUpsertConfiguredTenantExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originTenantUUID string
+	originDomainName string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Optional() *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	mmUpsertConfiguredTenant.optional = true
+	return mmUpsertConfiguredTenant
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Expect(ctx context.Context, tenantUUID string, domainName string) *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StorageAndGraphWriterMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by ExpectParams functions")
+	}
+
+	mmUpsertConfiguredTenant.defaultExpectation.params = &StorageAndGraphWriterMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName}
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmUpsertConfiguredTenant.expectations {
+		if minimock.Equal(e.params, mmUpsertConfiguredTenant.defaultExpectation.params) {
+			mmUpsertConfiguredTenant.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmUpsertConfiguredTenant.defaultExpectation.params)
+		}
+	}
+
+	return mmUpsertConfiguredTenant
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StorageAndGraphWriterMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.params != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Expect")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs == nil {
+		mmUpsertConfiguredTenant.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockUpsertConfiguredTenantParamPtrs{}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.paramPtrs.ctx = &ctx
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmUpsertConfiguredTenant
+}
+
+// ExpectTenantUUIDParam2 sets up expected param tenantUUID for StorageAndGraphWriter.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) ExpectTenantUUIDParam2(tenantUUID string) *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StorageAndGraphWriterMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.params != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Expect")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs == nil {
+		mmUpsertConfiguredTenant.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockUpsertConfiguredTenantParamPtrs{}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.paramPtrs.tenantUUID = &tenantUUID
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.originTenantUUID = minimock.CallerInfo(1)
+
+	return mmUpsertConfiguredTenant
+}
+
+// ExpectDomainNameParam3 sets up expected param domainName for StorageAndGraphWriter.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) ExpectDomainNameParam3(domainName string) *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StorageAndGraphWriterMockUpsertConfiguredTenantExpectation{}
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.params != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Expect")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation.paramPtrs == nil {
+		mmUpsertConfiguredTenant.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockUpsertConfiguredTenantParamPtrs{}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.paramPtrs.domainName = &domainName
+	mmUpsertConfiguredTenant.defaultExpectation.expectationOrigins.originDomainName = minimock.CallerInfo(1)
+
+	return mmUpsertConfiguredTenant
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Inspect(f func(ctx context.Context, tenantUUID string, domainName string)) *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	if mmUpsertConfiguredTenant.mock.inspectFuncUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.UpsertConfiguredTenant")
+	}
+
+	mmUpsertConfiguredTenant.mock.inspectFuncUpsertConfiguredTenant = f
+
+	return mmUpsertConfiguredTenant
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.UpsertConfiguredTenant
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Return(i1 int32, err error) *StorageAndGraphWriterMock {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	if mmUpsertConfiguredTenant.defaultExpectation == nil {
+		mmUpsertConfiguredTenant.defaultExpectation = &StorageAndGraphWriterMockUpsertConfiguredTenantExpectation{mock: mmUpsertConfiguredTenant.mock}
+	}
+	mmUpsertConfiguredTenant.defaultExpectation.results = &StorageAndGraphWriterMockUpsertConfiguredTenantResults{i1, err}
+	mmUpsertConfiguredTenant.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmUpsertConfiguredTenant.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.UpsertConfiguredTenant method
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Set(f func(ctx context.Context, tenantUUID string, domainName string) (i1 int32, err error)) *StorageAndGraphWriterMock {
+	if mmUpsertConfiguredTenant.defaultExpectation != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.UpsertConfiguredTenant method")
+	}
+
+	if len(mmUpsertConfiguredTenant.expectations) > 0 {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.UpsertConfiguredTenant method")
+	}
+
+	mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant = f
+	mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenantOrigin = minimock.CallerInfo(1)
+	return mmUpsertConfiguredTenant.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.UpsertConfiguredTenant which will trigger the result defined by the following
+// Then helper
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) When(ctx context.Context, tenantUUID string, domainName string) *StorageAndGraphWriterMockUpsertConfiguredTenantExpectation {
+	if mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("StorageAndGraphWriterMock.UpsertConfiguredTenant mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockUpsertConfiguredTenantExpectation{
+		mock:               mmUpsertConfiguredTenant.mock,
+		params:             &StorageAndGraphWriterMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName},
+		expectationOrigins: StorageAndGraphWriterMockUpsertConfiguredTenantExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmUpsertConfiguredTenant.expectations = append(mmUpsertConfiguredTenant.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.UpsertConfiguredTenant return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockUpsertConfiguredTenantExpectation) Then(i1 int32, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockUpsertConfiguredTenantResults{i1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.UpsertConfiguredTenant should be invoked
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Times(n uint64) *mStorageAndGraphWriterMockUpsertConfiguredTenant {
+	if n == 0 {
+		mmUpsertConfiguredTenant.mock.t.Fatalf("Times of StorageAndGraphWriterMock.UpsertConfiguredTenant mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmUpsertConfiguredTenant.expectedInvocations, n)
+	mmUpsertConfiguredTenant.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmUpsertConfiguredTenant
+}
+
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) invocationsDone() bool {
+	if len(mmUpsertConfiguredTenant.expectations) == 0 && mmUpsertConfiguredTenant.defaultExpectation == nil && mmUpsertConfiguredTenant.mock.funcUpsertConfiguredTenant == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.mock.afterUpsertConfiguredTenantCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// UpsertConfiguredTenant implements mm_port.StorageAndGraphWriter
+func (mmUpsertConfiguredTenant *StorageAndGraphWriterMock) UpsertConfiguredTenant(ctx context.Context, tenantUUID string, domainName string) (i1 int32, err error) {
+	mm_atomic.AddUint64(&mmUpsertConfiguredTenant.beforeUpsertConfiguredTenantCounter, 1)
+	defer mm_atomic.AddUint64(&mmUpsertConfiguredTenant.afterUpsertConfiguredTenantCounter, 1)
+
+	mmUpsertConfiguredTenant.t.Helper()
+
+	if mmUpsertConfiguredTenant.inspectFuncUpsertConfiguredTenant != nil {
+		mmUpsertConfiguredTenant.inspectFuncUpsertConfiguredTenant(ctx, tenantUUID, domainName)
+	}
+
+	mm_params := StorageAndGraphWriterMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName}
+
+	// Record call args
+	mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.mutex.Lock()
+	mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.callArgs = append(mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.callArgs, &mm_params)
+	mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.mutex.Unlock()
+
+	for _, e := range mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.i1, e.results.err
+		}
+	}
+
+	if mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.Counter, 1)
+		mm_want := mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.params
+		mm_want_ptrs := mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockUpsertConfiguredTenantParams{ctx, tenantUUID, domainName}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmUpsertConfiguredTenant.t.Errorf("StorageAndGraphWriterMock.UpsertConfiguredTenant got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.tenantUUID != nil && !minimock.Equal(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID) {
+				mmUpsertConfiguredTenant.t.Errorf("StorageAndGraphWriterMock.UpsertConfiguredTenant got unexpected parameter tenantUUID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.originTenantUUID, *mm_want_ptrs.tenantUUID, mm_got.tenantUUID, minimock.Diff(*mm_want_ptrs.tenantUUID, mm_got.tenantUUID))
+			}
+
+			if mm_want_ptrs.domainName != nil && !minimock.Equal(*mm_want_ptrs.domainName, mm_got.domainName) {
+				mmUpsertConfiguredTenant.t.Errorf("StorageAndGraphWriterMock.UpsertConfiguredTenant got unexpected parameter domainName, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.originDomainName, *mm_want_ptrs.domainName, mm_got.domainName, minimock.Diff(*mm_want_ptrs.domainName, mm_got.domainName))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmUpsertConfiguredTenant.t.Errorf("StorageAndGraphWriterMock.UpsertConfiguredTenant got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmUpsertConfiguredTenant.UpsertConfiguredTenantMock.defaultExpectation.results
+		if mm_results == nil {
+			mmUpsertConfiguredTenant.t.Fatal("No results are set for the StorageAndGraphWriterMock.UpsertConfiguredTenant")
+		}
+		return (*mm_results).i1, (*mm_results).err
+	}
+	if mmUpsertConfiguredTenant.funcUpsertConfiguredTenant != nil {
+		return mmUpsertConfiguredTenant.funcUpsertConfiguredTenant(ctx, tenantUUID, domainName)
+	}
+	mmUpsertConfiguredTenant.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.UpsertConfiguredTenant. %v %v %v", ctx, tenantUUID, domainName)
+	return
+}
+
+// UpsertConfiguredTenantAfterCounter returns a count of finished StorageAndGraphWriterMock.UpsertConfiguredTenant invocations
+func (mmUpsertConfiguredTenant *StorageAndGraphWriterMock) UpsertConfiguredTenantAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.afterUpsertConfiguredTenantCounter)
+}
+
+// UpsertConfiguredTenantBeforeCounter returns a count of StorageAndGraphWriterMock.UpsertConfiguredTenant invocations
+func (mmUpsertConfiguredTenant *StorageAndGraphWriterMock) UpsertConfiguredTenantBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmUpsertConfiguredTenant.beforeUpsertConfiguredTenantCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.UpsertConfiguredTenant.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmUpsertConfiguredTenant *mStorageAndGraphWriterMockUpsertConfiguredTenant) Calls() []*StorageAndGraphWriterMockUpsertConfiguredTenantParams {
+	mmUpsertConfiguredTenant.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockUpsertConfiguredTenantParams, len(mmUpsertConfiguredTenant.callArgs))
+	copy(argCopy, mmUpsertConfiguredTenant.callArgs)
+
+	mmUpsertConfiguredTenant.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockUpsertConfiguredTenantDone returns true if the count of the UpsertConfiguredTenant invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockUpsertConfiguredTenantDone() bool {
+	if m.UpsertConfiguredTenantMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.UpsertConfiguredTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.UpsertConfiguredTenantMock.invocationsDone()
+}
+
+// MinimockUpsertConfiguredTenantInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockUpsertConfiguredTenantInspect() {
+	for _, e := range m.UpsertConfiguredTenantMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.UpsertConfiguredTenant at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterUpsertConfiguredTenantCounter := mm_atomic.LoadUint64(&m.afterUpsertConfiguredTenantCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.UpsertConfiguredTenantMock.defaultExpectation != nil && afterUpsertConfiguredTenantCounter < 1 {
+		if m.UpsertConfiguredTenantMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.UpsertConfiguredTenant at\n%s", m.UpsertConfiguredTenantMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.UpsertConfiguredTenant at\n%s with params: %#v", m.UpsertConfiguredTenantMock.defaultExpectation.expectationOrigins.origin, *m.UpsertConfiguredTenantMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcUpsertConfiguredTenant != nil && afterUpsertConfiguredTenantCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.UpsertConfiguredTenant at\n%s", m.funcUpsertConfiguredTenantOrigin)
+	}
+
+	if !m.UpsertConfiguredTenantMock.invocationsDone() && afterUpsertConfiguredTenantCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.UpsertConfiguredTenant at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.UpsertConfiguredTenantMock.expectedInvocations), m.UpsertConfiguredTenantMock.expectedInvocationsOrigin, afterUpsertConfiguredTenantCounter)
+	}
+}
+
 type mStorageAndGraphWriterMockUpsertNomadicIdentity struct {
 	optional           bool
 	mock               *StorageAndGraphWriterMock
@@ -14931,6 +15637,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockGetActorProfileFromGraphInspect()
 
+			m.MinimockGetAllTenantsInspect()
+
 			m.MinimockGetCollectionPayloadsInspect()
 
 			m.MinimockGetHistoricalKeyInspect()
@@ -14941,8 +15649,6 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockGetNomadicIdentityInspect()
 
-			m.MinimockGetOrCreateTenantByDomainInspect()
-
 			m.MinimockGetRepliesForObjectInspect()
 
 			m.MinimockGetSharesForObjectInspect()
@@ -14950,6 +15656,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 			m.MinimockGetStatementsBySubjectIsolatedInspect()
 
 			m.MinimockGetTenantIDByActivityIRIInspect()
+
+			m.MinimockGetTenantIDByDomainInspect()
 
 			m.MinimockHasActorCredentialInspect()
 
@@ -14980,6 +15688,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 			m.MinimockSaveQuadsInspect()
 
 			m.MinimockStreamQuadsBySubjectInspect()
+
+			m.MinimockUpsertConfiguredTenantInspect()
 
 			m.MinimockUpsertNomadicIdentityInspect()
 
@@ -15019,16 +15729,17 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockGetActorIRIByUsernameDone() &&
 		m.MinimockGetActorProfileByIRIDone() &&
 		m.MinimockGetActorProfileFromGraphDone() &&
+		m.MinimockGetAllTenantsDone() &&
 		m.MinimockGetCollectionPayloadsDone() &&
 		m.MinimockGetHistoricalKeyDone() &&
 		m.MinimockGetLatestPayloadDone() &&
 		m.MinimockGetLikesForObjectDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
-		m.MinimockGetOrCreateTenantByDomainDone() &&
 		m.MinimockGetRepliesForObjectDone() &&
 		m.MinimockGetSharesForObjectDone() &&
 		m.MinimockGetStatementsBySubjectIsolatedDone() &&
 		m.MinimockGetTenantIDByActivityIRIDone() &&
+		m.MinimockGetTenantIDByDomainDone() &&
 		m.MinimockHasActorCredentialDone() &&
 		m.MinimockIsDomainBlockedDone() &&
 		m.MinimockMarkInboundCompleteDone() &&
@@ -15044,6 +15755,7 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockSaveQuadIDsDone() &&
 		m.MinimockSaveQuadsDone() &&
 		m.MinimockStreamQuadsBySubjectDone() &&
+		m.MinimockUpsertConfiguredTenantDone() &&
 		m.MinimockUpsertNomadicIdentityDone() &&
 		m.MinimockVerifyIncomingQuotaDone()
 }

@@ -45,7 +45,8 @@ func main() {
 	// 2. Provision multi-tenant system boundaries and server actors [source: 2]
 	log.Println("Validating configuration tenant boundaries and server identities...")
 	bootstrapService := service.NewBootstrapService(deps.postgresStorage)
-	if err := bootstrapService.BootstrapTenantsAndServerActors(context.Background(), deps.cfg.TenantDomains); err != nil {
+	tenantMap, err := bootstrapService.BootstrapTenantsAndServerActors(context.Background(), deps.cfg.Tenants)
+	if err != nil {
 		log.Fatalf("Critical failure bootstrapping tenant server actor layers: %v", err)
 	}
 	log.Println("Multi-tenant server actor matrices are completely provisioned.")
@@ -67,7 +68,7 @@ func main() {
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	setupRoutingTree(r, deps)
+	setupRoutingTree(r, deps, tenantMap)
 
 	server := &http.Server{
 		Addr:         ":" + deps.cfg.Port,
@@ -173,20 +174,25 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 	}()
 }
 
-func setupRoutingTree(r *chi.Mux, deps *dependencies) {
+func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32) {
 	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
 	genericHandler := inhttp.NewGenericHandler(deps.postgresStorage)
 
 	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{
-		TenantDomains: deps.cfg.TenantDomains,
+		TenantDomainToID: tenantMap,
 	})
 
 	signatureValidator := middleware.NewSignatureValidator(federatedVerifier, deps.postgresStorage)
 
+	var domains []string
+	for domain := range tenantMap {
+		domains = append(domains, domain)
+	}
+
 	r.Group(func(protected chi.Router) {
 		protected.Use(tenantValidator.Handler)
 
-		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(deps.cfg.TenantDomains, deps.postgresStorage))
+		protected.Get("/.well-known/webfinger", inhttp.HandleWebfinger(domains, deps.postgresStorage))
 
 		// Unified Greedy Catch-All Endpoint (Handles GET & POST dynamically)
 		protected.Group(func(router chi.Router) {

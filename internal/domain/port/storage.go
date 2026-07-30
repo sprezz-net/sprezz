@@ -11,8 +11,10 @@ import (
 type StoragePort interface {
 	// Domain Routing & Multi-Tenant Isolation Stubs
 
-	// GetOrCreateTenantByDomain checks for domain presence, inserting it dynamically if missing.
-	GetOrCreateTenantByDomain(ctx context.Context, domainName string) (int32, error)
+	// UpsertConfiguredTenant enforces config-driven tenant boundaries.
+	UpsertConfiguredTenant(ctx context.Context, tenantUUID string, domainName string) (int32, error)
+	GetAllTenants(ctx context.Context) (map[string]int32, error)
+	GetTenantIDByDomain(ctx context.Context, domainName string) (int32, error)
 
 	// HasActorCredential checks if a specific username exists inside a designated tenant partition.
 	HasActorCredential(ctx context.Context, tenantID int32, username string) (bool, error)
@@ -22,7 +24,7 @@ type StoragePort interface {
 	CreateActorCredential(ctx context.Context, actorIRI string, tenantID int32, username string, privateKeyRSAPEM string, privateKeyEd25519PEM string) error
 
 	IsDomainBlocked(ctx context.Context, domainName string) (bool, error)
-	EnqueueInbound(ctx context.Context, id string, activityIRI, objectIRI, targetDomain string, payload []byte) error
+	EnqueueInbound(ctx context.Context, id string, activityIRI, objectIRI string, tenantID int32, payload []byte) error
 	ClaimInboundBatch(ctx context.Context, batchSize int) ([]model.InboundTask, error)
 	MarkInboundComplete(ctx context.Context, id string) error
 	MarkInboundFailed(ctx context.Context, id string, reason string) error

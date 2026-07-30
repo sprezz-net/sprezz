@@ -34,18 +34,38 @@ func (s *PostgresStorage) queries() *db.Queries { return db.New(s.db) }
 
 // Multi-Tenant Bootstrap and Pre-Flight Storage Metric Hooks
 
-func (s *PostgresStorage) GetOrCreateTenantByDomain(ctx context.Context, domainName string) (int32, error) {
-	// Attempt to pull the existing tenant assignment row from our data map [source: 3]
+func (s *PostgresStorage) UpsertConfiguredTenant(ctx context.Context, tenantUUID string, domainName string) (int32, error) {
+	uuidVal, err := parseUUID(tenantUUID)
+	if err != nil {
+		return 0, fmt.Errorf("invalid tenant UUID format: %w", err)
+	}
+
+	newTenant, err := s.queries().InsertTenant(ctx, db.InsertTenantParams{
+		TenantUuid: uuidVal,
+		DomainName: domainName,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to upsert configured tenant boundary for %s: %w", domainName, err)
+	}
+	return newTenant.ID, nil
+}
+
+func (s *PostgresStorage) GetAllTenants(ctx context.Context) (map[string]int32, error) {
+	rows, err := s.queries().GetAllTenants(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed retrieving all tenants: %w", err)
+	}
+
+	tenants := make(map[string]int32, len(rows))
+	for _, r := range rows {
+		tenants[r.DomainName] = r.ID
+	}
+	return tenants, nil
+}
+
+func (s *PostgresStorage) GetTenantIDByDomain(ctx context.Context, domainName string) (int32, error) {
 	row, err := s.queries().GetTenantByDomain(ctx, domainName)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			// CORRECTED: Accept both the returned struct/row value and the error object from sqlc [source: 3]
-			newTenant, err := s.queries().InsertTenant(ctx, domainName)
-			if err != nil {
-				return 0, fmt.Errorf("failed to bootstrap new tenant mapping boundary for %s: %w", domainName, err)
-			}
-			return newTenant.ID, nil
-		}
 		return 0, fmt.Errorf("failed looking up tenant partition details: %w", err)
 	}
 	return row.ID, nil
@@ -109,18 +129,13 @@ func (s *PostgresStorage) IsDomainBlocked(ctx context.Context, domainName string
 	return s.queries().IsDomainBlocked(ctx, domainName)
 }
 
-func (s *PostgresStorage) EnqueueInbound(ctx context.Context, id string, activityIRI, objectIRI, targetDomain string, payload []byte) error {
+func (s *PostgresStorage) EnqueueInbound(ctx context.Context, id string, activityIRI, objectIRI string, tenantID int32, payload []byte) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer s.safeRollback(ctx, tx)
 	queries := db.New(tx)
-
-	tenantRow, err := queries.InsertTenant(ctx, targetDomain)
-	if err != nil {
-		return fmt.Errorf("failed to auto-provision inbound tenant %q: %w", targetDomain, err)
-	}
 
 	queueID, err := parseUUID(id)
 	if err != nil {
@@ -136,10 +151,10 @@ func (s *PostgresStorage) EnqueueInbound(ctx context.Context, id string, activit
 		return err
 	}
 
-	// Use tenantRow.ID directly to link delivery records seamlessly [source: 4]
+	// Use tenantID directly to link delivery records seamlessly
 	if err := queries.RecordTenantDelivery(ctx, db.RecordTenantDeliveryParams{
 		ActivityIri: activityIRI,
-		TenantID:    tenantRow.ID,
+		TenantID:    tenantID,
 	}); err != nil {
 		return err
 	}
@@ -175,7 +190,9 @@ func (s *PostgresStorage) GetCollectionPayloads(ctx context.Context, actorIRI, c
 		if tenantID == 0 {
 			host := extractDomain(actorIRI)
 			if host != "" {
-				tenantID, _ = s.GetOrCreateTenantByDomain(ctx, host)
+				if tRow, err := queries.GetTenantByDomain(ctx, host); err == nil {
+					tenantID = tRow.ID
+				}
 			}
 		}
 		if tenantID == 0 {

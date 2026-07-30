@@ -26,12 +26,12 @@ type MinIOConfig struct {
 }
 
 type Config struct {
-	AppEnv        string         `yaml:"app_env" env:"APP_ENV" env-default:"local"`
-	Port          string         `yaml:"port" env:"PORT" env-default:"8080"`
-	TenantDomains []string       `yaml:"tenant_domains" env:"TENANT_DOMAINS" env-separator:","`
-	Database      DatabaseConfig `yaml:"database"`
-	MinIO         MinIOConfig    `yaml:"minio"`
-	DatabaseURL   string         `env:"DATABASE_URL"`
+	AppEnv      string            `yaml:"app_env" env:"APP_ENV" env-default:"local"`
+	Port        string            `yaml:"port" env:"PORT" env-default:"8080"`
+	Tenants     map[string]string `yaml:"tenants"` // Maps UUID to Domain Name
+	Database    DatabaseConfig    `yaml:"database"`
+	MinIO       MinIOConfig       `yaml:"minio"`
+	DatabaseURL string            `env:"DATABASE_URL"`
 }
 
 // GetDSN dynamically builds the connection string or prioritizes a raw DATABASE_URL override.

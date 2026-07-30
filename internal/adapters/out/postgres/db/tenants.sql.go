@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const getActorCredentialsByUsername = `-- name: GetActorCredentialsByUsername :one
@@ -39,6 +41,36 @@ func (q *Queries) GetActorCredentialsByUsername(ctx context.Context, arg GetActo
 		&i.PrivateKeyEd25519Pem,
 	)
 	return i, err
+}
+
+const getAllTenants = `-- name: GetAllTenants :many
+SELECT id, tenant_uuid, domain_name FROM server_tenants
+`
+
+type GetAllTenantsRow struct {
+	ID         int32       `json:"id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	DomainName string      `json:"domain_name"`
+}
+
+func (q *Queries) GetAllTenants(ctx context.Context) ([]GetAllTenantsRow, error) {
+	rows, err := q.db.Query(ctx, getAllTenants)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllTenantsRow{}
+	for rows.Next() {
+		var i GetAllTenantsRow
+		if err := rows.Scan(&i.ID, &i.TenantUuid, &i.DomainName); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getTenantByDomain = `-- name: GetTenantByDomain :one
@@ -83,21 +115,27 @@ func (q *Queries) InsertActorCredentials(ctx context.Context, arg InsertActorCre
 }
 
 const insertTenant = `-- name: InsertTenant :one
-INSERT INTO server_tenants (domain_name)
-VALUES ($1)
-ON CONFLICT (domain_name) DO UPDATE SET domain_name = EXCLUDED.domain_name
-RETURNING id, domain_name
+INSERT INTO server_tenants (tenant_uuid, domain_name)
+VALUES ($1, $2)
+ON CONFLICT (domain_name) DO UPDATE SET tenant_uuid = EXCLUDED.tenant_uuid
+RETURNING id, tenant_uuid, domain_name
 `
 
-type InsertTenantRow struct {
-	ID         int32  `json:"id"`
-	DomainName string `json:"domain_name"`
+type InsertTenantParams struct {
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	DomainName string      `json:"domain_name"`
 }
 
-func (q *Queries) InsertTenant(ctx context.Context, domainName string) (InsertTenantRow, error) {
-	row := q.db.QueryRow(ctx, insertTenant, domainName)
+type InsertTenantRow struct {
+	ID         int32       `json:"id"`
+	TenantUuid pgtype.UUID `json:"tenant_uuid"`
+	DomainName string      `json:"domain_name"`
+}
+
+func (q *Queries) InsertTenant(ctx context.Context, arg InsertTenantParams) (InsertTenantRow, error) {
+	row := q.db.QueryRow(ctx, insertTenant, arg.TenantUuid, arg.DomainName)
 	var i InsertTenantRow
-	err := row.Scan(&i.ID, &i.DomainName)
+	err := row.Scan(&i.ID, &i.TenantUuid, &i.DomainName)
 	return i, err
 }
 

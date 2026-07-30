@@ -191,7 +191,8 @@ type RdfStatement struct {
 }
 
 type ServerTenant struct {
-	ID                  int32  `json:"id"`
-	DomainName          string `json:"domain_name"`
-	StorageCeilingBytes int64  `json:"storage_ceiling_bytes"`
+	ID                  int32       `json:"id"`
+	DomainName          string      `json:"domain_name"`
+	StorageCeilingBytes int64       `json:"storage_ceiling_bytes"`
+	TenantUuid          pgtype.UUID `json:"tenant_uuid"`
 }

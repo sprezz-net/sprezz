@@ -1,8 +1,8 @@
 app_env: "local"
 port: "8080"
-tenant_domains:
-  - "localhost"
-  - "local.sprezz.net"
+tenants:
+  "e3a47b36-54cd-4e89-beba-4a6c6a461b17": "localhost"
+  "62b662d5-450f-488b-aab7-380d3ce8cd7e": "local.sprezz.net"
 
 database:
   host: "localhost"

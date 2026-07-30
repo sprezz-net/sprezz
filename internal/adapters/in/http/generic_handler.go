@@ -84,9 +84,9 @@ func (h *GenericHandler) handleServerActorRedirect(w http.ResponseWriter, r *htt
 
 	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
 	if tenantID == 0 {
-		tenantDomain := middleware.GetTenantDomain(ctx)
-		tenantID, _ = h.storage.GetOrCreateTenantByDomain(ctx, tenantDomain)
+		return false
 	}
+
 	serverIRI, err := h.storage.GetActorIRIByUsername(ctx, tenantID, "server")
 	if err == nil && serverIRI != "" {
 		targetRedirect := serverIRI
@@ -264,11 +264,15 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targetDomain := httputil.RequestHost(r)
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		http.Error(w, "Internal Server Error: Unknown tenant context", http.StatusInternalServerError)
+		return
+	}
 
 	// Purely enqueue the inbound activity. Direct vs Shared delivery resolution is fully
 	// offloaded to the async background worker ProcessInboundTask.
-	err = h.storage.EnqueueInbound(ctx, taskID.String(), activity.ID, activity.Object.ID, targetDomain, body)
+	err = h.storage.EnqueueInbound(ctx, taskID.String(), activity.ID, activity.Object.ID, tenantID, body)
 	if err != nil {
 		http.Error(w, "Internal Server Error: Ingestion queue failure", http.StatusInternalServerError)
 		return
