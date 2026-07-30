@@ -107,7 +107,12 @@ The catch-all endpoint treats every incoming request path as an un-typed IRI and
 
 ### 3.2 Core Domain Services
 
-The activity service coordinates the lifecycle of an accepted activity.
+The activity service coordinates the lifecycle of an accepted activity. To maintain high cohesion, its business responsibilities are cleanly divided into logical subsystems:
+
+- **Validation and Verification**: Programmatic guards evaluating incoming activity types, origin domain spoofing, and media storage limits.
+- **Identity and Inbox Discovery**: Federation-level protocols resolving remote inboxes and public keys, backed by localized caching.
+- **Delivery and Forwarding**: Egress transport coordination, followers expansion, and shared-inbox consolidation.
+- **Optimized Indexing**: Reconstructing flat quad arrays into high-performance, lock-free read-only lookups.
 
 It must:
 
@@ -117,6 +122,7 @@ It must:
 - Enrich graph data with Nomad identity relationships when identity information is available.
 - Apply audience and actor authorization rules when building timelines or private views.
 - Request outbound delivery through a driven port.
+- Leverage lock-free, read-only map lookups for validation quads to eliminate lock contention during concurrent, multi-threaded worker loops.
 
 The service owns business sequencing and error semantics. It does not own connection pools, HTTP clients, cache implementations, or object-store SDKs.
 
@@ -148,6 +154,7 @@ For incoming HTTP requests, signature validation is dynamically routed based on 
    - Signature validation is only performed on `GET` requests if the `Content-Type` is an ActivityPub type **and** a `Signature` header is explicitly provided.
    - If the `Signature` header is absent, verification is bypassed (making signatures optional for ActivityPub `GET` requests).
    - For non-ActivityPub `Content-Type` payloads, signature verification is bypassed.
+4. **Max Activity Payload Size Limit**: Incoming ActivityPub task payloads are strictly capped at a system-wide maximum payload size (defaulting to 100KB) and rejected directly at the verification boundary if they exceed it. This ensures that oversized or deeply nested malicious payloads cannot proceed to memory-intensive unmarshaling, JSON-LD parsing, or quad conversion pipelines, preventing memory-exhaustion Denial of Service (DoS) vectors.
 
 ```mermaid
 flowchart TD
@@ -325,6 +332,7 @@ To support spec-compliant activity lifecycle transitions, follows operate as an 
    - Construct and dispatch a spec-compliant `Accept` or `Reject` activity back to the follower's inbox.
    - For `Accept`, write a state transition quad (`<followActivityIRI> <as:accepted> "true"`) and establish the active follow relationship edge (`<followedActorIRI> <activitystreams#follower> <followerActorIRI>`) in the RDF graph.
    - For `Reject`, write a state transition quad (`<followActivityIRI> <as:rejected> "true"`) and do not write any relationship edge.
+   - **Rigor in Transaction Propagation**: State transitions and relationship edges are committed with strict transaction enforcement. Any database-write failure immediately halts execution and propagates the error to the calling adapter/queue manager, preventing desynchronization between database states and remote dispatches.
 
 ### 7.3.2 Fediverse Enhancement Proposals (FEP) Symmetries
 
@@ -382,6 +390,7 @@ Outbound delivery tasks are requested through the activity service and performed
 - **Server Actor Shared Inbox Caching**: Upon successful FEP-d556 resolution, the discovered server actor's shared inbox endpoint is written directly back into the unstructured RDF quad database as cached triple edges. Subsequent deliveries to the target domain perform high-speed database cache hits, completely avoiding remote network latency during egress consolidation.
 - **Outbound Exponential Backoff and Retries**: To ensure delivery robustness, the outbound federation worker dynamically handles delivery errors using a stateless, database-backed retry model. It separates transient errors (HTTP 408, 429, 5xx, or network connection timeouts) from permanent errors (HTTP 400, 401, 403, 404, 410). While permanent failures immediately set the status to `failed` with an optional telemetry logging string (`error_message`) to avoid queue blockages, transient failures trigger an incremental retry sequence utilizing truncated exponential backoff (`2^attempts * BaseDelay`, capped at 2 hours) by tracking attempts, saving error logs (`error_message`), and scheduling subsequent runs (`next_run_at`) directly within the `outbound_activity_queue` table.
 - **Error and Log Masking**: The signing adapter handles low-level cryptographic execution and must never expose private key materials or raw untrusted payloads in errors or system logs.
+- **No-Ignore Inbound/Outbound Delivery Tracking**: Writing local inbox delivery records (such as tracking inbound deliveries or delete-activity propagation) must never be ignored with blank identifiers. Every storage write is verified and error-bubbled to ensure the task queue halts and retries on transient connection limits, preserving structural follow-graph integrity.
 
 ## 9. Media Storage
 
@@ -515,5 +524,4 @@ Additionally, the **Database Migration Subsystem** is fully operational. It leve
 
 The remaining architectural work is to:
 
-- Register the completed `MediaUploadHandler` in the HTTP routing tree in `cmd/server/main.go` under an active endpoint to connect it to a concrete application use case.
 - Add PostgreSQL integration coverage for transaction and concurrency guarantees.
