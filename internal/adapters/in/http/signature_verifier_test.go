@@ -119,3 +119,91 @@ func TestSignatureVerifier_MultiAlgorithm_TableDriven(t *testing.T) {
 		})
 	}
 }
+
+func TestSignatureVerifier_ActorSpoofingPrevention_MatchingDomains(t *testing.T) {
+	// Setup RSA Test Key Material
+	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsaBlock := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(rsaPriv)}
+	rsaPrivateKeyPEM := string(pem.EncodeToMemory(rsaBlock))
+
+	mc := minimock.NewController(t)
+
+	actorIRI := "https://local.example/actor/alice"
+	keyID := "https://local.example/actor/alice#main-key"
+
+	body := fmt.Appendf(nil, `{"type":"Create","actor":"%s"}`, actorIRI)
+	date := time.Now().UTC().Format(http.TimeFormat)
+
+	request := httptest.NewRequest(http.MethodPost, "/inbox", strings.NewReader(string(body)))
+	request.Host = "local.example"
+	request.Header.Set("Date", date)
+
+	canonical := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s",
+		request.URL.RequestURI(), request.Host, date)
+
+	hashed := sha256.Sum256([]byte(canonical))
+	signatureBytes, _ := rsa.SignPKCS1v15(rand.Reader, rsaPriv, crypto.SHA256, hashed[:])
+	signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes)
+
+	request.Header.Set("Signature", fmt.Sprintf(
+		"keyId=\"%s\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date\",signature=\"%s\"",
+		keyID, signatureBase64,
+	))
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.GetHistoricalKeyMock.Return(rsaPrivateKeyPEM, nil)
+
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+
+	err = verifier.Verify(request, body)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+}
+
+func TestSignatureVerifier_ActorSpoofingPrevention_MismatchedDomains(t *testing.T) {
+	// Setup RSA Test Key Material
+	rsaPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mc := minimock.NewController(t)
+
+	actorIRI := "https://high-profile.example/actor/target"
+	keyID := "https://attacker.example/actor/malicious#main-key"
+
+	body := fmt.Appendf(nil, `{"type":"Create","actor":"%s"}`, actorIRI)
+	date := time.Now().UTC().Format(http.TimeFormat)
+
+	request := httptest.NewRequest(http.MethodPost, "/inbox", strings.NewReader(string(body)))
+	request.Host = "local.example"
+	request.Header.Set("Date", date)
+
+	canonical := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s",
+		request.URL.RequestURI(), request.Host, date)
+
+	hashed := sha256.Sum256([]byte(canonical))
+	signatureBytes, _ := rsa.SignPKCS1v15(rand.Reader, rsaPriv, crypto.SHA256, hashed[:])
+	signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes)
+
+	request.Header.Set("Signature", fmt.Sprintf(
+		"keyId=\"%s\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date\",signature=\"%s\"",
+		keyID, signatureBase64,
+	))
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+
+	err = verifier.Verify(request, body)
+	if err == nil {
+		t.Fatalf("Expected error, got nil")
+	}
+	expectedError := "security violation: signature keyId domain"
+	if !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Expected error containing %q, got %q", expectedError, err.Error())
+	}
+}

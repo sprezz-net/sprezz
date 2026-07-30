@@ -8,9 +8,12 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -42,6 +45,10 @@ func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error 
 		return fmt.Errorf("malformed signature header attributes")
 	}
 
+	if err := validateActorDomain(r.Method, body, keyID); err != nil {
+		return err
+	}
+
 	signingString, err := constructSigningString(r, headersList)
 	if err != nil {
 		return fmt.Errorf("failed to build signing payload: %w", err)
@@ -64,20 +71,8 @@ func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error 
 		return fmt.Errorf("failed to decode base64 signature: %w", err)
 	}
 
-	// Branch out verification logic cleanly by concrete type
-	switch key := pubKey.(type) {
-	case *rsa.PublicKey:
-		hashed := sha256.Sum256([]byte(signingString))
-		if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, hashed[:], signatureBytes); err != nil {
-			return fmt.Errorf("cryptographic validation failed: RSA signature mismatch")
-		}
-	case ed25519.PublicKey:
-		// Ed25519 verifies over the raw signing string text bytes directly, without pre-hashing
-		if !ed25519.Verify(key, []byte(signingString), signatureBytes) {
-			return fmt.Errorf("cryptographic validation failed: Ed25519 signature mismatch")
-		}
-	default:
-		return fmt.Errorf("unsupported public key type encountered during verification pass")
+	if err := verifySignature(pubKey, signingString, signatureBytes); err != nil {
+		return err
 	}
 
 	return nil
@@ -190,4 +185,79 @@ func constructSigningString(r *http.Request, headersList string) (string, error)
 		}
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+func parseActorIRI(body []byte) string {
+	var activity struct {
+		Actor interface{} `json:"actor"`
+	}
+	if err := json.Unmarshal(body, &activity); err != nil {
+		return ""
+	}
+	return parseStringOrID(activity.Actor)
+}
+
+func parseStringOrID(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	switch v := val.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		if id, ok := v["id"].(string); ok {
+			return id
+		}
+	case []interface{}:
+		if len(v) > 0 {
+			return parseStringOrID(v[0])
+		}
+	}
+	return ""
+}
+
+func extractDomain(iri string) string {
+	u, err := url.Parse(iri)
+	if err != nil {
+		return ""
+	}
+	host := u.Host
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	return strings.ToLower(host)
+}
+
+func validateActorDomain(method string, body []byte, keyID string) error {
+	if method != http.MethodPost || len(body) == 0 {
+		return nil
+	}
+	actorIRI := parseActorIRI(body)
+	if actorIRI == "" {
+		return nil
+	}
+	keyDomain := extractDomain(keyID)
+	actorDomain := extractDomain(actorIRI)
+	if keyDomain == "" || actorDomain == "" || keyDomain != actorDomain {
+		return fmt.Errorf("security violation: signature keyId domain %q does not match actor domain %q", keyDomain, actorDomain)
+	}
+	return nil
+}
+
+func verifySignature(pubKey interface{}, signingString string, signatureBytes []byte) error {
+	switch key := pubKey.(type) {
+	case *rsa.PublicKey:
+		hashed := sha256.Sum256([]byte(signingString))
+		if err := rsa.VerifyPKCS1v15(key, crypto.SHA256, hashed[:], signatureBytes); err != nil {
+			return fmt.Errorf("cryptographic validation failed: RSA signature mismatch")
+		}
+	case ed25519.PublicKey:
+		// Ed25519 verifies over the raw signing string text bytes directly, without pre-hashing
+		if !ed25519.Verify(key, []byte(signingString), signatureBytes) {
+			return fmt.Errorf("cryptographic validation failed: Ed25519 signature mismatch")
+		}
+	default:
+		return fmt.Errorf("unsupported public key type encountered during verification pass")
+	}
+	return nil
 }
