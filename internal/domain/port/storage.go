@@ -59,6 +59,7 @@ type StoragePort interface {
 	GetLikesForObject(ctx context.Context, objectIRI string) ([]string, error)
 	GetSharesForObject(ctx context.Context, objectIRI string) ([]string, error)
 	GetRepliesForObject(ctx context.Context, objectIRI string) ([]string, error)
+	GetObjectsByContext(ctx context.Context, contextIRI string) ([]string, error)
 
 	GetActorIRIByUsername(ctx context.Context, tenantID int32, username string) (string, error)
 	// GetActorProfileFromGraph searches the quad store matching the tenant ID and username handle,

@@ -138,7 +138,8 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 		mediaStorage,
 		remoteFetcher,
 		service.ActivityServiceConfig{
-			MaxActivitySizeBytes: cfg.ActivityPub.MaxActivitySizeBytes,
+			MaxActivitySizeBytes:  cfg.ActivityPub.MaxActivitySizeBytes,
+			EnableContextBackfill: cfg.ActivityPub.EnableContextBackfill,
 		},
 		federatedSigner,
 	)

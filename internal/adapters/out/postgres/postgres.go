@@ -766,6 +766,10 @@ func (s *PostgresStorage) GetRepliesForObject(ctx context.Context, objectIRI str
 	return s.queries().GetRepliesByObject(ctx, objectIRI)
 }
 
+func (s *PostgresStorage) GetObjectsByContext(ctx context.Context, contextIRI string) ([]string, error) {
+	return s.queries().GetObjectsByContext(ctx, contextIRI)
+}
+
 func (s *PostgresStorage) StreamQuadsBySubject(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
 	subjectID, found := s.cache.GetID(subjectIRI)
 	if !found {

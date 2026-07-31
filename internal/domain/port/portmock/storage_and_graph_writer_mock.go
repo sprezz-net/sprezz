@@ -147,6 +147,13 @@ type StorageAndGraphWriterMock struct {
 	beforeGetNomadicIdentityCounter uint64
 	GetNomadicIdentityMock          mStorageAndGraphWriterMockGetNomadicIdentity
 
+	funcGetObjectsByContext          func(ctx context.Context, contextIRI string) (sa1 []string, err error)
+	funcGetObjectsByContextOrigin    string
+	inspectFuncGetObjectsByContext   func(ctx context.Context, contextIRI string)
+	afterGetObjectsByContextCounter  uint64
+	beforeGetObjectsByContextCounter uint64
+	GetObjectsByContextMock          mStorageAndGraphWriterMockGetObjectsByContext
+
 	funcGetRepliesForObject          func(ctx context.Context, objectIRI string) (sa1 []string, err error)
 	funcGetRepliesForObjectOrigin    string
 	inspectFuncGetRepliesForObject   func(ctx context.Context, objectIRI string)
@@ -377,6 +384,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.GetNomadicIdentityMock = mStorageAndGraphWriterMockGetNomadicIdentity{mock: m}
 	m.GetNomadicIdentityMock.callArgs = []*StorageAndGraphWriterMockGetNomadicIdentityParams{}
+
+	m.GetObjectsByContextMock = mStorageAndGraphWriterMockGetObjectsByContext{mock: m}
+	m.GetObjectsByContextMock.callArgs = []*StorageAndGraphWriterMockGetObjectsByContextParams{}
 
 	m.GetRepliesForObjectMock = mStorageAndGraphWriterMockGetRepliesForObject{mock: m}
 	m.GetRepliesForObjectMock.callArgs = []*StorageAndGraphWriterMockGetRepliesForObjectParams{}
@@ -7306,6 +7316,349 @@ func (m *StorageAndGraphWriterMock) MinimockGetNomadicIdentityInspect() {
 	if !m.GetNomadicIdentityMock.invocationsDone() && afterGetNomadicIdentityCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetNomadicIdentity at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.GetNomadicIdentityMock.expectedInvocations), m.GetNomadicIdentityMock.expectedInvocationsOrigin, afterGetNomadicIdentityCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockGetObjectsByContext struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockGetObjectsByContextExpectation
+	expectations       []*StorageAndGraphWriterMockGetObjectsByContextExpectation
+
+	callArgs []*StorageAndGraphWriterMockGetObjectsByContextParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockGetObjectsByContextExpectation specifies expectation struct of the StorageAndGraphWriter.GetObjectsByContext
+type StorageAndGraphWriterMockGetObjectsByContextExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockGetObjectsByContextParams
+	paramPtrs          *StorageAndGraphWriterMockGetObjectsByContextParamPtrs
+	expectationOrigins StorageAndGraphWriterMockGetObjectsByContextExpectationOrigins
+	results            *StorageAndGraphWriterMockGetObjectsByContextResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockGetObjectsByContextParams contains parameters of the StorageAndGraphWriter.GetObjectsByContext
+type StorageAndGraphWriterMockGetObjectsByContextParams struct {
+	ctx        context.Context
+	contextIRI string
+}
+
+// StorageAndGraphWriterMockGetObjectsByContextParamPtrs contains pointers to parameters of the StorageAndGraphWriter.GetObjectsByContext
+type StorageAndGraphWriterMockGetObjectsByContextParamPtrs struct {
+	ctx        *context.Context
+	contextIRI *string
+}
+
+// StorageAndGraphWriterMockGetObjectsByContextResults contains results of the StorageAndGraphWriter.GetObjectsByContext
+type StorageAndGraphWriterMockGetObjectsByContextResults struct {
+	sa1 []string
+	err error
+}
+
+// StorageAndGraphWriterMockGetObjectsByContextOrigins contains origins of expectations of the StorageAndGraphWriter.GetObjectsByContext
+type StorageAndGraphWriterMockGetObjectsByContextExpectationOrigins struct {
+	origin           string
+	originCtx        string
+	originContextIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Optional() *mStorageAndGraphWriterMockGetObjectsByContext {
+	mmGetObjectsByContext.optional = true
+	return mmGetObjectsByContext
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.GetObjectsByContext
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Expect(ctx context.Context, contextIRI string) *mStorageAndGraphWriterMockGetObjectsByContext {
+	if mmGetObjectsByContext.mock.funcGetObjectsByContext != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Set")
+	}
+
+	if mmGetObjectsByContext.defaultExpectation == nil {
+		mmGetObjectsByContext.defaultExpectation = &StorageAndGraphWriterMockGetObjectsByContextExpectation{}
+	}
+
+	if mmGetObjectsByContext.defaultExpectation.paramPtrs != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by ExpectParams functions")
+	}
+
+	mmGetObjectsByContext.defaultExpectation.params = &StorageAndGraphWriterMockGetObjectsByContextParams{ctx, contextIRI}
+	mmGetObjectsByContext.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmGetObjectsByContext.expectations {
+		if minimock.Equal(e.params, mmGetObjectsByContext.defaultExpectation.params) {
+			mmGetObjectsByContext.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmGetObjectsByContext.defaultExpectation.params)
+		}
+	}
+
+	return mmGetObjectsByContext
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.GetObjectsByContext
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockGetObjectsByContext {
+	if mmGetObjectsByContext.mock.funcGetObjectsByContext != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Set")
+	}
+
+	if mmGetObjectsByContext.defaultExpectation == nil {
+		mmGetObjectsByContext.defaultExpectation = &StorageAndGraphWriterMockGetObjectsByContextExpectation{}
+	}
+
+	if mmGetObjectsByContext.defaultExpectation.params != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Expect")
+	}
+
+	if mmGetObjectsByContext.defaultExpectation.paramPtrs == nil {
+		mmGetObjectsByContext.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetObjectsByContextParamPtrs{}
+	}
+	mmGetObjectsByContext.defaultExpectation.paramPtrs.ctx = &ctx
+	mmGetObjectsByContext.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmGetObjectsByContext
+}
+
+// ExpectContextIRIParam2 sets up expected param contextIRI for StorageAndGraphWriter.GetObjectsByContext
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) ExpectContextIRIParam2(contextIRI string) *mStorageAndGraphWriterMockGetObjectsByContext {
+	if mmGetObjectsByContext.mock.funcGetObjectsByContext != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Set")
+	}
+
+	if mmGetObjectsByContext.defaultExpectation == nil {
+		mmGetObjectsByContext.defaultExpectation = &StorageAndGraphWriterMockGetObjectsByContextExpectation{}
+	}
+
+	if mmGetObjectsByContext.defaultExpectation.params != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Expect")
+	}
+
+	if mmGetObjectsByContext.defaultExpectation.paramPtrs == nil {
+		mmGetObjectsByContext.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockGetObjectsByContextParamPtrs{}
+	}
+	mmGetObjectsByContext.defaultExpectation.paramPtrs.contextIRI = &contextIRI
+	mmGetObjectsByContext.defaultExpectation.expectationOrigins.originContextIRI = minimock.CallerInfo(1)
+
+	return mmGetObjectsByContext
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.GetObjectsByContext
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Inspect(f func(ctx context.Context, contextIRI string)) *mStorageAndGraphWriterMockGetObjectsByContext {
+	if mmGetObjectsByContext.mock.inspectFuncGetObjectsByContext != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.GetObjectsByContext")
+	}
+
+	mmGetObjectsByContext.mock.inspectFuncGetObjectsByContext = f
+
+	return mmGetObjectsByContext
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.GetObjectsByContext
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Return(sa1 []string, err error) *StorageAndGraphWriterMock {
+	if mmGetObjectsByContext.mock.funcGetObjectsByContext != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Set")
+	}
+
+	if mmGetObjectsByContext.defaultExpectation == nil {
+		mmGetObjectsByContext.defaultExpectation = &StorageAndGraphWriterMockGetObjectsByContextExpectation{mock: mmGetObjectsByContext.mock}
+	}
+	mmGetObjectsByContext.defaultExpectation.results = &StorageAndGraphWriterMockGetObjectsByContextResults{sa1, err}
+	mmGetObjectsByContext.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmGetObjectsByContext.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.GetObjectsByContext method
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Set(f func(ctx context.Context, contextIRI string) (sa1 []string, err error)) *StorageAndGraphWriterMock {
+	if mmGetObjectsByContext.defaultExpectation != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.GetObjectsByContext method")
+	}
+
+	if len(mmGetObjectsByContext.expectations) > 0 {
+		mmGetObjectsByContext.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.GetObjectsByContext method")
+	}
+
+	mmGetObjectsByContext.mock.funcGetObjectsByContext = f
+	mmGetObjectsByContext.mock.funcGetObjectsByContextOrigin = minimock.CallerInfo(1)
+	return mmGetObjectsByContext.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.GetObjectsByContext which will trigger the result defined by the following
+// Then helper
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) When(ctx context.Context, contextIRI string) *StorageAndGraphWriterMockGetObjectsByContextExpectation {
+	if mmGetObjectsByContext.mock.funcGetObjectsByContext != nil {
+		mmGetObjectsByContext.mock.t.Fatalf("StorageAndGraphWriterMock.GetObjectsByContext mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockGetObjectsByContextExpectation{
+		mock:               mmGetObjectsByContext.mock,
+		params:             &StorageAndGraphWriterMockGetObjectsByContextParams{ctx, contextIRI},
+		expectationOrigins: StorageAndGraphWriterMockGetObjectsByContextExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmGetObjectsByContext.expectations = append(mmGetObjectsByContext.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.GetObjectsByContext return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockGetObjectsByContextExpectation) Then(sa1 []string, err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockGetObjectsByContextResults{sa1, err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.GetObjectsByContext should be invoked
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Times(n uint64) *mStorageAndGraphWriterMockGetObjectsByContext {
+	if n == 0 {
+		mmGetObjectsByContext.mock.t.Fatalf("Times of StorageAndGraphWriterMock.GetObjectsByContext mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmGetObjectsByContext.expectedInvocations, n)
+	mmGetObjectsByContext.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmGetObjectsByContext
+}
+
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) invocationsDone() bool {
+	if len(mmGetObjectsByContext.expectations) == 0 && mmGetObjectsByContext.defaultExpectation == nil && mmGetObjectsByContext.mock.funcGetObjectsByContext == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmGetObjectsByContext.mock.afterGetObjectsByContextCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmGetObjectsByContext.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// GetObjectsByContext implements mm_port.StorageAndGraphWriter
+func (mmGetObjectsByContext *StorageAndGraphWriterMock) GetObjectsByContext(ctx context.Context, contextIRI string) (sa1 []string, err error) {
+	mm_atomic.AddUint64(&mmGetObjectsByContext.beforeGetObjectsByContextCounter, 1)
+	defer mm_atomic.AddUint64(&mmGetObjectsByContext.afterGetObjectsByContextCounter, 1)
+
+	mmGetObjectsByContext.t.Helper()
+
+	if mmGetObjectsByContext.inspectFuncGetObjectsByContext != nil {
+		mmGetObjectsByContext.inspectFuncGetObjectsByContext(ctx, contextIRI)
+	}
+
+	mm_params := StorageAndGraphWriterMockGetObjectsByContextParams{ctx, contextIRI}
+
+	// Record call args
+	mmGetObjectsByContext.GetObjectsByContextMock.mutex.Lock()
+	mmGetObjectsByContext.GetObjectsByContextMock.callArgs = append(mmGetObjectsByContext.GetObjectsByContextMock.callArgs, &mm_params)
+	mmGetObjectsByContext.GetObjectsByContextMock.mutex.Unlock()
+
+	for _, e := range mmGetObjectsByContext.GetObjectsByContextMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.sa1, e.results.err
+		}
+	}
+
+	if mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.Counter, 1)
+		mm_want := mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.params
+		mm_want_ptrs := mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockGetObjectsByContextParams{ctx, contextIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmGetObjectsByContext.t.Errorf("StorageAndGraphWriterMock.GetObjectsByContext got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.contextIRI != nil && !minimock.Equal(*mm_want_ptrs.contextIRI, mm_got.contextIRI) {
+				mmGetObjectsByContext.t.Errorf("StorageAndGraphWriterMock.GetObjectsByContext got unexpected parameter contextIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.expectationOrigins.originContextIRI, *mm_want_ptrs.contextIRI, mm_got.contextIRI, minimock.Diff(*mm_want_ptrs.contextIRI, mm_got.contextIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmGetObjectsByContext.t.Errorf("StorageAndGraphWriterMock.GetObjectsByContext got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmGetObjectsByContext.GetObjectsByContextMock.defaultExpectation.results
+		if mm_results == nil {
+			mmGetObjectsByContext.t.Fatal("No results are set for the StorageAndGraphWriterMock.GetObjectsByContext")
+		}
+		return (*mm_results).sa1, (*mm_results).err
+	}
+	if mmGetObjectsByContext.funcGetObjectsByContext != nil {
+		return mmGetObjectsByContext.funcGetObjectsByContext(ctx, contextIRI)
+	}
+	mmGetObjectsByContext.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.GetObjectsByContext. %v %v", ctx, contextIRI)
+	return
+}
+
+// GetObjectsByContextAfterCounter returns a count of finished StorageAndGraphWriterMock.GetObjectsByContext invocations
+func (mmGetObjectsByContext *StorageAndGraphWriterMock) GetObjectsByContextAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetObjectsByContext.afterGetObjectsByContextCounter)
+}
+
+// GetObjectsByContextBeforeCounter returns a count of StorageAndGraphWriterMock.GetObjectsByContext invocations
+func (mmGetObjectsByContext *StorageAndGraphWriterMock) GetObjectsByContextBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmGetObjectsByContext.beforeGetObjectsByContextCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.GetObjectsByContext.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmGetObjectsByContext *mStorageAndGraphWriterMockGetObjectsByContext) Calls() []*StorageAndGraphWriterMockGetObjectsByContextParams {
+	mmGetObjectsByContext.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockGetObjectsByContextParams, len(mmGetObjectsByContext.callArgs))
+	copy(argCopy, mmGetObjectsByContext.callArgs)
+
+	mmGetObjectsByContext.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockGetObjectsByContextDone returns true if the count of the GetObjectsByContext invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockGetObjectsByContextDone() bool {
+	if m.GetObjectsByContextMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.GetObjectsByContextMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.GetObjectsByContextMock.invocationsDone()
+}
+
+// MinimockGetObjectsByContextInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockGetObjectsByContextInspect() {
+	for _, e := range m.GetObjectsByContextMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetObjectsByContext at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterGetObjectsByContextCounter := mm_atomic.LoadUint64(&m.afterGetObjectsByContextCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.GetObjectsByContextMock.defaultExpectation != nil && afterGetObjectsByContextCounter < 1 {
+		if m.GetObjectsByContextMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetObjectsByContext at\n%s", m.GetObjectsByContextMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetObjectsByContext at\n%s with params: %#v", m.GetObjectsByContextMock.defaultExpectation.expectationOrigins.origin, *m.GetObjectsByContextMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcGetObjectsByContext != nil && afterGetObjectsByContextCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.GetObjectsByContext at\n%s", m.funcGetObjectsByContextOrigin)
+	}
+
+	if !m.GetObjectsByContextMock.invocationsDone() && afterGetObjectsByContextCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.GetObjectsByContext at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.GetObjectsByContextMock.expectedInvocations), m.GetObjectsByContextMock.expectedInvocationsOrigin, afterGetObjectsByContextCounter)
 	}
 }
 
@@ -16002,6 +16355,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockGetNomadicIdentityInspect()
 
+			m.MinimockGetObjectsByContextInspect()
+
 			m.MinimockGetRepliesForObjectInspect()
 
 			m.MinimockGetSharesForObjectInspect()
@@ -16090,6 +16445,7 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockGetLatestPayloadDone() &&
 		m.MinimockGetLikesForObjectDone() &&
 		m.MinimockGetNomadicIdentityDone() &&
+		m.MinimockGetObjectsByContextDone() &&
 		m.MinimockGetRepliesForObjectDone() &&
 		m.MinimockGetSharesForObjectDone() &&
 		m.MinimockGetStatementsBySubjectIsolatedDone() &&

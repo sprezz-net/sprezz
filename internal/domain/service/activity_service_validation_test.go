@@ -619,7 +619,6 @@ func getTypeConfusionTestCases() []typeConfusionTestCase {
 
 func runTypeConfusionTest(t *testing.T, ctx context.Context, payload, expectedError string) {
 	mc := minimock.NewController(t)
-	defer mc.Finish()
 
 	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
 	mockParser := portmock.NewJSONLDParserPortMock(mc)

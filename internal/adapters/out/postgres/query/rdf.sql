@@ -78,3 +78,13 @@ JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
 JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
 WHERE d_obj.value = $1
   AND d_pred.value = 'https://www.w3.org/ns/activitystreams#inReplyTo';
+
+-- name: GetObjectsByContext :many
+SELECT DISTINCT d_sub.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
+JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
+JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+WHERE d_obj.value = $1
+  AND d_pred.value = 'https://www.w3.org/ns/activitystreams#context'
+ORDER BY d_sub.value ASC;

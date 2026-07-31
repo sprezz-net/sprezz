@@ -17,16 +17,18 @@ import (
 var ErrDropAction = errors.New("drop action gracefully")
 
 type ActivityServiceConfig struct {
-	MaxActivitySizeBytes int64
+	MaxActivitySizeBytes  int64
+	EnableContextBackfill bool
 }
 
 type ActivityService struct {
-	storage              port.StoragePort
-	mediaStorage         port.MediaStoragePort
-	parser               port.JSONLDParserPort
-	forwarder            port.OutboundDispatcher
-	fetcher              port.RemoteFetcher
-	maxActivitySizeBytes int64
+	storage               port.StoragePort
+	mediaStorage          port.MediaStoragePort
+	parser                port.JSONLDParserPort
+	forwarder             port.OutboundDispatcher
+	fetcher               port.RemoteFetcher
+	maxActivitySizeBytes  int64
+	enableContextBackfill bool
 }
 
 func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, media port.MediaStoragePort, fetcher port.RemoteFetcher, cfg ActivityServiceConfig, forwarders ...port.OutboundDispatcher) *ActivityService {
@@ -35,11 +37,12 @@ func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, 
 		maxLimit = 102400 // 100KB secure fallback default
 	}
 	service := &ActivityService{
-		storage:              storage,
-		mediaStorage:         media,
-		parser:               parser,
-		fetcher:              fetcher,
-		maxActivitySizeBytes: maxLimit,
+		storage:               storage,
+		mediaStorage:          media,
+		parser:                parser,
+		fetcher:               fetcher,
+		maxActivitySizeBytes:  maxLimit,
+		enableContextBackfill: cfg.EnableContextBackfill,
 	}
 	if len(forwarders) > 0 {
 		service.forwarder = forwarders[0]
@@ -48,6 +51,18 @@ func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, 
 }
 
 var _ port.ActivityServicePort = (*ActivityService)(nil)
+
+func (s *ActivityService) handleLocalGroupActivity(ctx context.Context, task model.InboundTask, activityType string, actorVal interface{}) (bool, error) {
+	if !s.isLocalActorGroup(ctx, task.ObjectIRI) {
+		return false, nil
+	}
+	actorIRI := parseStringOrID(actorVal)
+	if err := s.processGroupActivity(ctx, task, activityType, actorIRI, task.ObjectIRI); err != nil {
+		return false, err
+	}
+	isJoinOrLeave := activityType == model.ShortJoin || activityType == model.ShortLeave
+	return isJoinOrLeave, nil
+}
 
 // ProcessInboundTask handles incoming standard (non-media) ActivityPub payloads
 func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.InboundTask) error {
@@ -85,17 +100,142 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		return err
 	}
 
-	if s.isLocalActorGroup(ctx, task.ObjectIRI) {
-		actorIRI := parseStringOrID(activity.Actor)
-		if err := s.processGroupActivity(ctx, task, activity.Type, actorIRI, task.ObjectIRI); err != nil {
-			return err
-		}
-		if activity.Type == model.ShortJoin || activity.Type == model.ShortLeave {
-			return nil
+	isGroupJoinOrLeave, err := s.handleLocalGroupActivity(ctx, task, activity.Type, activity.Actor)
+	if err != nil {
+		return err
+	}
+	if isGroupJoinOrLeave {
+		return nil
+	}
+
+	if err := s.deliverAndForwardInbound(ctx, task); err != nil {
+		return err
+	}
+
+	if s.enableContextBackfill {
+		go func() {
+			_ = s.maybeTriggerContextBackfill(context.Background(), task)
+		}()
+	}
+
+	return nil
+}
+
+func (s *ActivityService) maybeTriggerContextBackfill(ctx context.Context, task model.InboundTask) error {
+	if task.ObjectIRI == "" {
+		return nil
+	}
+
+	quads, err := s.storage.StreamQuadsBySubject(ctx, task.ObjectIRI)
+	if err != nil || len(quads) == 0 {
+		return nil
+	}
+
+	var contextIRI string
+	for _, q := range quads {
+		if q.Predicate == model.PredicateContext {
+			contextIRI = strings.Trim(q.Object, `"'`)
+			break
 		}
 	}
 
-	return s.deliverAndForwardInbound(ctx, task)
+	if contextIRI == "" {
+		return nil
+	}
+
+	domain := extractDomain(contextIRI)
+	localDomain := extractDomain(task.ObjectIRI)
+	if domain == "" || domain == localDomain {
+		return nil
+	}
+
+	items, err := s.storage.GetObjectsByContext(ctx, contextIRI)
+	if err == nil && len(items) > 1 {
+		return nil
+	}
+
+	return s.backfillRemoteContext(ctx, contextIRI, task.ObjectIRI)
+}
+
+func (s *ActivityService) backfillRemoteContext(ctx context.Context, contextIRI, targetIRI string) error {
+	domain := extractDomain(targetIRI)
+	if domain == "" {
+		return nil
+	}
+	tenantID, err := s.storage.GetTenantIDByDomain(ctx, domain)
+	if err != nil {
+		return err
+	}
+	serverIRI, keys, err := s.storage.GetActorCredentials(ctx, tenantID, "server")
+	if err != nil {
+		return err
+	}
+
+	payload, err := s.fetcher.FetchSigned(ctx, contextIRI, serverIRI+model.SuffixMainKey, keys.PrivateKeyRSAPEM, keys.PrivateKeyEd25519PEM)
+	if err != nil {
+		return err
+	}
+
+	var collection struct {
+		OrderedItems []interface{} `json:"orderedItems"`
+		Items        []interface{} `json:"items"`
+	}
+	if err := json.Unmarshal(payload, &collection); err != nil {
+		return err
+	}
+
+	items := collection.OrderedItems
+	if len(items) == 0 {
+		items = collection.Items
+	}
+
+	for _, item := range items {
+		s.ingestContextItem(ctx, tenantID, item)
+	}
+
+	return nil
+}
+
+func (s *ActivityService) ingestContextItem(ctx context.Context, tenantID int32, item interface{}) {
+	var itemIRI string
+	var itemPayload []byte
+
+	switch v := item.(type) {
+	case string:
+		itemIRI = v
+	case map[string]interface{}:
+		if id, ok := v["id"].(string); ok {
+			itemIRI = id
+			itemPayload, _ = json.Marshal(v)
+		}
+	}
+
+	if itemIRI == "" {
+		return
+	}
+
+	existing, _ := s.storage.GetLatestPayload(ctx, itemIRI)
+	if len(existing) > 0 {
+		return
+	}
+
+	if len(itemPayload) == 0 {
+		serverIRI, keys, err := s.storage.GetActorCredentials(ctx, tenantID, "server")
+		if err != nil {
+			return
+		}
+		itemPayload, err = s.fetcher.FetchSigned(ctx, itemIRI, serverIRI+model.SuffixMainKey, keys.PrivateKeyRSAPEM, keys.PrivateKeyEd25519PEM)
+		if err != nil {
+			return
+		}
+	}
+
+	id, err := uuid.NewV7()
+	if err != nil {
+		return
+	}
+
+	_ = s.storage.EnqueueInbound(ctx, id.String(), itemIRI, itemIRI, tenantID, itemPayload)
 }
 
 // ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.

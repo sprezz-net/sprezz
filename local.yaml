@@ -17,3 +17,6 @@ minio:
   # RootPassword:
   bucket_name: "sprezz-media"
   use_ssl: false
+
+activitypub:
+  enable_context_backfill: true

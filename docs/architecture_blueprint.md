@@ -363,6 +363,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 2. **`FEP-8fcf` (Federated Moderation & Instance Blocklists)**: Standardizes domain-level defederation blocks. Fully implemented via the `blocked_domains` early-exit index check on incoming and outbound deliveries.
 3. **`FEP-67ff` (Server-Controlled Shared Inbox Routing)**: Standardizes decoupled, instance-wide shared inbox collection routing. Fully implemented inside `generic_handler.go` catch-all routes mapping POST /inbox to async queues and GET /inbox to the server actor's inbox collection.
 4. **`FEP-1b12` (Group Federation)**: Outlines standard handle matching and group subscription behavior (`Join`/`Leave` operations). Fully implemented via inbound `Join`/`Leave` auto-accept state transitions, automatic database-backed follow membership updates/deletions, and programmatic members-only `Announce` auto-relay loops to the Group's followers collection.
+5. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Fully implemented. Top-level notes automatically establish a `<root_post_iri>/context` collection IRI, which reply notes inherit. Remote context collections are actively fetched and back-filled asynchronously on-demand when encountering new threads.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
@@ -371,7 +372,6 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 3. **`FEP-2c59` (Decoupled Actor Profile and Migration Aliases)**: Standardizes alias mapping and verification (`alsoKnownAs`). Partially implemented. GenericHandler checks custom aliases dynamically and performs redirects with an HTTP 303 Status, but account-migration key verification is not present.
 4. **`FEP-e232` (Object Links and Inline Context References)**: Standardizes inline attachment, hashtag, and skolemized blank-node references. Partially implemented. Fully supported in parsing contexts and blank-node rewriting, but explicit parsing of FEP-e232 tag properties is not present.
 5. **`FEP-0151` (Nomadic Identity and Cross-Hub Synchronization)**: Standardizes multi-hub Nomadic persona clone tracking. Partially implemented. Sprezz provides the relational storage schema (`nomadic_identities` and `identity_clones`) and `PredicateNomadGUID` graph mapping to represent nomadic identifiers, but the background synchronization engine is not implemented.
-6. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Partially implemented via our side-channel `/replies` OrderedCollection. Conversation context ID routing is not present.
 
 #### III. Possible Future Enhancements (Not implemented)
 
@@ -387,13 +387,14 @@ The domain service provides a low-complexity, graph-based privacy filtration pip
 
 Privacy filtering occurs before collection serialization and before pagination so private records do not affect visible counts or page boundaries.
 
-### 7.5 Side-Channel Engagement Collections (Likes, Shares, Replies)
+### 7.5 Side-Channel Engagement Collections (Likes, Shares, Replies, Context)
 
-Sprezz standardizes resource engagement collections by serving URL-agnostic side-channel collections pointing directly to targeting activities inside the clustered triple store. The routing system extracts `/likes`, `/shares`, and `/replies` suffixes dynamically from requested object paths, stripping the suffix to evaluate the core object's payload existence.
+Sprezz standardizes resource engagement collections by serving URL-agnostic side-channel collections pointing directly to targeting activities inside the clustered triple store. The routing system extracts `/likes`, `/shares`, `/replies`, and `/context` suffixes dynamically from requested object paths, stripping the suffix to evaluate the core object's payload existence.
 
 - **`likes` Collection**: An `OrderedCollection` served at `<object-IRI>/likes` pointing to the `Like` activity IRIs targeting the parent object. Sourced by querying matching subjects with predicate `as:object` and type `as:Like`.
 - **`shares` Collection**: An `OrderedCollection` served at `<object-IRI>/shares` pointing to the `Announce` (share) activity IRIs targeting the parent object. Sourced by querying matching subjects with predicate `as:object` and type `as:Announce`.
 - **`replies` Collection**: An `OrderedCollection` served at `<object-IRI>/replies` pointing to replies targeting the parent object. Sourced by querying subjects with predicate `as:inReplyTo` and object matching the parent object's IRI.
+- **`context` Collection (FEP-7888)**: An `OrderedCollection` served at `<object-IRI>/context` pointing to all objects (posts, replies, other activities) belonging to the entire conversation thread. Sourced by querying subjects with predicate `as:context` pointing to this context collection IRI.
 
 These collections use standard AS2 MIME content headers and support high-performance, index-assisted queries to ensure constant-time resolution without redundant relational tables or database schema duplication.
 

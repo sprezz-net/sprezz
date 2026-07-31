@@ -94,6 +94,37 @@ func (q *Queries) GetLatestPayload(ctx context.Context, objectIri string) ([]byt
 	return payload, err
 }
 
+const getObjectsByContext = `-- name: GetObjectsByContext :many
+SELECT DISTINCT d_sub.value AS subject
+FROM rdf_quads q
+JOIN rdf_dictionary d_sub ON q.subject_id = d_sub.id
+JOIN rdf_dictionary d_pred ON q.predicate_id = d_pred.id
+JOIN rdf_dictionary d_obj ON q.object_id = d_obj.id
+WHERE d_obj.value = $1
+  AND d_pred.value = 'https://www.w3.org/ns/activitystreams#context'
+ORDER BY d_sub.value ASC
+`
+
+func (q *Queries) GetObjectsByContext(ctx context.Context, value string) ([]string, error) {
+	rows, err := q.db.Query(ctx, getObjectsByContext, value)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var subject string
+		if err := rows.Scan(&subject); err != nil {
+			return nil, err
+		}
+		items = append(items, subject)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRepliesByObject = `-- name: GetRepliesByObject :many
 SELECT DISTINCT d_sub.value AS subject
 FROM rdf_quads q

@@ -100,6 +100,7 @@ const (
 	PredicateEndTime      = NamespaceActivityStreams + "endTime"
 	PredicateVoted        = NamespaceActivityStreams + "voted"
 	PredicateLiked        = NamespaceActivityStreams + "liked"
+	PredicateContext      = NamespaceActivityStreams + "context"
 
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"

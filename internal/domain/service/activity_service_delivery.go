@@ -189,6 +189,10 @@ func (s *ActivityService) saveInboundActivityQuads(ctx context.Context, task mod
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
 		}
+		quads, err = s.ensureContextRelation(ctx, task.ObjectIRI, quads)
+		if err != nil {
+			return nil, err
+		}
 		if err := writer.SaveGraphVersion(ctx, task.ActivityIRI, task.ObjectIRI, task.Payload, quads); err != nil {
 			return nil, fmt.Errorf("failed to save graph version and quads: %w", err)
 		}
@@ -206,9 +210,75 @@ func (s *ActivityService) saveInboundActivityQuads(ctx context.Context, task mod
 		return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
 	}
 
+	quads, err = s.ensureContextRelation(ctx, task.ObjectIRI, quads)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := s.storage.SaveQuads(ctx, quads); err != nil {
 		return nil, fmt.Errorf("failed to save quads: %w", err)
 	}
+	return quads, nil
+}
+
+func (s *ActivityService) hasContextQuad(objectIRI string, quads []model.Quad) bool {
+	for _, q := range quads {
+		if q.Subject == objectIRI && q.Predicate == model.PredicateContext {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ActivityService) getInReplyToIRI(objectIRI string, quads []model.Quad) string {
+	for _, q := range quads {
+		if q.Subject == objectIRI && q.Predicate == model.NamespaceActivityStreams+"inReplyTo" {
+			return strings.Trim(q.Object, `"'`)
+		}
+	}
+	return ""
+}
+
+func (s *ActivityService) fetchParentContext(ctx context.Context, inReplyTo string) string {
+	parentQuads, err := s.storage.StreamQuadsBySubject(ctx, inReplyTo)
+	if err != nil {
+		return ""
+	}
+	for _, pq := range parentQuads {
+		if pq.Predicate == model.PredicateContext {
+			return strings.Trim(pq.Object, `"'`)
+		}
+	}
+	return ""
+}
+
+func (s *ActivityService) ensureContextRelation(ctx context.Context, objectIRI string, quads []model.Quad) ([]model.Quad, error) {
+	if objectIRI == "" {
+		return quads, nil
+	}
+
+	if s.hasContextQuad(objectIRI, quads) {
+		return quads, nil
+	}
+
+	var contextIRI string
+	if inReplyTo := s.getInReplyToIRI(objectIRI, quads); inReplyTo != "" {
+		contextIRI = s.fetchParentContext(ctx, inReplyTo)
+		if contextIRI == "" {
+			contextIRI = inReplyTo + "/context"
+		}
+	} else {
+		contextIRI = objectIRI + "/context"
+	}
+
+	quads = append(quads, model.Quad{
+		GraphID:   0,
+		Subject:   objectIRI,
+		Predicate: model.PredicateContext,
+		Object:    contextIRI,
+		ObjType:   model.NamedNode,
+	})
+
 	return quads, nil
 }
 
