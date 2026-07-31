@@ -365,20 +365,30 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 4. **`FEP-1b12` (Group Federation)**: Outlines standard handle matching and group subscription behavior (`Join`/`Leave` operations). Fully implemented via inbound `Join`/`Leave` auto-accept state transitions, automatic database-backed follow membership updates/deletions, and programmatic members-only `Announce` auto-relay loops to the Group's followers collection.
 5. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Fully implemented. Top-level notes automatically establish a `<root_post_iri>/context` collection IRI, which reply notes inherit. Remote context collections are actively fetched and back-filled asynchronously on-demand when encountering new threads.
 6. **`FEP-400e` (Publicly-appendable ActivityPub Collections)**: Standardizes appendable collections by non-owners. Fully implemented as a strict opt-in mechanism; all collections are non-public by default, and third-party `Add`/`Remove` actions are only permitted if the target collection explicitly defines `publicAppend: true` in its metadata.
+7. **`FEP-35b7` (Fediverse Servers, Instances, and Tenants)**: See [section about Multi-Tenancy](#5-multi-tenancy-and-resource-schema-boundaries) in Sprezz.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
-1. **`FEP-c0e0` (Actor-to-Actor Trust Relationship States)**: Standardizes follow state transitions. Partially implemented via our `"pending_follows"` collection and manual state machine (`AcceptFollow` and `RejectFollow`) writing state quads on follow activity subjects. Advanced trust-mesh cryptography is not implemented.
-2. **`FEP-8a03` (Followers-only visibility)**: Enforced inside the domain layer via context-aware audience target pruning to keep private notes from leaking into unauthorized collection responses. Real-time followers collection synchronization is not implemented.
-3. **`FEP-2c59` (Decoupled Actor Profile and Migration Aliases)**: Standardizes alias mapping and verification (`alsoKnownAs`). Partially implemented. GenericHandler checks custom aliases dynamically and performs redirects with an HTTP 303 Status, but account-migration key verification is not present.
-4. **`FEP-e232` (Object Links and Inline Context References)**: Standardizes inline attachment, hashtag, and skolemized blank-node references. Partially implemented. Fully supported in parsing contexts and blank-node rewriting, but explicit parsing of FEP-e232 tag properties is not present.
-5. **`FEP-0151` (Nomadic Identity and Cross-Hub Synchronization)**: Standardizes multi-hub Nomadic persona clone tracking. Partially implemented. Sprezz provides the relational storage schema (`nomadic_identities` and `identity_clones`) and `PredicateNomadGUID` graph mapping to represent nomadic identifiers, but the background synchronization engine is not implemented.
+1. **`FEP-521a` (Representing Actors with Ed25519 Signatures)**: Outlines native cryptographic key generation, storage, and verification workflow over Ed25519 signatures. Scaffolding present. Sprezz mints and stores local Ed25519 private keys alongside RSA-2048 keys collectively, and our `SignatureVerifier` natively validates incoming FEP-521a HTTP signatures directly over `ed25519.Verify` on raw signing string bytes without hashing. Outbound signing is currently locked to RSA.
+2. **`FEP-c0e0` (Actor-to-Actor Trust Relationship States)**: Standardizes follow state transitions. Partially implemented via our `"pending_follows"` collection and manual state machine (`AcceptFollow` and `RejectFollow`) writing state quads on follow activity subjects. Advanced trust-mesh cryptography is not implemented.
+3. **`FEP-8a03` (Followers-only visibility)**: Enforced inside the domain layer via context-aware audience target pruning to keep private notes from leaking into unauthorized collection responses. Real-time followers collection synchronization is not implemented.
+4. **`FEP-2c59` (Decoupled Actor Profile and Migration Aliases)**: Standardizes alias mapping and verification (`alsoKnownAs`). Partially implemented. GenericHandler checks custom aliases dynamically and performs redirects with an HTTP 303 Status, but account-migration key verification is not present.
+5. **`FEP-e232` (Object Links and Inline Context References)**: Standardizes inline attachment, hashtag, and skolemized blank-node references. Partially implemented. Fully supported in parsing contexts and blank-node rewriting, but explicit parsing of FEP-e232 tag properties is not present.
+6. **`FEP-0151` (Nomadic Identity and Cross-Hub Synchronization)**: Standardizes multi-hub Nomadic persona clone tracking. Partially implemented. Sprezz provides the relational storage schema (`nomadic_identities` and `identity_clones`) and `PredicateNomadGUID` graph mapping to represent nomadic identifiers, but the background synchronization engine is not implemented.
+7. **`FEP-ae49` (Semantic Routing for ActivityPub)**: Semantic routing is used for objects and path based suffix routing for collections on those objects.
 
 #### III. Possible Future Enhancements (Not implemented)
 
-1. **`FEP-521a` (Representing Actors with Ed25519 Signatures)**: Outlines native cryptographic key generation, storage, and verification workflow over Ed25519 signatures. Scaffolding present. Sprezz mints and stores local Ed25519 private keys alongside RSA-2048 keys collectively, and our `SignatureVerifier` natively validates incoming FEP-521a HTTP signatures directly over `ed25519.Verify` on raw signing string bytes without hashing. Outbound signing is currently locked to RSA.
-2. **`FEP-2243` (Signaling Following State)**: Recommends exposing a standard `following` property on Actor Profiles pointing to their following collection page. Marked as a potential future enhancement.
-3. **`FEP-f1d5` (NodeInfo Metadata Discovery)**: Recommends standardizing capability discovery and user metrics. Marked as a potential future enhancement.
+1. **`FEP-2243` (Signaling Following State)**: Recommends exposing a standard `following` property on Actor Profiles pointing to their following collection page. Marked as a potential future enhancement.
+2. **`FEP-f1d5` (NodeInfo Metadata Discovery)**: Recommends standardizing capability discovery and user metrics. Marked as a potential future enhancement.
+3. **`FEP-0151` (NodeInfo in Fediverse Software (2025 edition))**
+4. **`FEP-e232` (Object Links)**
+5. **`FEP-67ff` (FEDERATION.md)**
+6. **`FEP-ae0c` (Fediverse Relay Protocols: Mastodon and LitePub)**: Unsure yet if this will be supported. The LitePub approach looks to be the part that fits best.
+7. **`FEP-fc48` (Generic ActivityPub server)**: When creating objects also create the attached supported collections. This will allow for full sementic routing.
+8. **`FEP-9098` (Custom emojis)**
+9. **`FEP-044f` (Consent-respecting quote posts)**
+10. **`FEP-1311` (Media Attachments)**
 
 ### 7.4 Privacy and Audience Rules
 
