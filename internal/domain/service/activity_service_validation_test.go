@@ -678,3 +678,132 @@ func TestProcessInboundTask_TypeConfusion_Resilience(t *testing.T) {
 		})
 	}
 }
+
+type addRemoveTestCase struct {
+	name          string
+	actorIRI      string
+	collectionIRI string
+	publicAppend  string // "true", "1", "false", or ""
+	expectError   bool
+	errContains   string
+}
+
+func getAddRemoveTestCases() []addRemoveTestCase {
+	return []addRemoveTestCase{
+		{
+			name:          "Owner of collection can Add/Remove",
+			actorIRI:      "https://remote.com/actor/alice",
+			collectionIRI: "https://remote.com/collection/alice-list",
+			publicAppend:  "",
+			expectError:   false,
+		},
+		{
+			name:          "Non-owner rejected if publicAppend is missing",
+			actorIRI:      "https://remote.com/actor/bob",
+			collectionIRI: "https://remote.com/collection/alice-list",
+			publicAppend:  "",
+			expectError:   true,
+			errContains:   "security violation: actor https://remote.com/actor/bob is not authorized to edit collection",
+		},
+		{
+			name:          "Non-owner rejected if publicAppend is false",
+			actorIRI:      "https://remote.com/actor/bob",
+			collectionIRI: "https://remote.com/collection/alice-list",
+			publicAppend:  "false",
+			expectError:   true,
+			errContains:   "security violation: actor https://remote.com/actor/bob is not authorized to edit collection",
+		},
+		{
+			name:          "Non-owner allowed if publicAppend is true",
+			actorIRI:      "https://remote.com/actor/bob",
+			collectionIRI: "https://remote.com/collection/alice-list",
+			publicAppend:  "true",
+			expectError:   false,
+		},
+		{
+			name:          "Non-owner allowed if publicAppend is 1",
+			actorIRI:      "https://remote.com/actor/bob",
+			collectionIRI: "https://remote.com/collection/alice-list",
+			publicAppend:  "1",
+			expectError:   false,
+		},
+	}
+}
+
+func mockStreamQuadsBySubject(tc addRemoveTestCase, subjectIRI string) ([]model.Quad, error) {
+	if subjectIRI == tc.actorIRI {
+		return []model.Quad{
+			{GraphID: 1, Subject: subjectIRI, Predicate: model.PredicatePublicKeyPem, Object: "mock-pubkey"},
+		}, nil
+	}
+	if subjectIRI == tc.collectionIRI {
+		quads := []model.Quad{
+			{GraphID: 2, Subject: subjectIRI, Predicate: model.PredicateActor, Object: "https://remote.com/actor/alice"},
+		}
+		if tc.publicAppend != "" {
+			quads = append(quads, model.Quad{
+				GraphID:   2,
+				Subject:   subjectIRI,
+				Predicate: model.PredicatePublicAppend,
+				Object:    tc.publicAppend,
+			})
+		}
+		return quads, nil
+	}
+	return nil, nil
+}
+
+func runAddRemoveTestCase(t *testing.T, tc addRemoveTestCase) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+
+	mockStorage.SaveGraphVersionMock.Optional()
+	mockParser.ToQuadsMock.Optional()
+	mockStorage.GetActorDualKeysMock.Optional()
+	mockStorage.StreamQuadsBySubjectMock.Optional()
+
+	if !tc.expectError {
+		mockStorage.SaveGraphVersionMock.Return(nil)
+		mockParser.ToQuadsMock.Return([]model.Quad{}, nil)
+	}
+	mockStorage.GetActorDualKeysMock.Return(nil, errors.New("not local"))
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		return mockStreamQuadsBySubject(tc, subjectIRI)
+	})
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/add-1",
+		ObjectIRI:   tc.collectionIRI,
+		Payload:     []byte(`{"type":"Add","actor":"` + tc.actorIRI + `","target":"` + tc.collectionIRI + `","object":"https://remote.com/note/1"}`),
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if tc.expectError {
+		if err == nil {
+			t.Fatalf("Expected error containing %q, got nil", tc.errContains)
+		}
+		if !strings.Contains(err.Error(), tc.errContains) {
+			t.Errorf("Expected error containing %q, got: %v", tc.errContains, err)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("Expected success, got error: %v", err)
+		}
+	}
+}
+
+func TestProcessInboundTask_AddRemove_FEP400e(t *testing.T) {
+	tests := getAddRemoveTestCases()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runAddRemoveTestCase(t, tc)
+		})
+	}
+}

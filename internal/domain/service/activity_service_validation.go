@@ -224,6 +224,25 @@ func (s *ActivityService) getCollectionOwner(ctx context.Context, collectionIRI 
 	return "", nil
 }
 
+func (s *ActivityService) isCollectionPubliclyAppendable(ctx context.Context, collectionIRI string) bool {
+	colQuads, err := s.storage.StreamQuadsBySubject(ctx, collectionIRI)
+	if err != nil || len(colQuads) == 0 {
+		return false
+	}
+	colMap := NewThreadSafePredicateMap(colQuads)
+	for pred, objects := range colMap.m {
+		if pred == model.PredicatePublicAppend {
+			for _, obj := range objects {
+				cleanVal := strings.ToLower(strings.Trim(obj, `"'`))
+				if cleanVal == "true" || cleanVal == "1" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func (s *ActivityService) validateAddRemoveVerb(ctx context.Context, actorIRI string, target, object interface{}) error {
 	collectionIRI := parseStringOrID(target)
 	if collectionIRI == "" {
@@ -232,7 +251,9 @@ func (s *ActivityService) validateAddRemoveVerb(ctx context.Context, actorIRI st
 	if collectionIRI != "" {
 		ownerActor, err := s.getCollectionOwner(ctx, collectionIRI)
 		if err == nil && ownerActor != "" && strings.TrimSpace(actorIRI) != strings.TrimSpace(ownerActor) {
-			return fmt.Errorf("security violation: actor %s is not authorized to edit collection %s owned by %s", actorIRI, collectionIRI, ownerActor)
+			if !s.isCollectionPubliclyAppendable(ctx, collectionIRI) {
+				return fmt.Errorf("security violation: actor %s is not authorized to edit collection %s owned by %s", actorIRI, collectionIRI, ownerActor)
+			}
 		}
 	}
 	return nil

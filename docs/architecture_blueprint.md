@@ -364,6 +364,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 3. **`FEP-67ff` (Server-Controlled Shared Inbox Routing)**: Standardizes decoupled, instance-wide shared inbox collection routing. Fully implemented inside `generic_handler.go` catch-all routes mapping POST /inbox to async queues and GET /inbox to the server actor's inbox collection.
 4. **`FEP-1b12` (Group Federation)**: Outlines standard handle matching and group subscription behavior (`Join`/`Leave` operations). Fully implemented via inbound `Join`/`Leave` auto-accept state transitions, automatic database-backed follow membership updates/deletions, and programmatic members-only `Announce` auto-relay loops to the Group's followers collection.
 5. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Fully implemented. Top-level notes automatically establish a `<root_post_iri>/context` collection IRI, which reply notes inherit. Remote context collections are actively fetched and back-filled asynchronously on-demand when encountering new threads.
+6. **`FEP-400e` (Publicly-appendable ActivityPub Collections)**: Standardizes appendable collections by non-owners. Fully implemented as a strict opt-in mechanism; all collections are non-public by default, and third-party `Add`/`Remove` actions are only permitted if the target collection explicitly defines `publicAppend: true` in its metadata.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 

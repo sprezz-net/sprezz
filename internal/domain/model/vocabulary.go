@@ -84,6 +84,7 @@ const (
 	// Vocabulary predicates
 	PredicateInbox        = NamespaceActivityStreams + "inbox"
 	PredicateSharedInbox  = NamespaceActivityStreams + "sharedInbox"
+	PredicatePublicAppend = "https://w3id.org/fep/400e/publicAppend"
 	PredicateFollower     = NamespaceActivityStreams + "follower"
 	PredicateAccepted     = NamespaceActivityStreams + "accepted"
 	PredicateRejected     = NamespaceActivityStreams + "rejected"
