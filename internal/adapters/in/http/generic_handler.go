@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -21,10 +22,11 @@ const (
 
 type GenericHandler struct {
 	storage port.StoragePort
+	service port.ActivityServicePort
 }
 
-func NewGenericHandler(storage port.StoragePort) *GenericHandler {
-	return &GenericHandler{storage: storage}
+func NewGenericHandler(storage port.StoragePort, service port.ActivityServicePort) *GenericHandler {
+	return &GenericHandler{storage: storage, service: service}
 }
 
 func writeActivityJSON(w http.ResponseWriter, payload []byte) {
@@ -173,11 +175,49 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 		h.serveRelationshipCollection(w, r, actorIRI, collection)
 		return
 	}
+	if collection == model.ShortFollowersSync {
+		h.serveFollowersSyncCollection(w, r, actorIRI)
+		return
+	}
 	if collection == model.ShortLikes || collection == model.ShortShares || collection == model.ShortReplies || collection == model.ShortContext || collection == model.ShortContextHistory {
 		h.serveEngagementCollection(w, r, actorIRI, collection)
 		return
 	}
 	h.servePayloadCollection(w, r, actorIRI, collection)
+}
+
+func (h *GenericHandler) serveFollowersSyncCollection(w http.ResponseWriter, r *http.Request, actorIRI string) {
+	ctx := r.Context()
+	authenticatedActor := middleware.GetAuthenticatedActor(ctx)
+	if authenticatedActor == "" {
+		http.Error(w, "Unauthorized: Request context lacks verified signature validation", http.StatusUnauthorized)
+		return
+	}
+
+	requesterDomain := extractDomain(authenticatedActor)
+	if requesterDomain == "" {
+		http.Error(w, "Bad Request: Invalid authenticated actor domain", http.StatusBadRequest)
+		return
+	}
+
+	quads, err := h.storage.StreamQuadsBySubject(ctx, actorIRI)
+	if err != nil {
+		http.Error(w, internalServerError, http.StatusInternalServerError)
+		return
+	}
+
+	predicate := model.PredicateFollower
+	items := make([]string, 0)
+	for _, quad := range quads {
+		if quad.Predicate == predicate && !quad.IsLiteral() {
+			followerIRI := quad.Object
+			if extractDomain(followerIRI) == requesterDomain {
+				items = append(items, followerIRI)
+			}
+		}
+	}
+
+	writeCollection(w, r.URL.String(), items)
 }
 
 func (h *GenericHandler) serveEngagementCollection(w http.ResponseWriter, r *http.Request, objectIRI, collection string) {
@@ -243,6 +283,20 @@ func (h *GenericHandler) servePayloadCollection(w http.ResponseWriter, r *http.R
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": r.URL.String(), "totalItems": len(items), "orderedItems": items})
 }
 
+func parseCollectionSyncHeader(headerVal string) (collectionID, syncURL, digest string) {
+	params := make(map[string]string)
+	parts := strings.Split(headerVal, ",")
+	for _, part := range parts {
+		subParts := strings.SplitN(strings.TrimSpace(part), "=", 2)
+		if len(subParts) == 2 {
+			k := strings.TrimSpace(subParts[0])
+			v := strings.Trim(strings.TrimSpace(subParts[1]), "\"`")
+			params[k] = v
+		}
+	}
+	return params["collectionId"], params["url"], params["digest"]
+}
+
 func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -290,6 +344,20 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Internal Server Error: Ingestion queue failure", http.StatusInternalServerError)
 		return
+	}
+
+	// Process FEP-8fcf Followers Collection synchronization asynchronously
+	syncHeader := r.Header.Get("Collection-Synchronization")
+	if syncHeader != "" && h.service != nil {
+		collectionID, syncURL, digest := parseCollectionSyncHeader(syncHeader)
+		if collectionID != "" && syncURL != "" && digest != "" {
+			go func() {
+				// Security check: only sync if the collection ID matches the authenticated actor's followers
+				if collectionID == authenticatedActor+"/followers" {
+					_ = h.service.SyncFollowers(context.Background(), authenticatedActor, collectionID, syncURL, digest)
+				}
+			}()
+		}
 	}
 
 	w.WriteHeader(http.StatusAccepted)

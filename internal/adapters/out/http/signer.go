@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"time"
 
+	"sprezz/internal/domain/model"
 	"sprezz/internal/pkg/httputil"
 )
 
@@ -37,6 +38,10 @@ func (a *FederatedSignerAdapter) ForwardFederatedActivity(ctx context.Context, t
 	}
 
 	req.Header.Set(httputil.HeaderContentType, "application/activity+json")
+
+	if syncVal, ok := ctx.Value(model.CollectionSyncHeaderKey).(string); ok && syncVal != "" {
+		req.Header.Set("Collection-Synchronization", syncVal)
+	}
 
 	hasher := sha256.New()
 	hasher.Write(payload)

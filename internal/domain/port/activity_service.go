@@ -41,4 +41,5 @@ type ActivityServicePort interface {
 	GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error)
 	AcceptFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error
 	RejectFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error
+	SyncFollowers(ctx context.Context, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest string) error
 }

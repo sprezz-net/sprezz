@@ -25,6 +25,7 @@ var ErrDropAction = errors.New("drop action gracefully")
 type ActivityServiceConfig struct {
 	MaxActivitySizeBytes  int64
 	EnableContextBackfill bool
+	FollowersSyncCache    port.FollowersSyncCache
 }
 
 type ActivityService struct {
@@ -33,6 +34,7 @@ type ActivityService struct {
 	parser                port.JSONLDParserPort
 	forwarder             port.OutboundDispatcher
 	fetcher               port.RemoteFetcher
+	syncCache             port.FollowersSyncCache
 	maxActivitySizeBytes  int64
 	enableContextBackfill bool
 }
@@ -47,6 +49,7 @@ func NewActivityService(storage port.StoragePort, parser port.JSONLDParserPort, 
 		mediaStorage:          media,
 		parser:                parser,
 		fetcher:               fetcher,
+		syncCache:             cfg.FollowersSyncCache,
 		maxActivitySizeBytes:  maxLimit,
 		enableContextBackfill: cfg.EnableContextBackfill,
 	}
@@ -369,8 +372,20 @@ func (s *ActivityService) DispatchOutboundActivity(ctx context.Context, activity
 
 	var lastErr error
 	for inbox := range inboxesMap {
+		inboxDomain := extractDomain(inbox)
+		followers, _ := s.GetFollowersTimeline(ctx, actorIRI, 10000, 0)
+		digest := ComputeFollowersDigest(followers, inboxDomain)
+
+		deliveryCtx := ctx
+		if digest != "" {
+			syncURL := actorIRI + "/followers_synchronization"
+			collectionID := actorIRI + "/followers"
+			headerVal := fmt.Sprintf("collectionId=%q,url=%q,digest=%q", collectionID, syncURL, digest)
+			deliveryCtx = context.WithValue(ctx, model.CollectionSyncHeaderKey, headerVal)
+		}
+
 		err = s.forwarder.ForwardFederatedActivity(
-			ctx,
+			deliveryCtx,
 			inbox,
 			targetKeyID,
 			dualKeys.PrivateKeyRSAPEM,
@@ -621,6 +636,8 @@ func (s *ActivityService) handleGroupJoin(ctx context.Context, senderIRI, groupI
 		return fmt.Errorf("failed to save group follower relationship: %w", err)
 	}
 
+	s.evictFollowersDigest(ctx, groupIRI, extractDomain(senderIRI))
+
 	id, err := uuid.NewV7()
 	if err != nil {
 		return err
@@ -652,6 +669,8 @@ func (s *ActivityService) handleGroupLeave(ctx context.Context, senderIRI, group
 	if err := s.storage.RemoveQuadEdge(ctx, groupIRI, model.PredicateFollower, senderIRI); err != nil {
 		return fmt.Errorf("failed to remove group follower relationship: %w", err)
 	}
+
+	s.evictFollowersDigest(ctx, groupIRI, extractDomain(senderIRI))
 
 	id, err := uuid.NewV7()
 	if err != nil {

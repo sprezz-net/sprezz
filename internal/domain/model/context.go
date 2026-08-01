@@ -8,4 +8,6 @@ const (
 	TenantIDKey ContextKey = iota
 	// ActorIRIKey uniquely identifies the authenticated actor string inside execution flows.
 	ActorIRIKey
+	// CollectionSyncHeaderKey uniquely identifies the collection-synchronization context inside execution flows.
+	CollectionSyncHeaderKey
 )

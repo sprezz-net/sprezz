@@ -372,6 +372,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 10. **`FEP-4ccd` (Pending Followers Collection and Pending Following Collection)**: Standardizes managing pending follow requests using dedicated collections. Fully implemented in the handler and services.
 11. **`FEP-c648` (Blocked Collection)**: Recommends exposing standard `blocked` and `blocks` collections for user-controlled actor-level blocks. Fully implemented in the handler, services, and storage.
 12. **`FEP-1311` (Media Attachments)**: Standardizes metadata properties (like `mediaType`, `digestMultibase` integrity checks, `size`, and image `width`/`height` dimensions) on ActivityPub attachments. Fully implemented inside our media handler, dimension-extraction streaming pipeline, and multibase digest generation.
+13. **`FEP-8fcf` (Followers collection synchronization across servers)**: Standardizes detecting and correcting follow relationship discrepancies across servers using XORed SHA-256 digests of partial followers list. Fully implemented via dynamic on-the-fly digest computation, in-memory caching, the `/followers_synchronization` endpoint, and outbound `Collection-Synchronization` header injection.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
@@ -410,6 +411,51 @@ Sprezz standardizes resource engagement collections by serving URL-agnostic side
 - **`context` Collection (FEP-7888)**: An `OrderedCollection` served at `<object-IRI>/context` pointing to all objects (posts, replies, other activities) belonging to the entire conversation thread. Sourced by querying subjects with predicate `as:context` pointing to this context collection IRI.
 
 These collections use standard AS2 MIME content headers and support high-performance, index-assisted queries to ensure constant-time resolution without redundant relational tables or database schema duplication.
+
+### 7.6 Followers Collection Synchronization (FEP-8fcf)
+
+To prevent follower database state desynchronization (followers drift) across remote servers due to network failures, server crashes, or missed delivery messages, Sprezz implements standard followers collection synchronization (FEP-8fcf).
+
+Upon receiving inbound POST request deliveries accompanied by a valid, signed `Collection-Synchronization` header, the system processes synchronization asynchronously.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Remote as Remote Server
+    participant Handler as GenericHandler
+    participant Service as ActivityService
+    participant Cache as FollowersSyncCache
+    participant Storage as StoragePort (DB)
+    participant Fetcher as RemoteFetcher
+
+    Remote->>Handler: POST /inbox with Collection-Synchronization header
+    Handler->>Service: Async SyncFollowers(actorIRI, collectionID, syncURL, digest)
+    Service->>Cache: GetDigest(actorIRI, syncHost)
+    alt Cache Hit (Already in sync!)
+        Cache-->>Service: Digest Match (No-Op)
+    else Cache Miss / Mismatch
+        Service->>Storage: GetFollowersTimeline(actorIRI)
+        Storage-->>Service: Local Followers List
+        Service->>Service: ComputeFollowersDigest(followers, syncHost)
+        alt Digest Matches expected remote digest
+            Service->>Cache: SetDigest(actorIRI, syncHost, expectedDigest)
+            Service-->>Handler: Return
+        else Digest Mismatch
+            Service->>Fetcher: FetchSigned(syncURL)
+            Fetcher-->>Service: Authoritative Remote Followers List
+            Service->>Service: Calculate Diff (Additions & Deletions)
+            Service->>Storage: SaveQuads() / RemoveQuadEdge()
+            Service->>Cache: SetDigest(actorIRI, syncHost, expectedDigest)
+            Service->>Cache: EvictDigest(actorIRI, syncHost)
+        end
+    end
+```
+
+#### 7.6.1 On-The-Fly Computation and Decoupled Cache Adapter
+
+- **Stateless Calculations:** The system computes XORed SHA-256 partial collection digests dynamically in-memory on the fly.
+- **Hexagonal Cache Port Isolation:** Rather than coupling the core domain to a specific caching provider, the `ActivityService` operates strictly on a clean Go interface port (`port.FollowersSyncCache`). The production implementation is offloaded to a high-speed `FollowersSyncCacheAdapter` wrapping Ristretto, configured under `ActivityPubConfig` with a default TTL of 24 hours.
+- **Reactive Cache Eviction:** To ensure absolute freshness with zero stale data, follow-relationship mutations (follow accepts, rejects, deletes, group joins/leaves, and resync reconciliation) instantly trigger targeted `EvictDigest` cache invalidation queries.
 
 ## 8. Outbound Federation and Dual-Key Alignment
 

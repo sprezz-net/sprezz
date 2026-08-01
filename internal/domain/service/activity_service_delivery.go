@@ -652,6 +652,7 @@ func (s *ActivityService) saveFollowStateTransition(ctx context.Context, followA
 			return fmt.Errorf("failed to save follower relationship quads: %w", err)
 		}
 	}
+	s.evictFollowersDigest(ctx, followedActorIRI, extractDomain(followerIRI))
 	return nil
 }
 

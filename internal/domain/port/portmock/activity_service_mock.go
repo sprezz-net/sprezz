@@ -75,6 +75,13 @@ type ActivityServicePortMock struct {
 	afterRejectFollowCounter  uint64
 	beforeRejectFollowCounter uint64
 	RejectFollowMock          mActivityServicePortMockRejectFollow
+
+	funcSyncFollowers          func(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string) (err error)
+	funcSyncFollowersOrigin    string
+	inspectFuncSyncFollowers   func(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string)
+	afterSyncFollowersCounter  uint64
+	beforeSyncFollowersCounter uint64
+	SyncFollowersMock          mActivityServicePortMockSyncFollowers
 }
 
 // NewActivityServicePortMock returns a mock for mm_port.ActivityServicePort
@@ -108,6 +115,9 @@ func NewActivityServicePortMock(t minimock.Tester) *ActivityServicePortMock {
 
 	m.RejectFollowMock = mActivityServicePortMockRejectFollow{mock: m}
 	m.RejectFollowMock.callArgs = []*ActivityServicePortMockRejectFollowParams{}
+
+	m.SyncFollowersMock = mActivityServicePortMockSyncFollowers{mock: m}
+	m.SyncFollowersMock.callArgs = []*ActivityServicePortMockSyncFollowersParams{}
 
 	t.Cleanup(m.MinimockFinish)
 
@@ -3194,6 +3204,441 @@ func (m *ActivityServicePortMock) MinimockRejectFollowInspect() {
 	}
 }
 
+type mActivityServicePortMockSyncFollowers struct {
+	optional           bool
+	mock               *ActivityServicePortMock
+	defaultExpectation *ActivityServicePortMockSyncFollowersExpectation
+	expectations       []*ActivityServicePortMockSyncFollowersExpectation
+
+	callArgs []*ActivityServicePortMockSyncFollowersParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// ActivityServicePortMockSyncFollowersExpectation specifies expectation struct of the ActivityServicePort.SyncFollowers
+type ActivityServicePortMockSyncFollowersExpectation struct {
+	mock               *ActivityServicePortMock
+	params             *ActivityServicePortMockSyncFollowersParams
+	paramPtrs          *ActivityServicePortMockSyncFollowersParamPtrs
+	expectationOrigins ActivityServicePortMockSyncFollowersExpectationOrigins
+	results            *ActivityServicePortMockSyncFollowersResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// ActivityServicePortMockSyncFollowersParams contains parameters of the ActivityServicePort.SyncFollowers
+type ActivityServicePortMockSyncFollowersParams struct {
+	ctx                context.Context
+	actorIRI           string
+	remoteCollectionID string
+	remoteSyncURL      string
+	expectedDigest     string
+}
+
+// ActivityServicePortMockSyncFollowersParamPtrs contains pointers to parameters of the ActivityServicePort.SyncFollowers
+type ActivityServicePortMockSyncFollowersParamPtrs struct {
+	ctx                *context.Context
+	actorIRI           *string
+	remoteCollectionID *string
+	remoteSyncURL      *string
+	expectedDigest     *string
+}
+
+// ActivityServicePortMockSyncFollowersResults contains results of the ActivityServicePort.SyncFollowers
+type ActivityServicePortMockSyncFollowersResults struct {
+	err error
+}
+
+// ActivityServicePortMockSyncFollowersOrigins contains origins of expectations of the ActivityServicePort.SyncFollowers
+type ActivityServicePortMockSyncFollowersExpectationOrigins struct {
+	origin                   string
+	originCtx                string
+	originActorIRI           string
+	originRemoteCollectionID string
+	originRemoteSyncURL      string
+	originExpectedDigest     string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Optional() *mActivityServicePortMockSyncFollowers {
+	mmSyncFollowers.optional = true
+	return mmSyncFollowers
+}
+
+// Expect sets up expected params for ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Expect(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{}
+	}
+
+	if mmSyncFollowers.defaultExpectation.paramPtrs != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by ExpectParams functions")
+	}
+
+	mmSyncFollowers.defaultExpectation.params = &ActivityServicePortMockSyncFollowersParams{ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest}
+	mmSyncFollowers.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmSyncFollowers.expectations {
+		if minimock.Equal(e.params, mmSyncFollowers.defaultExpectation.params) {
+			mmSyncFollowers.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmSyncFollowers.defaultExpectation.params)
+		}
+	}
+
+	return mmSyncFollowers
+}
+
+// ExpectCtxParam1 sets up expected param ctx for ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) ExpectCtxParam1(ctx context.Context) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{}
+	}
+
+	if mmSyncFollowers.defaultExpectation.params != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Expect")
+	}
+
+	if mmSyncFollowers.defaultExpectation.paramPtrs == nil {
+		mmSyncFollowers.defaultExpectation.paramPtrs = &ActivityServicePortMockSyncFollowersParamPtrs{}
+	}
+	mmSyncFollowers.defaultExpectation.paramPtrs.ctx = &ctx
+	mmSyncFollowers.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmSyncFollowers
+}
+
+// ExpectActorIRIParam2 sets up expected param actorIRI for ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) ExpectActorIRIParam2(actorIRI string) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{}
+	}
+
+	if mmSyncFollowers.defaultExpectation.params != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Expect")
+	}
+
+	if mmSyncFollowers.defaultExpectation.paramPtrs == nil {
+		mmSyncFollowers.defaultExpectation.paramPtrs = &ActivityServicePortMockSyncFollowersParamPtrs{}
+	}
+	mmSyncFollowers.defaultExpectation.paramPtrs.actorIRI = &actorIRI
+	mmSyncFollowers.defaultExpectation.expectationOrigins.originActorIRI = minimock.CallerInfo(1)
+
+	return mmSyncFollowers
+}
+
+// ExpectRemoteCollectionIDParam3 sets up expected param remoteCollectionID for ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) ExpectRemoteCollectionIDParam3(remoteCollectionID string) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{}
+	}
+
+	if mmSyncFollowers.defaultExpectation.params != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Expect")
+	}
+
+	if mmSyncFollowers.defaultExpectation.paramPtrs == nil {
+		mmSyncFollowers.defaultExpectation.paramPtrs = &ActivityServicePortMockSyncFollowersParamPtrs{}
+	}
+	mmSyncFollowers.defaultExpectation.paramPtrs.remoteCollectionID = &remoteCollectionID
+	mmSyncFollowers.defaultExpectation.expectationOrigins.originRemoteCollectionID = minimock.CallerInfo(1)
+
+	return mmSyncFollowers
+}
+
+// ExpectRemoteSyncURLParam4 sets up expected param remoteSyncURL for ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) ExpectRemoteSyncURLParam4(remoteSyncURL string) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{}
+	}
+
+	if mmSyncFollowers.defaultExpectation.params != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Expect")
+	}
+
+	if mmSyncFollowers.defaultExpectation.paramPtrs == nil {
+		mmSyncFollowers.defaultExpectation.paramPtrs = &ActivityServicePortMockSyncFollowersParamPtrs{}
+	}
+	mmSyncFollowers.defaultExpectation.paramPtrs.remoteSyncURL = &remoteSyncURL
+	mmSyncFollowers.defaultExpectation.expectationOrigins.originRemoteSyncURL = minimock.CallerInfo(1)
+
+	return mmSyncFollowers
+}
+
+// ExpectExpectedDigestParam5 sets up expected param expectedDigest for ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) ExpectExpectedDigestParam5(expectedDigest string) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{}
+	}
+
+	if mmSyncFollowers.defaultExpectation.params != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Expect")
+	}
+
+	if mmSyncFollowers.defaultExpectation.paramPtrs == nil {
+		mmSyncFollowers.defaultExpectation.paramPtrs = &ActivityServicePortMockSyncFollowersParamPtrs{}
+	}
+	mmSyncFollowers.defaultExpectation.paramPtrs.expectedDigest = &expectedDigest
+	mmSyncFollowers.defaultExpectation.expectationOrigins.originExpectedDigest = minimock.CallerInfo(1)
+
+	return mmSyncFollowers
+}
+
+// Inspect accepts an inspector function that has same arguments as the ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Inspect(f func(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string)) *mActivityServicePortMockSyncFollowers {
+	if mmSyncFollowers.mock.inspectFuncSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("Inspect function is already set for ActivityServicePortMock.SyncFollowers")
+	}
+
+	mmSyncFollowers.mock.inspectFuncSyncFollowers = f
+
+	return mmSyncFollowers
+}
+
+// Return sets up results that will be returned by ActivityServicePort.SyncFollowers
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Return(err error) *ActivityServicePortMock {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	if mmSyncFollowers.defaultExpectation == nil {
+		mmSyncFollowers.defaultExpectation = &ActivityServicePortMockSyncFollowersExpectation{mock: mmSyncFollowers.mock}
+	}
+	mmSyncFollowers.defaultExpectation.results = &ActivityServicePortMockSyncFollowersResults{err}
+	mmSyncFollowers.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmSyncFollowers.mock
+}
+
+// Set uses given function f to mock the ActivityServicePort.SyncFollowers method
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Set(f func(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string) (err error)) *ActivityServicePortMock {
+	if mmSyncFollowers.defaultExpectation != nil {
+		mmSyncFollowers.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.SyncFollowers method")
+	}
+
+	if len(mmSyncFollowers.expectations) > 0 {
+		mmSyncFollowers.mock.t.Fatalf("Some expectations are already set for the ActivityServicePort.SyncFollowers method")
+	}
+
+	mmSyncFollowers.mock.funcSyncFollowers = f
+	mmSyncFollowers.mock.funcSyncFollowersOrigin = minimock.CallerInfo(1)
+	return mmSyncFollowers.mock
+}
+
+// When sets expectation for the ActivityServicePort.SyncFollowers which will trigger the result defined by the following
+// Then helper
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) When(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string) *ActivityServicePortMockSyncFollowersExpectation {
+	if mmSyncFollowers.mock.funcSyncFollowers != nil {
+		mmSyncFollowers.mock.t.Fatalf("ActivityServicePortMock.SyncFollowers mock is already set by Set")
+	}
+
+	expectation := &ActivityServicePortMockSyncFollowersExpectation{
+		mock:               mmSyncFollowers.mock,
+		params:             &ActivityServicePortMockSyncFollowersParams{ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest},
+		expectationOrigins: ActivityServicePortMockSyncFollowersExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmSyncFollowers.expectations = append(mmSyncFollowers.expectations, expectation)
+	return expectation
+}
+
+// Then sets up ActivityServicePort.SyncFollowers return parameters for the expectation previously defined by the When method
+func (e *ActivityServicePortMockSyncFollowersExpectation) Then(err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockSyncFollowersResults{err}
+	return e.mock
+}
+
+// Times sets number of times ActivityServicePort.SyncFollowers should be invoked
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Times(n uint64) *mActivityServicePortMockSyncFollowers {
+	if n == 0 {
+		mmSyncFollowers.mock.t.Fatalf("Times of ActivityServicePortMock.SyncFollowers mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmSyncFollowers.expectedInvocations, n)
+	mmSyncFollowers.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmSyncFollowers
+}
+
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) invocationsDone() bool {
+	if len(mmSyncFollowers.expectations) == 0 && mmSyncFollowers.defaultExpectation == nil && mmSyncFollowers.mock.funcSyncFollowers == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmSyncFollowers.mock.afterSyncFollowersCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmSyncFollowers.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// SyncFollowers implements mm_port.ActivityServicePort
+func (mmSyncFollowers *ActivityServicePortMock) SyncFollowers(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string) (err error) {
+	mm_atomic.AddUint64(&mmSyncFollowers.beforeSyncFollowersCounter, 1)
+	defer mm_atomic.AddUint64(&mmSyncFollowers.afterSyncFollowersCounter, 1)
+
+	mmSyncFollowers.t.Helper()
+
+	if mmSyncFollowers.inspectFuncSyncFollowers != nil {
+		mmSyncFollowers.inspectFuncSyncFollowers(ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest)
+	}
+
+	mm_params := ActivityServicePortMockSyncFollowersParams{ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest}
+
+	// Record call args
+	mmSyncFollowers.SyncFollowersMock.mutex.Lock()
+	mmSyncFollowers.SyncFollowersMock.callArgs = append(mmSyncFollowers.SyncFollowersMock.callArgs, &mm_params)
+	mmSyncFollowers.SyncFollowersMock.mutex.Unlock()
+
+	for _, e := range mmSyncFollowers.SyncFollowersMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmSyncFollowers.SyncFollowersMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmSyncFollowers.SyncFollowersMock.defaultExpectation.Counter, 1)
+		mm_want := mmSyncFollowers.SyncFollowersMock.defaultExpectation.params
+		mm_want_ptrs := mmSyncFollowers.SyncFollowersMock.defaultExpectation.paramPtrs
+
+		mm_got := ActivityServicePortMockSyncFollowersParams{ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmSyncFollowers.t.Errorf("ActivityServicePortMock.SyncFollowers got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSyncFollowers.SyncFollowersMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.actorIRI != nil && !minimock.Equal(*mm_want_ptrs.actorIRI, mm_got.actorIRI) {
+				mmSyncFollowers.t.Errorf("ActivityServicePortMock.SyncFollowers got unexpected parameter actorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSyncFollowers.SyncFollowersMock.defaultExpectation.expectationOrigins.originActorIRI, *mm_want_ptrs.actorIRI, mm_got.actorIRI, minimock.Diff(*mm_want_ptrs.actorIRI, mm_got.actorIRI))
+			}
+
+			if mm_want_ptrs.remoteCollectionID != nil && !minimock.Equal(*mm_want_ptrs.remoteCollectionID, mm_got.remoteCollectionID) {
+				mmSyncFollowers.t.Errorf("ActivityServicePortMock.SyncFollowers got unexpected parameter remoteCollectionID, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSyncFollowers.SyncFollowersMock.defaultExpectation.expectationOrigins.originRemoteCollectionID, *mm_want_ptrs.remoteCollectionID, mm_got.remoteCollectionID, minimock.Diff(*mm_want_ptrs.remoteCollectionID, mm_got.remoteCollectionID))
+			}
+
+			if mm_want_ptrs.remoteSyncURL != nil && !minimock.Equal(*mm_want_ptrs.remoteSyncURL, mm_got.remoteSyncURL) {
+				mmSyncFollowers.t.Errorf("ActivityServicePortMock.SyncFollowers got unexpected parameter remoteSyncURL, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSyncFollowers.SyncFollowersMock.defaultExpectation.expectationOrigins.originRemoteSyncURL, *mm_want_ptrs.remoteSyncURL, mm_got.remoteSyncURL, minimock.Diff(*mm_want_ptrs.remoteSyncURL, mm_got.remoteSyncURL))
+			}
+
+			if mm_want_ptrs.expectedDigest != nil && !minimock.Equal(*mm_want_ptrs.expectedDigest, mm_got.expectedDigest) {
+				mmSyncFollowers.t.Errorf("ActivityServicePortMock.SyncFollowers got unexpected parameter expectedDigest, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmSyncFollowers.SyncFollowersMock.defaultExpectation.expectationOrigins.originExpectedDigest, *mm_want_ptrs.expectedDigest, mm_got.expectedDigest, minimock.Diff(*mm_want_ptrs.expectedDigest, mm_got.expectedDigest))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmSyncFollowers.t.Errorf("ActivityServicePortMock.SyncFollowers got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmSyncFollowers.SyncFollowersMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmSyncFollowers.SyncFollowersMock.defaultExpectation.results
+		if mm_results == nil {
+			mmSyncFollowers.t.Fatal("No results are set for the ActivityServicePortMock.SyncFollowers")
+		}
+		return (*mm_results).err
+	}
+	if mmSyncFollowers.funcSyncFollowers != nil {
+		return mmSyncFollowers.funcSyncFollowers(ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest)
+	}
+	mmSyncFollowers.t.Fatalf("Unexpected call to ActivityServicePortMock.SyncFollowers. %v %v %v %v %v", ctx, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest)
+	return
+}
+
+// SyncFollowersAfterCounter returns a count of finished ActivityServicePortMock.SyncFollowers invocations
+func (mmSyncFollowers *ActivityServicePortMock) SyncFollowersAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSyncFollowers.afterSyncFollowersCounter)
+}
+
+// SyncFollowersBeforeCounter returns a count of ActivityServicePortMock.SyncFollowers invocations
+func (mmSyncFollowers *ActivityServicePortMock) SyncFollowersBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmSyncFollowers.beforeSyncFollowersCounter)
+}
+
+// Calls returns a list of arguments used in each call to ActivityServicePortMock.SyncFollowers.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmSyncFollowers *mActivityServicePortMockSyncFollowers) Calls() []*ActivityServicePortMockSyncFollowersParams {
+	mmSyncFollowers.mutex.RLock()
+
+	argCopy := make([]*ActivityServicePortMockSyncFollowersParams, len(mmSyncFollowers.callArgs))
+	copy(argCopy, mmSyncFollowers.callArgs)
+
+	mmSyncFollowers.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockSyncFollowersDone returns true if the count of the SyncFollowers invocations corresponds
+// the number of defined expectations
+func (m *ActivityServicePortMock) MinimockSyncFollowersDone() bool {
+	if m.SyncFollowersMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.SyncFollowersMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.SyncFollowersMock.invocationsDone()
+}
+
+// MinimockSyncFollowersInspect logs each unmet expectation
+func (m *ActivityServicePortMock) MinimockSyncFollowersInspect() {
+	for _, e := range m.SyncFollowersMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to ActivityServicePortMock.SyncFollowers at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterSyncFollowersCounter := mm_atomic.LoadUint64(&m.afterSyncFollowersCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.SyncFollowersMock.defaultExpectation != nil && afterSyncFollowersCounter < 1 {
+		if m.SyncFollowersMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to ActivityServicePortMock.SyncFollowers at\n%s", m.SyncFollowersMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to ActivityServicePortMock.SyncFollowers at\n%s with params: %#v", m.SyncFollowersMock.defaultExpectation.expectationOrigins.origin, *m.SyncFollowersMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcSyncFollowers != nil && afterSyncFollowersCounter < 1 {
+		m.t.Errorf("Expected call to ActivityServicePortMock.SyncFollowers at\n%s", m.funcSyncFollowersOrigin)
+	}
+
+	if !m.SyncFollowersMock.invocationsDone() && afterSyncFollowersCounter > 0 {
+		m.t.Errorf("Expected %d calls to ActivityServicePortMock.SyncFollowers at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.SyncFollowersMock.expectedInvocations), m.SyncFollowersMock.expectedInvocationsOrigin, afterSyncFollowersCounter)
+	}
+}
+
 // MinimockFinish checks that all mocked methods have been called the expected number of times
 func (m *ActivityServicePortMock) MinimockFinish() {
 	m.finishOnce.Do(func() {
@@ -3213,6 +3658,8 @@ func (m *ActivityServicePortMock) MinimockFinish() {
 			m.MinimockPurgeOrphanedMediaInspect()
 
 			m.MinimockRejectFollowInspect()
+
+			m.MinimockSyncFollowersInspect()
 		}
 	})
 }
@@ -3243,5 +3690,6 @@ func (m *ActivityServicePortMock) minimockDone() bool {
 		m.MinimockProcessInboundMediaTaskDone() &&
 		m.MinimockProcessInboundTaskDone() &&
 		m.MinimockPurgeOrphanedMediaDone() &&
-		m.MinimockRejectFollowDone()
+		m.MinimockRejectFollowDone() &&
+		m.MinimockSyncFollowersDone()
 }

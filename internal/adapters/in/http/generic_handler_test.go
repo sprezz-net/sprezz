@@ -26,7 +26,7 @@ func TestGenericHandler_GetProfile_Success(t *testing.T) {
 		}
 	}).Return([]byte(`{"id":"https://local.example/actor/alice","type":"Person","preferredUsername":"alice"}`), nil)
 
-	handler := inhttp.NewGenericHandler(storage)
+	handler := inhttp.NewGenericHandler(storage, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/actor/alice", nil)
 	req.Host = "local.example"
@@ -57,7 +57,7 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 		}
 	}).Return(nil)
 
-	handler := inhttp.NewGenericHandler(storage)
+	handler := inhttp.NewGenericHandler(storage, nil)
 
 	payload := []byte(`{"id":"https://remote.com/activity-1","type":"Create","object":{"id":"https://remote.com/object-1"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/inbox", bytes.NewReader(payload))
@@ -88,7 +88,7 @@ func TestGenericHandler_GetLikes_Success(t *testing.T) {
 		"https://remote2.com/activity/like-2",
 	}, nil)
 
-	handler := inhttp.NewGenericHandler(storage)
+	handler := inhttp.NewGenericHandler(storage, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/object/note-1/likes", nil)
 	req.Host = "local.example"
@@ -132,7 +132,7 @@ func TestGenericHandler_PostDirectInbox_Success(t *testing.T) {
 		}
 	}).Return(nil)
 
-	handler := inhttp.NewGenericHandler(storage)
+	handler := inhttp.NewGenericHandler(storage, nil)
 
 	payload := []byte(`{"id":"https://remote.com/activity-1","type":"Create","object":{"id":"https://remote.com/object-1"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/actor/alice/inbox", bytes.NewReader(payload))

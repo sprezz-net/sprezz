@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
 )
@@ -26,9 +27,10 @@ type MinIOConfig struct {
 }
 
 type ActivityPubConfig struct {
-	MaxActivitySizeBytes  int64 `yaml:"max_activity_size_bytes" env:"MAX_ACTIVITY_SIZE_BYTES" env-default:"102400"`
-	MaxMediaSizeBytes     int64 `yaml:"max_media_size_bytes" env:"MAX_MEDIA_SIZE_BYTES" env-default:"10485760"`
-	EnableContextBackfill bool  `yaml:"enable_context_backfill" env:"ENABLE_CONTEXT_BACKFILL" env-default:"false"`
+	MaxActivitySizeBytes  int64         `yaml:"max_activity_size_bytes" env:"MAX_ACTIVITY_SIZE_BYTES" env-default:"102400"`
+	MaxMediaSizeBytes     int64         `yaml:"max_media_size_bytes" env:"MAX_MEDIA_SIZE_BYTES" env-default:"10485760"`
+	EnableContextBackfill bool          `yaml:"enable_context_backfill" env:"ENABLE_CONTEXT_BACKFILL" env-default:"false"`
+	FollowersSyncCacheTTL time.Duration `yaml:"followers_sync_cache_ttl" env:"FOLLOWERS_SYNC_CACHE_TTL" env-default:"24h"`
 }
 
 type Config struct {

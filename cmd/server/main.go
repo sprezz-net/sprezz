@@ -132,6 +132,12 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 	sharedHTTPClient := httpclient.New()
 	federatedSigner := outhttp.NewFederatedSignerAdapter(sharedHTTPClient)
 	remoteFetcher := outhttp.NewRemoteFetcherAdapter(sharedHTTPClient)
+
+	followersSyncCache, err := cache.NewFollowersSyncCacheAdapter(cfg.ActivityPub.FollowersSyncCacheTTL)
+	if err != nil {
+		log.Fatalf("Failed to initialize followers sync cache adapter: %v", err)
+	}
+
 	activityService := service.NewActivityService(
 		postgresStorage,
 		jsonldParser,
@@ -140,6 +146,7 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 		service.ActivityServiceConfig{
 			MaxActivitySizeBytes:  cfg.ActivityPub.MaxActivitySizeBytes,
 			EnableContextBackfill: cfg.ActivityPub.EnableContextBackfill,
+			FollowersSyncCache:    followersSyncCache,
 		},
 		federatedSigner,
 	)
@@ -186,7 +193,7 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 
 func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32) {
 	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
-	genericHandler := inhttp.NewGenericHandler(deps.postgresStorage)
+	genericHandler := inhttp.NewGenericHandler(deps.postgresStorage, deps.activityService)
 	mediaUploadHandler := inhttp.NewMediaUploadHandler(deps.activityService, deps.cfg.ActivityPub.MaxMediaSizeBytes)
 
 	tenantValidator := middleware.NewTenantValidator(middleware.TenantConfig{

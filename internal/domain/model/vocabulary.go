@@ -123,6 +123,7 @@ const (
 	ShortReplies          = "replies"
 	ShortContext          = "context"
 	ShortContextHistory   = "contextHistory"
+	ShortFollowersSync    = "followers_synchronization"
 
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"
@@ -192,5 +193,6 @@ func IsCollection(collection string) bool {
 		collection == ShortShares ||
 		collection == ShortReplies ||
 		collection == ShortContext ||
-		collection == ShortContextHistory
+		collection == ShortContextHistory ||
+		collection == ShortFollowersSync
 }

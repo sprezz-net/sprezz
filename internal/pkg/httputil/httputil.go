@@ -17,6 +17,7 @@ const (
 	HeaderDigest      = "Digest"
 	HeaderDate        = "Date"
 	HeaderHost        = "Host"
+	HeaderCollectionSynchronization = "Collection-Synchronization"
 
 	// MIME Types
 	ContentTypeActivityJSON = "application/activity+json"
