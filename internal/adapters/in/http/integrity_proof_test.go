@@ -73,7 +73,7 @@ func TestSignatureVerifier_ObjectIntegrityProof_FEP8b32(t *testing.T) {
 	// 4. Setup request
 	request := httptest.NewRequest(http.MethodPost, "/inbox", strings.NewReader(string(signedDocBytes)))
 	request.Host = "local.example"
-	request.Header.Set("Date", "Fri, 24 Feb 2023 23:36:38 GMT")
+	request.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 
 	// 5. Mock storage to return our key PEM
 	mockStorage := portmock.NewStoragePortMock(mc)
@@ -170,7 +170,7 @@ func TestSignatureVerifier_FEP8c13_AuthorAndForwardingProof(t *testing.T) {
 	// 6. Setup request
 	request := httptest.NewRequest(http.MethodPost, "/inbox", strings.NewReader(string(forwardedBytes)))
 	request.Host = "local.example"
-	request.Header.Set("Date", "Fri, 24 Feb 2023 23:36:38 GMT")
+	request.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
 
 	// 7. Mock storage to return PEM keys
 	mockStorage := portmock.NewStoragePortMock(mc)

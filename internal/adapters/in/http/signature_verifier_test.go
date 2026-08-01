@@ -208,3 +208,28 @@ func TestSignatureVerifier_ActorSpoofingPrevention_MismatchedDomains(t *testing.
 		t.Errorf("Expected error containing %q, got %q", expectedError, err.Error())
 	}
 }
+
+func TestSignatureVerifier_ClockSkew_Rejection(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	body := []byte(`{"id":"https://remote.example"}`)
+
+	// Create a Date header that is 1 hour in the past (clock skew is > 5 mins)
+	staleDate := time.Now().Add(-1 * time.Hour).UTC().Format(http.TimeFormat)
+
+	request := httptest.NewRequest(http.MethodPost, "/inbox/alice", strings.NewReader(string(body)))
+	request.Host = "local.example"
+	request.Header.Set("Date", staleDate)
+
+	mockStorage := portmock.NewStoragePortMock(mc)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+
+	err := verifier.Verify(request, body)
+	if err == nil {
+		t.Fatalf("Expected error due to clock skew, got nil")
+	}
+	expectedError := "clock drift exceeds 5-minute maximum limit"
+	if !strings.Contains(err.Error(), expectedError) {
+		t.Errorf("Expected error containing %q, got: %v", expectedError, err)
+	}
+}

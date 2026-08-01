@@ -31,9 +31,36 @@ func NewFederatedSignatureVerifier(s port.StoragePort) *FederatedSignatureVerifi
 
 var _ middleware.SignatureVerifier = (*FederatedSignatureVerifier)(nil)
 
+func (v *FederatedSignatureVerifier) validateClockSkew(r *http.Request) error {
+	dateHeader := r.Header.Get("Date")
+	if dateHeader == "" {
+		return nil
+	}
+
+	requestTime, err := time.Parse(time.RFC1123, dateHeader)
+	if err != nil {
+		return fmt.Errorf("invalid Date header format: %w", err)
+	}
+
+	drift := time.Since(requestTime)
+	if drift < 0 {
+		drift = -drift
+	}
+
+	if drift > 5*time.Minute {
+		return fmt.Errorf("http signature verification failed: Date header clock drift exceeds 5-minute maximum limit")
+	}
+
+	return nil
+}
+
 // Verify serves as a highly flat orchestration entry point with minimal cognitive complexity.
 func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error {
 	ctx := r.Context()
+
+	if err := v.validateClockSkew(r); err != nil {
+		return err
+	}
 
 	// Try FEP-8b32 Object Integrity Proof verification first
 	if found, err := v.CheckAndVerifyIntegrityProof(r, body); found {
