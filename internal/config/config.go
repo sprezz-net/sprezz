@@ -28,11 +28,11 @@ type MinIOConfig struct {
 }
 
 type ActivityPubConfig struct {
-	MaxActivitySizeBytes  int64         `yaml:"max_activity_size_bytes" env:"MAX_ACTIVITY_SIZE_BYTES" env-default:"102400"`
-	MaxMediaSizeBytes     int64         `yaml:"max_media_size_bytes" env:"MAX_MEDIA_SIZE_BYTES" env-default:"10485760"`
-	EnableContextBackfill bool          `yaml:"enable_context_backfill" env:"ENABLE_CONTEXT_BACKFILL" env-default:"false"`
-	FollowersSyncCacheTTL time.Duration `yaml:"followers_sync_cache_ttl" env:"FOLLOWERS_SYNC_CACHE_TTL" env-default:"24h"`
-	DomainRateLimitRequests int         `yaml:"domain_rate_limit_requests" env:"DOMAIN_RATE_LIMIT_REQUESTS" env-default:"100"`
+	MaxActivitySizeBytes    int64         `yaml:"max_activity_size_bytes" env:"MAX_ACTIVITY_SIZE_BYTES" env-default:"102400"`
+	MaxMediaSizeBytes       int64         `yaml:"max_media_size_bytes" env:"MAX_MEDIA_SIZE_BYTES" env-default:"10485760"`
+	EnableContextBackfill   bool          `yaml:"enable_context_backfill" env:"ENABLE_CONTEXT_BACKFILL" env-default:"false"`
+	FollowersSyncCacheTTL   time.Duration `yaml:"followers_sync_cache_ttl" env:"FOLLOWERS_SYNC_CACHE_TTL" env-default:"24h"`
+	DomainRateLimitRequests int           `yaml:"domain_rate_limit_requests" env:"DOMAIN_RATE_LIMIT_REQUESTS" env-default:"100"`
 	DomainRateLimitWindow   time.Duration `yaml:"domain_rate_limit_window" env:"DOMAIN_RATE_LIMIT_WINDOW" env-default:"1m"`
 }
 
