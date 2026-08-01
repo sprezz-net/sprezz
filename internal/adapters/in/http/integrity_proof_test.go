@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,7 @@ import (
 
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/port/portmock"
+	"sprezz/internal/domain/service"
 	"sprezz/internal/pkg/cryptoutil"
 
 	"github.com/gojuno/minimock/v3"
@@ -89,6 +91,104 @@ func TestSignatureVerifier_ObjectIntegrityProof_FEP8b32(t *testing.T) {
 	// 6. Verify (should succeed purely based on the FEP-8b32 object integrity proof, even without "Signature" header!)
 	if err := verifier.Verify(request, signedDocBytes); err != nil {
 		t.Fatalf("Verifier rejected FEP-8b32 proof signature path: %v", err)
+	}
+
+	actorIRI := request.Header.Get("X-Actor-IRI")
+	expectedIRI := "https://local.example/users/alice"
+	if actorIRI != expectedIRI {
+		t.Errorf("Expected extracted X-Actor-IRI %q, got %q", expectedIRI, actorIRI)
+	}
+}
+
+func TestSignatureVerifier_FEP8c13_AuthorAndForwardingProof(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	// 1. Generate keys for Author (Alice) and Forwarder (Bob)
+	_, authorPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, forwarderPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 2. Marshal private keys to PEM
+	authorPKCS8, err := x509.MarshalPKCS8PrivateKey(authorPriv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: authorPKCS8}))
+
+	forwarderPKCS8, err := x509.MarshalPKCS8PrivateKey(forwarderPriv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forwarderPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: forwarderPKCS8}))
+
+	// 3. Prepare document map
+	docMap := map[string]interface{}{
+		"@context": []interface{}{
+			"https://www.w3.org/ns/activitystreams",
+			"https://w3id.org/security/data-integrity/v1",
+			"https://w3id.org/fep/8c13",
+		},
+		"id":             "https://local.example/activities/98765",
+		"type":           "Create",
+		"actor":          "https://local.example/users/alice",
+		"contextHistory": "https://local.example/history/12345",
+		"to":             []interface{}{"https://local.example/users/alice/followers"},
+		"cc":             []interface{}{"https://local.example/users/alice"},
+		"object": map[string]interface{}{
+			"id":             "https://local.example/posts/98765",
+			"type":           "Note",
+			"contextHistory": "https://local.example/history/12345",
+			"content":        "Hi followers",
+		},
+	}
+
+	authorKeyID := "https://local.example/users/alice#ed25519-key"
+	forwarderKeyID := "https://local.example/users/bob#ed25519-key"
+
+	// 4. Sign Author Proof
+	signedDoc, err := service.SignAuthorProof(docMap, authorPriv, authorKeyID, "2026-01-08T12:00:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 5. Sign Forwarding Proof
+	forwardedDoc, err := service.SignForwardingProof(signedDoc, forwarderPriv, forwarderKeyID, "2026-01-08T12:01:00Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	forwardedBytes, err := json.Marshal(forwardedDoc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 6. Setup request
+	request := httptest.NewRequest(http.MethodPost, "/inbox", strings.NewReader(string(forwardedBytes)))
+	request.Host = "local.example"
+	request.Header.Set("Date", "Fri, 24 Feb 2023 23:36:38 GMT")
+
+	// 7. Mock storage to return PEM keys
+	mockStorage := portmock.NewStoragePortMock(mc)
+	mockStorage.GetHistoricalKeyMock.Set(func(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error) {
+		if actorIRI == "https://local.example/users/alice" {
+			return authorPEM, nil
+		}
+		if actorIRI == "https://local.example/users/bob" {
+			return forwarderPEM, nil
+		}
+		return "", fmt.Errorf("key not found")
+	})
+
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+
+	// 8. Verify
+	if err := verifier.Verify(request, forwardedBytes); err != nil {
+		t.Fatalf("Verifier rejected FEP-8c13 author & forwarding proof path: %v", err)
 	}
 
 	actorIRI := request.Header.Get("X-Actor-IRI")
