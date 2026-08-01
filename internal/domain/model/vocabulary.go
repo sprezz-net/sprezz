@@ -102,6 +102,7 @@ const (
 	PredicateVoted        = NamespaceActivityStreams + "voted"
 	PredicateLiked        = NamespaceActivityStreams + "liked"
 	PredicateContext      = NamespaceActivityStreams + "context"
+	PredicateContextHistory = "https://w3id.org/fep/171b/contextHistory"
 
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"

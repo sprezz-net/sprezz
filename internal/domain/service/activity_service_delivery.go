@@ -182,14 +182,42 @@ func (s *ActivityService) processDeleteActivity(ctx context.Context, task model.
 	return s.deliverDeleteActivity(ctx, task)
 }
 
+func (s *ActivityService) linkActivityToContextHistory(task model.InboundTask, quads []model.Quad, graphID int64) []model.Quad {
+	var contextHistoryIRI string
+	for _, q := range quads {
+		if q.Subject == task.ObjectIRI && q.Predicate == model.PredicateContextHistory {
+			contextHistoryIRI = q.Object
+			break
+		}
+	}
+	if contextHistoryIRI != "" && task.ActivityIRI != "" {
+		quads = append(quads, model.Quad{
+			GraphID:   graphID,
+			Subject:   task.ActivityIRI,
+			Predicate: model.PredicateContext,
+			Object:    contextHistoryIRI,
+			ObjType:   model.NamedNode,
+		})
+	}
+	return quads
+}
+
+func (s *ActivityService) prepareInboundQuads(ctx context.Context, task model.InboundTask, graphID int64) ([]model.Quad, error) {
+	quads, err := s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
+	}
+	quads, err = s.ensureContextRelation(ctx, task.ObjectIRI, quads)
+	if err != nil {
+		return nil, err
+	}
+	return s.linkActivityToContextHistory(task, quads, graphID), nil
+}
+
 // saveInboundActivityQuads stores standard activity payload versions and parses RDF quads.
 func (s *ActivityService) saveInboundActivityQuads(ctx context.Context, task model.InboundTask) ([]model.Quad, error) {
 	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
-		quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
-		}
-		quads, err = s.ensureContextRelation(ctx, task.ObjectIRI, quads)
+		quads, err := s.prepareInboundQuads(ctx, task, 0)
 		if err != nil {
 			return nil, err
 		}
@@ -205,12 +233,7 @@ func (s *ActivityService) saveInboundActivityQuads(ctx context.Context, task mod
 		return nil, fmt.Errorf("failed to create graph version: %w", err)
 	}
 
-	quads, err := s.parser.ToQuads(ctx, graphID, task.ObjectIRI, task.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse activity payload to quads: %w", err)
-	}
-
-	quads, err = s.ensureContextRelation(ctx, task.ObjectIRI, quads)
+	quads, err := s.prepareInboundQuads(ctx, task, graphID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +247,15 @@ func (s *ActivityService) saveInboundActivityQuads(ctx context.Context, task mod
 func (s *ActivityService) hasContextQuad(objectIRI string, quads []model.Quad) bool {
 	for _, q := range quads {
 		if q.Subject == objectIRI && q.Predicate == model.PredicateContext {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ActivityService) hasContextHistoryQuad(objectIRI string, quads []model.Quad) bool {
+	for _, q := range quads {
+		if q.Subject == objectIRI && q.Predicate == model.PredicateContextHistory {
 			return true
 		}
 	}
@@ -246,7 +278,20 @@ func (s *ActivityService) fetchParentContext(ctx context.Context, inReplyTo stri
 	}
 	for _, pq := range parentQuads {
 		if pq.Predicate == model.PredicateContext {
-			return strings.Trim(pq.Object, `"'`)
+			return pq.Object
+		}
+	}
+	return ""
+}
+
+func (s *ActivityService) fetchParentContextHistory(ctx context.Context, inReplyTo string) string {
+	parentQuads, err := s.storage.StreamQuadsBySubject(ctx, inReplyTo)
+	if err != nil {
+		return ""
+	}
+	for _, pq := range parentQuads {
+		if pq.Predicate == model.PredicateContextHistory {
+			return pq.Object
 		}
 	}
 	return ""
@@ -257,27 +302,45 @@ func (s *ActivityService) ensureContextRelation(ctx context.Context, objectIRI s
 		return quads, nil
 	}
 
-	if s.hasContextQuad(objectIRI, quads) {
-		return quads, nil
-	}
-
-	var contextIRI string
-	if inReplyTo := s.getInReplyToIRI(objectIRI, quads); inReplyTo != "" {
-		contextIRI = s.fetchParentContext(ctx, inReplyTo)
-		if contextIRI == "" {
-			contextIRI = inReplyTo + "/context"
+	if !s.hasContextQuad(objectIRI, quads) {
+		var contextIRI string
+		if inReplyTo := s.getInReplyToIRI(objectIRI, quads); inReplyTo != "" {
+			contextIRI = s.fetchParentContext(ctx, inReplyTo)
+			if contextIRI == "" {
+				contextIRI = inReplyTo + "/context"
+			}
+		} else {
+			contextIRI = objectIRI + "/context"
 		}
-	} else {
-		contextIRI = objectIRI + "/context"
+
+		quads = append(quads, model.Quad{
+			GraphID:   0,
+			Subject:   objectIRI,
+			Predicate: model.PredicateContext,
+			Object:    contextIRI,
+			ObjType:   model.NamedNode,
+		})
 	}
 
-	quads = append(quads, model.Quad{
-		GraphID:   0,
-		Subject:   objectIRI,
-		Predicate: model.PredicateContext,
-		Object:    contextIRI,
-		ObjType:   model.NamedNode,
-	})
+	if !s.hasContextHistoryQuad(objectIRI, quads) {
+		var contextHistoryIRI string
+		if inReplyTo := s.getInReplyToIRI(objectIRI, quads); inReplyTo != "" {
+			contextHistoryIRI = s.fetchParentContextHistory(ctx, inReplyTo)
+			if contextHistoryIRI == "" {
+				contextHistoryIRI = inReplyTo + "/contextHistory"
+			}
+		} else {
+			contextHistoryIRI = objectIRI + "/contextHistory"
+		}
+
+		quads = append(quads, model.Quad{
+			GraphID:   0,
+			Subject:   objectIRI,
+			Predicate: model.PredicateContextHistory,
+			Object:    contextHistoryIRI,
+			ObjType:   model.NamedNode,
+		})
+	}
 
 	return quads, nil
 }

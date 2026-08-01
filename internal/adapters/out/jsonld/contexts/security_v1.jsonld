@@ -35,6 +35,10 @@
     "nonce": {
       "@id": "sec:nonce",
       "@type": "xsd:string"
+    },
+    "contextHistory": {
+      "@id": "https://w3id.org/fep/171b/contextHistory",
+      "@type": "@id"
     }
   }
 }

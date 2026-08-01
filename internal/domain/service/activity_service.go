@@ -131,30 +131,40 @@ func (s *ActivityService) maybeTriggerContextBackfill(ctx context.Context, task 
 		return nil
 	}
 
+	var contextHistoryIRI string
 	var contextIRI string
 	for _, q := range quads {
+		if q.Predicate == model.PredicateContextHistory {
+			contextHistoryIRI = q.Object
+		}
 		if q.Predicate == model.PredicateContext {
-			contextIRI = strings.Trim(q.Object, `"'`)
-			break
+			contextIRI = q.Object
 		}
 	}
 
-	if contextIRI == "" {
+	var targetIRI string
+	if contextHistoryIRI != "" {
+		targetIRI = contextHistoryIRI
+	} else if contextIRI != "" {
+		targetIRI = contextIRI
+	}
+
+	if targetIRI == "" {
 		return nil
 	}
 
-	domain := extractDomain(contextIRI)
+	domain := extractDomain(targetIRI)
 	localDomain := extractDomain(task.ObjectIRI)
 	if domain == "" || domain == localDomain {
 		return nil
 	}
 
-	items, err := s.storage.GetObjectsByContext(ctx, contextIRI)
+	items, err := s.storage.GetObjectsByContext(ctx, targetIRI)
 	if err == nil && len(items) > 1 {
 		return nil
 	}
 
-	return s.backfillRemoteContext(ctx, contextIRI, task.ObjectIRI)
+	return s.backfillRemoteContext(ctx, targetIRI, task.ObjectIRI)
 }
 
 func (s *ActivityService) backfillRemoteContext(ctx context.Context, contextIRI, targetIRI string) error {

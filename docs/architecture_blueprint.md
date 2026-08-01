@@ -365,6 +365,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 4. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Fully implemented. Top-level notes automatically establish a `<root_post_iri>/context` collection IRI, which reply notes inherit. Remote context collections are actively fetched and back-filled asynchronously on-demand when encountering new threads.
 5. **`FEP-400e` (Publicly-appendable ActivityPub Collections)**: Standardizes appendable collections by non-owners. Fully implemented as a strict opt-in mechanism; all collections are non-public by default, and third-party `Add`/`Remove` actions are only permitted if the target collection explicitly defines `publicAppend: true` in its metadata.
 6. **`FEP-35b7` (Fediverse Servers, Instances, and Tenants)**: Fully implemented by isolating multi-tenant boundaries via implicit domain-based graph partitioning, routing decoupled instance-wide shared inboxes via a system-wide server actor, and resolving base-domain WebFinger queries back to that server actor.
+7. **`FEP-f228` (Backfilling conversations)**: Standardizes efficient conversation thread backfilling using dedicated collections. Fully implemented in Sprezz by prioritizing `contextHistory` (activities collection) retrieval over the posts collection, and exposing `/contextHistory` as a standard dereferenceable collection of activities.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 

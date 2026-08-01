@@ -65,7 +65,7 @@ func (h *GenericHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractCollection(requestedIRI string) (string, string) {
-	suffixes := []string{"/inbox", "/outbox", "/followers", "/following", "/likes", "/shares", "/replies", "/context"}
+	suffixes := []string{"/inbox", "/outbox", "/followers", "/following", "/likes", "/shares", "/replies", "/contextHistory", "/context"}
 	for _, suffix := range suffixes {
 		if strings.HasSuffix(requestedIRI, suffix) {
 			return strings.TrimPrefix(suffix, "/"), strings.TrimSuffix(requestedIRI, suffix)
@@ -165,7 +165,7 @@ func (h *GenericHandler) handleGet(w http.ResponseWriter, r *http.Request, reque
 		h.serveRelationshipCollection(w, r, actorIRI, collection)
 		return
 	}
-	if collection == "likes" || collection == "shares" || collection == "replies" || collection == "context" {
+	if collection == "likes" || collection == "shares" || collection == "replies" || collection == "context" || collection == "contextHistory" {
 		h.serveEngagementCollection(w, r, actorIRI, collection)
 		return
 	}
@@ -186,6 +186,9 @@ func (h *GenericHandler) serveEngagementCollection(w http.ResponseWriter, r *htt
 	case "context":
 		contextIRI := objectIRI + "/context"
 		items, err = h.storage.GetObjectsByContext(r.Context(), contextIRI)
+	case "contextHistory":
+		contextHistoryIRI := objectIRI + "/contextHistory"
+		items, err = h.storage.GetObjectsByContext(r.Context(), contextHistoryIRI)
 	default:
 		http.Error(w, "Unsupported collection", http.StatusBadRequest)
 		return

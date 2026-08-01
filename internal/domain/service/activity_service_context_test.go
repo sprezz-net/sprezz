@@ -10,6 +10,18 @@ import (
 	"sprezz/internal/domain/port/portmock"
 )
 
+func verifyQuad(t *testing.T, res []model.Quad, subject, predicate, expectedObject string) bool {
+	for _, q := range res {
+		if q.Subject == subject && q.Predicate == predicate {
+			if q.Object != expectedObject {
+				t.Errorf("expected %s IRI to be '%s', got: %s", predicate, expectedObject, q.Object)
+			}
+			return true
+		}
+	}
+	return false
+}
+
 func TestEnsureContextRelation_TopLevel(t *testing.T) {
 	mc := minimock.NewController(t)
 
@@ -29,17 +41,14 @@ func TestEnsureContextRelation_TopLevel(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	found := false
-	for _, q := range res {
-		if q.Subject == "https://local.com/objects/note-123" && q.Predicate == model.PredicateContext {
-			found = true
-			if q.Object != "https://local.com/objects/note-123/context" {
-				t.Errorf("expected context IRI to be 'https://local.com/objects/note-123/context', got: %s", q.Object)
-			}
-		}
-	}
+	found := verifyQuad(t, res, "https://local.com/objects/note-123", model.PredicateContext, "https://local.com/objects/note-123/context")
+	foundHistory := verifyQuad(t, res, "https://local.com/objects/note-123", model.PredicateContextHistory, "https://local.com/objects/note-123/contextHistory")
+
 	if !found {
 		t.Error("expected context quad to be generated")
+	}
+	if !foundHistory {
+		t.Error("expected contextHistory quad to be generated")
 	}
 }
 
@@ -51,6 +60,7 @@ func TestEnsureContextRelation_Reply(t *testing.T) {
 		if subjectIRI == "https://remote.com/objects/note-999" {
 			return []model.Quad{
 				{Subject: "https://remote.com/objects/note-999", Predicate: model.PredicateContext, Object: "https://remote.com/objects/note-999/context", ObjType: model.NamedNode},
+				{Subject: "https://remote.com/objects/note-999", Predicate: model.PredicateContextHistory, Object: "https://remote.com/objects/note-999/contextHistory", ObjType: model.NamedNode},
 			}, nil
 		}
 		return nil, errors.New("not found")
@@ -72,16 +82,13 @@ func TestEnsureContextRelation_Reply(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	found := false
-	for _, q := range res {
-		if q.Subject == "https://local.com/objects/reply-456" && q.Predicate == model.PredicateContext {
-			found = true
-			if q.Object != "https://remote.com/objects/note-999/context" {
-				t.Errorf("expected context IRI to be inherited as 'https://remote.com/objects/note-999/context', got: %s", q.Object)
-			}
-		}
-	}
+	found := verifyQuad(t, res, "https://local.com/objects/reply-456", model.PredicateContext, "https://remote.com/objects/note-999/context")
+	foundHistory := verifyQuad(t, res, "https://local.com/objects/reply-456", model.PredicateContextHistory, "https://remote.com/objects/note-999/contextHistory")
+
 	if !found {
 		t.Error("expected context quad to be inherited")
+	}
+	if !foundHistory {
+		t.Error("expected contextHistory quad to be inherited")
 	}
 }

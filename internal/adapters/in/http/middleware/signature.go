@@ -49,6 +49,7 @@ func (v *SignatureValidator) isCollectionPost(path string) bool {
 		strings.HasSuffix(path, "/likes") ||
 		strings.HasSuffix(path, "/shares") ||
 		strings.HasSuffix(path, "/replies") ||
+		strings.HasSuffix(path, "/contextHistory") ||
 		strings.HasSuffix(path, "/context") ||
 		path == "/inbox" ||
 		path == "/outbox"
