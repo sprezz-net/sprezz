@@ -505,7 +505,7 @@ flowchart TD
     Alloc --> Hash[3. Stack-Allocated io.TeeReader Hashing & Stream to MinIO]
     Hash --> Commit{4. SaveGraphVersionWithMedia DB Transaction}
     Commit -->|Success| Next[Proceed to Next File]
-    Commit -->|Failure| Rollback[5. Execute Compensating Rollback (PurgeOrphanedMedia)]
+    Commit -->|Failure| Rollback[5. Execute Compensating Rollback PurgeOrphanedMedia]
     Rollback --> Del[Delete Stored Objects from MinIO]
     Del --> Exit[Abort Request with HTTP 500]
 ```
