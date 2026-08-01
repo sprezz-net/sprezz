@@ -23,10 +23,11 @@ import (
 
 type FederatedSignatureVerifier struct {
 	storage port.StoragePort
+	fetcher port.RemoteFetcher
 }
 
-func NewFederatedSignatureVerifier(s port.StoragePort) *FederatedSignatureVerifier {
-	return &FederatedSignatureVerifier{storage: s}
+func NewFederatedSignatureVerifier(s port.StoragePort, f port.RemoteFetcher) *FederatedSignatureVerifier {
+	return &FederatedSignatureVerifier{storage: s, fetcher: f}
 }
 
 var _ middleware.SignatureVerifier = (*FederatedSignatureVerifier)(nil)
@@ -88,7 +89,7 @@ func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error 
 	}
 
 	// Pass 'r' directly into the helper signature so it is available in scope
-	publicPEM, err := v.resolvePublicKeyPEM(ctx, r, keyID, r.Header.Get("Date"))
+	publicPEM, wasCached, err := v.resolvePublicKeyPEM(ctx, r, keyID, r.Header.Get("Date"))
 	if err != nil {
 		return fmt.Errorf("failed to resolve verification key: %w", err)
 	}
@@ -104,22 +105,51 @@ func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error 
 		return fmt.Errorf("failed to decode base64 signature: %w", err)
 	}
 
+	actorIRI := strings.Split(keyID, "#")[0]
+	keyType := "RSA"
+	if strings.HasSuffix(keyID, "#ed25519-key") {
+		keyType = "Ed25519"
+	}
+
 	if err := verifySignature(pubKey, signingString, signatureBytes); err != nil {
+		// If verification fails against a cached key, trigger fallback cache invalidation & retry exactly once
+		if wasCached && v.tryFallbackRetry(ctx, actorIRI, keyType, signingString, signatureBytes) {
+			return nil
+		}
 		return err
 	}
 
 	return nil
 }
 
+func (v *FederatedSignatureVerifier) tryFallbackRetry(ctx context.Context, actorIRI, keyType, signingString string, signatureBytes []byte) bool {
+	// Invalidate local cache entry
+	_ = v.storage.DeleteActorKeyHistory(ctx, actorIRI)
+
+	// Execute exactly one fresh, outbound key de-referencing fetch
+	freshPEM, fetchErr := v.fetchFreshPublicKeyPEM(ctx, actorIRI)
+	if fetchErr != nil {
+		return false
+	}
+
+	freshPubKey, decodeErr := decodePEMToPublicKey(freshPEM)
+	if decodeErr != nil {
+		return false
+	}
+
+	// Archive the fresh key in local history
+	now := time.Now()
+	_ = v.storage.ArchiveKeyHistory(ctx, actorIRI, keyType, freshPEM, now.Add(-24*time.Hour), now.Add(100*365*24*time.Hour))
+
+	// Retry verification exactly once
+	return verifySignature(freshPubKey, signingString, signatureBytes) == nil
+}
+
 // resolvePublicKeyPEM routes key location checks dynamically based on domain context boundaries.
-func (v *FederatedSignatureVerifier) resolvePublicKeyPEM(ctx context.Context, r *http.Request, keyID, dateHeader string) (string, error) {
+func (v *FederatedSignatureVerifier) resolvePublicKeyPEM(ctx context.Context, r *http.Request, keyID, dateHeader string) (string, bool, error) {
 	requestTime, err := time.Parse(time.RFC1123, dateHeader)
 	if err != nil {
 		requestTime = time.Now().UTC()
-	}
-
-	if !strings.Contains(keyID, r.Host) {
-		return "", fmt.Errorf("remote verification fetch loop not implemented in sandbox")
 	}
 
 	keyType := "RSA"
@@ -128,23 +158,70 @@ func (v *FederatedSignatureVerifier) resolvePublicKeyPEM(ctx context.Context, r 
 	}
 	actorIRI := strings.Split(keyID, "#")[0]
 
+	// 1. Try local historical cache first
 	historicalKey, err := v.storage.GetHistoricalKey(ctx, actorIRI, keyType, requestTime)
 	if err == nil {
 		v.assertActorIdentityHeader(r, actorIRI)
-		return historicalKey, nil
+		return historicalKey, true, nil
 	}
 
-	username := strings.Split(actorIRI, "/")[len(strings.Split(actorIRI, "/"))-1]
-	_, dualKeys, fallbackErr := v.storage.GetActorCredentials(ctx, 0, username)
-	if fallbackErr != nil {
-		return "", fmt.Errorf("failed to locate active credentials: %w", fallbackErr)
+	// 2. Try local actor credentials next if the key is on our own host
+	if strings.Contains(keyID, r.Host) {
+		username := strings.Split(actorIRI, "/")[len(strings.Split(actorIRI, "/"))-1]
+		_, dualKeys, fallbackErr := v.storage.GetActorCredentials(ctx, 0, username)
+		if fallbackErr == nil {
+			v.assertActorIdentityHeader(r, actorIRI)
+			if keyType == "Ed25519" {
+				return dualKeys.PrivateKeyEd25519PEM, false, nil
+			}
+			return dualKeys.PrivateKeyRSAPEM, false, nil
+		}
 	}
 
-	v.assertActorIdentityHeader(r, actorIRI)
-	if keyType == "Ed25519" {
-		return dualKeys.PrivateKeyEd25519PEM, nil
+	// 3. For remote actors, query outbound key de-referencing fetch if we have a fetcher configured
+	if v.fetcher != nil {
+		freshPEM, fetchErr := v.fetchFreshPublicKeyPEM(ctx, actorIRI)
+		if fetchErr == nil {
+			// Save/Archive the newly resolved key so it is cached
+			now := time.Now()
+			_ = v.storage.ArchiveKeyHistory(ctx, actorIRI, keyType, freshPEM, now.Add(-24*time.Hour), now.Add(100*365*24*time.Hour))
+			v.assertActorIdentityHeader(r, actorIRI)
+			return freshPEM, false, nil
+		}
+		return "", false, fmt.Errorf("failed to fetch remote public key: %w", fetchErr)
 	}
-	return dualKeys.PrivateKeyRSAPEM, nil
+
+	return "", false, fmt.Errorf("remote verification fetch loop not implemented in sandbox or fetcher missing")
+}
+
+func (v *FederatedSignatureVerifier) fetchFreshPublicKeyPEM(ctx context.Context, actorIRI string) (string, error) {
+	if v.fetcher == nil {
+		return "", fmt.Errorf("remote fetcher not configured")
+	}
+
+	body, err := v.fetcher.FetchSigned(ctx, actorIRI, "", "", "")
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch remote actor profile: %w", err)
+	}
+
+	// Parse remote actor profile to extract publicKey -> publicKeyPem
+	var profile struct {
+		PublicKey struct {
+			ID           string `json:"id"`
+			Owner        string `json:"owner"`
+			PublicKeyPem string `json:"publicKeyPem"`
+		} `json:"publicKey"`
+	}
+
+	if err := json.Unmarshal(body, &profile); err != nil {
+		return "", fmt.Errorf("failed to parse remote actor profile: %w", err)
+	}
+
+	if profile.PublicKey.PublicKeyPem == "" {
+		return "", fmt.Errorf("no publicKeyPem found in remote actor profile")
+	}
+
+	return profile.PublicKey.PublicKeyPem, nil
 }
 
 // assertActorIdentityHeader notifies downstream middleware of verified identity strings [source: 3].

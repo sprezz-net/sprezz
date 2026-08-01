@@ -56,6 +56,13 @@ type StorageAndGraphWriterMock struct {
 	beforeCreateGraphVersionCounter uint64
 	CreateGraphVersionMock          mStorageAndGraphWriterMockCreateGraphVersion
 
+	funcDeleteActorKeyHistory          func(ctx context.Context, actorIRI string) (err error)
+	funcDeleteActorKeyHistoryOrigin    string
+	inspectFuncDeleteActorKeyHistory   func(ctx context.Context, actorIRI string)
+	afterDeleteActorKeyHistoryCounter  uint64
+	beforeDeleteActorKeyHistoryCounter uint64
+	DeleteActorKeyHistoryMock          mStorageAndGraphWriterMockDeleteActorKeyHistory
+
 	funcEnqueueInbound          func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte) (err error)
 	funcEnqueueInboundOrigin    string
 	inspectFuncEnqueueInbound   func(ctx context.Context, id string, activityIRI string, objectIRI string, tenantID int32, payload []byte)
@@ -345,6 +352,9 @@ func NewStorageAndGraphWriterMock(t minimock.Tester) *StorageAndGraphWriterMock 
 
 	m.CreateGraphVersionMock = mStorageAndGraphWriterMockCreateGraphVersion{mock: m}
 	m.CreateGraphVersionMock.callArgs = []*StorageAndGraphWriterMockCreateGraphVersionParams{}
+
+	m.DeleteActorKeyHistoryMock = mStorageAndGraphWriterMockDeleteActorKeyHistory{mock: m}
+	m.DeleteActorKeyHistoryMock.callArgs = []*StorageAndGraphWriterMockDeleteActorKeyHistoryParams{}
 
 	m.EnqueueInboundMock = mStorageAndGraphWriterMockEnqueueInbound{mock: m}
 	m.EnqueueInboundMock.callArgs = []*StorageAndGraphWriterMockEnqueueInboundParams{}
@@ -2485,6 +2495,348 @@ func (m *StorageAndGraphWriterMock) MinimockCreateGraphVersionInspect() {
 	if !m.CreateGraphVersionMock.invocationsDone() && afterCreateGraphVersionCounter > 0 {
 		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.CreateGraphVersion at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.CreateGraphVersionMock.expectedInvocations), m.CreateGraphVersionMock.expectedInvocationsOrigin, afterCreateGraphVersionCounter)
+	}
+}
+
+type mStorageAndGraphWriterMockDeleteActorKeyHistory struct {
+	optional           bool
+	mock               *StorageAndGraphWriterMock
+	defaultExpectation *StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation
+	expectations       []*StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation
+
+	callArgs []*StorageAndGraphWriterMockDeleteActorKeyHistoryParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation specifies expectation struct of the StorageAndGraphWriter.DeleteActorKeyHistory
+type StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation struct {
+	mock               *StorageAndGraphWriterMock
+	params             *StorageAndGraphWriterMockDeleteActorKeyHistoryParams
+	paramPtrs          *StorageAndGraphWriterMockDeleteActorKeyHistoryParamPtrs
+	expectationOrigins StorageAndGraphWriterMockDeleteActorKeyHistoryExpectationOrigins
+	results            *StorageAndGraphWriterMockDeleteActorKeyHistoryResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// StorageAndGraphWriterMockDeleteActorKeyHistoryParams contains parameters of the StorageAndGraphWriter.DeleteActorKeyHistory
+type StorageAndGraphWriterMockDeleteActorKeyHistoryParams struct {
+	ctx      context.Context
+	actorIRI string
+}
+
+// StorageAndGraphWriterMockDeleteActorKeyHistoryParamPtrs contains pointers to parameters of the StorageAndGraphWriter.DeleteActorKeyHistory
+type StorageAndGraphWriterMockDeleteActorKeyHistoryParamPtrs struct {
+	ctx      *context.Context
+	actorIRI *string
+}
+
+// StorageAndGraphWriterMockDeleteActorKeyHistoryResults contains results of the StorageAndGraphWriter.DeleteActorKeyHistory
+type StorageAndGraphWriterMockDeleteActorKeyHistoryResults struct {
+	err error
+}
+
+// StorageAndGraphWriterMockDeleteActorKeyHistoryOrigins contains origins of expectations of the StorageAndGraphWriter.DeleteActorKeyHistory
+type StorageAndGraphWriterMockDeleteActorKeyHistoryExpectationOrigins struct {
+	origin         string
+	originCtx      string
+	originActorIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Optional() *mStorageAndGraphWriterMockDeleteActorKeyHistory {
+	mmDeleteActorKeyHistory.optional = true
+	return mmDeleteActorKeyHistory
+}
+
+// Expect sets up expected params for StorageAndGraphWriter.DeleteActorKeyHistory
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Expect(ctx context.Context, actorIRI string) *mStorageAndGraphWriterMockDeleteActorKeyHistory {
+	if mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Set")
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation == nil {
+		mmDeleteActorKeyHistory.defaultExpectation = &StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation{}
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation.paramPtrs != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by ExpectParams functions")
+	}
+
+	mmDeleteActorKeyHistory.defaultExpectation.params = &StorageAndGraphWriterMockDeleteActorKeyHistoryParams{ctx, actorIRI}
+	mmDeleteActorKeyHistory.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmDeleteActorKeyHistory.expectations {
+		if minimock.Equal(e.params, mmDeleteActorKeyHistory.defaultExpectation.params) {
+			mmDeleteActorKeyHistory.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmDeleteActorKeyHistory.defaultExpectation.params)
+		}
+	}
+
+	return mmDeleteActorKeyHistory
+}
+
+// ExpectCtxParam1 sets up expected param ctx for StorageAndGraphWriter.DeleteActorKeyHistory
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) ExpectCtxParam1(ctx context.Context) *mStorageAndGraphWriterMockDeleteActorKeyHistory {
+	if mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Set")
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation == nil {
+		mmDeleteActorKeyHistory.defaultExpectation = &StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation{}
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation.params != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Expect")
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation.paramPtrs == nil {
+		mmDeleteActorKeyHistory.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockDeleteActorKeyHistoryParamPtrs{}
+	}
+	mmDeleteActorKeyHistory.defaultExpectation.paramPtrs.ctx = &ctx
+	mmDeleteActorKeyHistory.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmDeleteActorKeyHistory
+}
+
+// ExpectActorIRIParam2 sets up expected param actorIRI for StorageAndGraphWriter.DeleteActorKeyHistory
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) ExpectActorIRIParam2(actorIRI string) *mStorageAndGraphWriterMockDeleteActorKeyHistory {
+	if mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Set")
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation == nil {
+		mmDeleteActorKeyHistory.defaultExpectation = &StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation{}
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation.params != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Expect")
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation.paramPtrs == nil {
+		mmDeleteActorKeyHistory.defaultExpectation.paramPtrs = &StorageAndGraphWriterMockDeleteActorKeyHistoryParamPtrs{}
+	}
+	mmDeleteActorKeyHistory.defaultExpectation.paramPtrs.actorIRI = &actorIRI
+	mmDeleteActorKeyHistory.defaultExpectation.expectationOrigins.originActorIRI = minimock.CallerInfo(1)
+
+	return mmDeleteActorKeyHistory
+}
+
+// Inspect accepts an inspector function that has same arguments as the StorageAndGraphWriter.DeleteActorKeyHistory
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Inspect(f func(ctx context.Context, actorIRI string)) *mStorageAndGraphWriterMockDeleteActorKeyHistory {
+	if mmDeleteActorKeyHistory.mock.inspectFuncDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("Inspect function is already set for StorageAndGraphWriterMock.DeleteActorKeyHistory")
+	}
+
+	mmDeleteActorKeyHistory.mock.inspectFuncDeleteActorKeyHistory = f
+
+	return mmDeleteActorKeyHistory
+}
+
+// Return sets up results that will be returned by StorageAndGraphWriter.DeleteActorKeyHistory
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Return(err error) *StorageAndGraphWriterMock {
+	if mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Set")
+	}
+
+	if mmDeleteActorKeyHistory.defaultExpectation == nil {
+		mmDeleteActorKeyHistory.defaultExpectation = &StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation{mock: mmDeleteActorKeyHistory.mock}
+	}
+	mmDeleteActorKeyHistory.defaultExpectation.results = &StorageAndGraphWriterMockDeleteActorKeyHistoryResults{err}
+	mmDeleteActorKeyHistory.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmDeleteActorKeyHistory.mock
+}
+
+// Set uses given function f to mock the StorageAndGraphWriter.DeleteActorKeyHistory method
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Set(f func(ctx context.Context, actorIRI string) (err error)) *StorageAndGraphWriterMock {
+	if mmDeleteActorKeyHistory.defaultExpectation != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("Default expectation is already set for the StorageAndGraphWriter.DeleteActorKeyHistory method")
+	}
+
+	if len(mmDeleteActorKeyHistory.expectations) > 0 {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("Some expectations are already set for the StorageAndGraphWriter.DeleteActorKeyHistory method")
+	}
+
+	mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory = f
+	mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistoryOrigin = minimock.CallerInfo(1)
+	return mmDeleteActorKeyHistory.mock
+}
+
+// When sets expectation for the StorageAndGraphWriter.DeleteActorKeyHistory which will trigger the result defined by the following
+// Then helper
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) When(ctx context.Context, actorIRI string) *StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation {
+	if mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("StorageAndGraphWriterMock.DeleteActorKeyHistory mock is already set by Set")
+	}
+
+	expectation := &StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation{
+		mock:               mmDeleteActorKeyHistory.mock,
+		params:             &StorageAndGraphWriterMockDeleteActorKeyHistoryParams{ctx, actorIRI},
+		expectationOrigins: StorageAndGraphWriterMockDeleteActorKeyHistoryExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmDeleteActorKeyHistory.expectations = append(mmDeleteActorKeyHistory.expectations, expectation)
+	return expectation
+}
+
+// Then sets up StorageAndGraphWriter.DeleteActorKeyHistory return parameters for the expectation previously defined by the When method
+func (e *StorageAndGraphWriterMockDeleteActorKeyHistoryExpectation) Then(err error) *StorageAndGraphWriterMock {
+	e.results = &StorageAndGraphWriterMockDeleteActorKeyHistoryResults{err}
+	return e.mock
+}
+
+// Times sets number of times StorageAndGraphWriter.DeleteActorKeyHistory should be invoked
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Times(n uint64) *mStorageAndGraphWriterMockDeleteActorKeyHistory {
+	if n == 0 {
+		mmDeleteActorKeyHistory.mock.t.Fatalf("Times of StorageAndGraphWriterMock.DeleteActorKeyHistory mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmDeleteActorKeyHistory.expectedInvocations, n)
+	mmDeleteActorKeyHistory.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmDeleteActorKeyHistory
+}
+
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) invocationsDone() bool {
+	if len(mmDeleteActorKeyHistory.expectations) == 0 && mmDeleteActorKeyHistory.defaultExpectation == nil && mmDeleteActorKeyHistory.mock.funcDeleteActorKeyHistory == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmDeleteActorKeyHistory.mock.afterDeleteActorKeyHistoryCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmDeleteActorKeyHistory.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// DeleteActorKeyHistory implements mm_port.StorageAndGraphWriter
+func (mmDeleteActorKeyHistory *StorageAndGraphWriterMock) DeleteActorKeyHistory(ctx context.Context, actorIRI string) (err error) {
+	mm_atomic.AddUint64(&mmDeleteActorKeyHistory.beforeDeleteActorKeyHistoryCounter, 1)
+	defer mm_atomic.AddUint64(&mmDeleteActorKeyHistory.afterDeleteActorKeyHistoryCounter, 1)
+
+	mmDeleteActorKeyHistory.t.Helper()
+
+	if mmDeleteActorKeyHistory.inspectFuncDeleteActorKeyHistory != nil {
+		mmDeleteActorKeyHistory.inspectFuncDeleteActorKeyHistory(ctx, actorIRI)
+	}
+
+	mm_params := StorageAndGraphWriterMockDeleteActorKeyHistoryParams{ctx, actorIRI}
+
+	// Record call args
+	mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.mutex.Lock()
+	mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.callArgs = append(mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.callArgs, &mm_params)
+	mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.mutex.Unlock()
+
+	for _, e := range mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.Counter, 1)
+		mm_want := mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.params
+		mm_want_ptrs := mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.paramPtrs
+
+		mm_got := StorageAndGraphWriterMockDeleteActorKeyHistoryParams{ctx, actorIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmDeleteActorKeyHistory.t.Errorf("StorageAndGraphWriterMock.DeleteActorKeyHistory got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.actorIRI != nil && !minimock.Equal(*mm_want_ptrs.actorIRI, mm_got.actorIRI) {
+				mmDeleteActorKeyHistory.t.Errorf("StorageAndGraphWriterMock.DeleteActorKeyHistory got unexpected parameter actorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.expectationOrigins.originActorIRI, *mm_want_ptrs.actorIRI, mm_got.actorIRI, minimock.Diff(*mm_want_ptrs.actorIRI, mm_got.actorIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmDeleteActorKeyHistory.t.Errorf("StorageAndGraphWriterMock.DeleteActorKeyHistory got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmDeleteActorKeyHistory.DeleteActorKeyHistoryMock.defaultExpectation.results
+		if mm_results == nil {
+			mmDeleteActorKeyHistory.t.Fatal("No results are set for the StorageAndGraphWriterMock.DeleteActorKeyHistory")
+		}
+		return (*mm_results).err
+	}
+	if mmDeleteActorKeyHistory.funcDeleteActorKeyHistory != nil {
+		return mmDeleteActorKeyHistory.funcDeleteActorKeyHistory(ctx, actorIRI)
+	}
+	mmDeleteActorKeyHistory.t.Fatalf("Unexpected call to StorageAndGraphWriterMock.DeleteActorKeyHistory. %v %v", ctx, actorIRI)
+	return
+}
+
+// DeleteActorKeyHistoryAfterCounter returns a count of finished StorageAndGraphWriterMock.DeleteActorKeyHistory invocations
+func (mmDeleteActorKeyHistory *StorageAndGraphWriterMock) DeleteActorKeyHistoryAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteActorKeyHistory.afterDeleteActorKeyHistoryCounter)
+}
+
+// DeleteActorKeyHistoryBeforeCounter returns a count of StorageAndGraphWriterMock.DeleteActorKeyHistory invocations
+func (mmDeleteActorKeyHistory *StorageAndGraphWriterMock) DeleteActorKeyHistoryBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmDeleteActorKeyHistory.beforeDeleteActorKeyHistoryCounter)
+}
+
+// Calls returns a list of arguments used in each call to StorageAndGraphWriterMock.DeleteActorKeyHistory.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmDeleteActorKeyHistory *mStorageAndGraphWriterMockDeleteActorKeyHistory) Calls() []*StorageAndGraphWriterMockDeleteActorKeyHistoryParams {
+	mmDeleteActorKeyHistory.mutex.RLock()
+
+	argCopy := make([]*StorageAndGraphWriterMockDeleteActorKeyHistoryParams, len(mmDeleteActorKeyHistory.callArgs))
+	copy(argCopy, mmDeleteActorKeyHistory.callArgs)
+
+	mmDeleteActorKeyHistory.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockDeleteActorKeyHistoryDone returns true if the count of the DeleteActorKeyHistory invocations corresponds
+// the number of defined expectations
+func (m *StorageAndGraphWriterMock) MinimockDeleteActorKeyHistoryDone() bool {
+	if m.DeleteActorKeyHistoryMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.DeleteActorKeyHistoryMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.DeleteActorKeyHistoryMock.invocationsDone()
+}
+
+// MinimockDeleteActorKeyHistoryInspect logs each unmet expectation
+func (m *StorageAndGraphWriterMock) MinimockDeleteActorKeyHistoryInspect() {
+	for _, e := range m.DeleteActorKeyHistoryMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.DeleteActorKeyHistory at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterDeleteActorKeyHistoryCounter := mm_atomic.LoadUint64(&m.afterDeleteActorKeyHistoryCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.DeleteActorKeyHistoryMock.defaultExpectation != nil && afterDeleteActorKeyHistoryCounter < 1 {
+		if m.DeleteActorKeyHistoryMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.DeleteActorKeyHistory at\n%s", m.DeleteActorKeyHistoryMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to StorageAndGraphWriterMock.DeleteActorKeyHistory at\n%s with params: %#v", m.DeleteActorKeyHistoryMock.defaultExpectation.expectationOrigins.origin, *m.DeleteActorKeyHistoryMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcDeleteActorKeyHistory != nil && afterDeleteActorKeyHistoryCounter < 1 {
+		m.t.Errorf("Expected call to StorageAndGraphWriterMock.DeleteActorKeyHistory at\n%s", m.funcDeleteActorKeyHistoryOrigin)
+	}
+
+	if !m.DeleteActorKeyHistoryMock.invocationsDone() && afterDeleteActorKeyHistoryCounter > 0 {
+		m.t.Errorf("Expected %d calls to StorageAndGraphWriterMock.DeleteActorKeyHistory at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.DeleteActorKeyHistoryMock.expectedInvocations), m.DeleteActorKeyHistoryMock.expectedInvocationsOrigin, afterDeleteActorKeyHistoryCounter)
 	}
 }
 
@@ -16329,6 +16681,8 @@ func (m *StorageAndGraphWriterMock) MinimockFinish() {
 
 			m.MinimockCreateGraphVersionInspect()
 
+			m.MinimockDeleteActorKeyHistoryInspect()
+
 			m.MinimockEnqueueInboundInspect()
 
 			m.MinimockGetActorCredentialsInspect()
@@ -16432,6 +16786,7 @@ func (m *StorageAndGraphWriterMock) minimockDone() bool {
 		m.MinimockClaimOutboundBatchDone() &&
 		m.MinimockCreateActorCredentialDone() &&
 		m.MinimockCreateGraphVersionDone() &&
+		m.MinimockDeleteActorKeyHistoryDone() &&
 		m.MinimockEnqueueInboundDone() &&
 		m.MinimockGetActorCredentialsDone() &&
 		m.MinimockGetActorDualKeysDone() &&

@@ -106,7 +106,7 @@ func TestSignatureVerifier_MultiAlgorithm_TableDriven(t *testing.T) {
 				}
 			}).Return(tt.privatePEM, nil)
 
-			verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+			verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, nil)
 
 			if err := verifier.Verify(request, body); err != nil {
 				t.Fatalf("Verifier rejected valid %s signature path: %v", tt.keyType, err)
@@ -157,7 +157,7 @@ func TestSignatureVerifier_ActorSpoofingPrevention_MatchingDomains(t *testing.T)
 	mockStorage := portmock.NewStoragePortMock(mc)
 	mockStorage.GetHistoricalKeyMock.Return(rsaPrivateKeyPEM, nil)
 
-	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, nil)
 
 	err = verifier.Verify(request, body)
 	if err != nil {
@@ -197,7 +197,7 @@ func TestSignatureVerifier_ActorSpoofingPrevention_MismatchedDomains(t *testing.
 	))
 
 	mockStorage := portmock.NewStoragePortMock(mc)
-	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, nil)
 
 	err = verifier.Verify(request, body)
 	if err == nil {
@@ -222,7 +222,7 @@ func TestSignatureVerifier_ClockSkew_Rejection(t *testing.T) {
 	request.Header.Set("Date", staleDate)
 
 	mockStorage := portmock.NewStoragePortMock(mc)
-	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, nil)
 
 	err := verifier.Verify(request, body)
 	if err == nil {
@@ -231,5 +231,98 @@ func TestSignatureVerifier_ClockSkew_Rejection(t *testing.T) {
 	expectedError := "clock drift exceeds 5-minute maximum limit"
 	if !strings.Contains(err.Error(), expectedError) {
 		t.Errorf("Expected error containing %q, got: %v", expectedError, err)
+	}
+}
+
+func TestSignatureVerifier_PublicKeyCacheExpiryFallback(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	// 1. Setup Outdated RSA Key Material (stored in cache)
+	outdatedPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outdatedBytes, err := x509.MarshalPKIXPublicKey(&outdatedPriv.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outdatedBlock := &pem.Block{Type: "PUBLIC KEY", Bytes: outdatedBytes}
+	outdatedPublicKeyPEM := string(pem.EncodeToMemory(outdatedBlock))
+
+	// 2. Setup Fresh RSA Key Material (rotated on remote)
+	freshPriv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshBytes, err := x509.MarshalPKIXPublicKey(&freshPriv.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	freshBlock := &pem.Block{Type: "PUBLIC KEY", Bytes: freshBytes}
+	freshPublicKeyPEM := string(pem.EncodeToMemory(freshBlock))
+
+	body := []byte(`{"id":"https://remote.example"}`)
+	date := time.Now().UTC().Format(http.TimeFormat)
+
+	request := httptest.NewRequest(http.MethodPost, "/inbox/alice", strings.NewReader(string(body)))
+	request.Host = "local.example"
+	request.Header.Set("Date", date)
+
+	// Sign the request with the FRESH private key
+	keyID := "https://remote.example/users/alice#main-key"
+	canonical := fmt.Sprintf("(request-target): post %s\nhost: %s\ndate: %s",
+		request.URL.RequestURI(), request.Host, date)
+
+	hashed := sha256.Sum256([]byte(canonical))
+	signatureBytes, _ := rsa.SignPKCS1v15(rand.Reader, freshPriv, crypto.SHA256, hashed[:])
+	signatureBase64 := base64.StdEncoding.EncodeToString(signatureBytes)
+
+	request.Header.Set("Signature", fmt.Sprintf(
+		"keyId=\"%s\",algorithm=\"rsa-sha256\",headers=\"(request-target) host date\",signature=\"%s\"",
+		keyID, signatureBase64,
+	))
+
+	// 3. Mock Storage Port
+	mockStorage := portmock.NewStoragePortMock(mc)
+	// Return the outdated public key on first call (causes verifySignature to fail)
+	mockStorage.GetHistoricalKeyMock.Return(outdatedPublicKeyPEM, nil)
+	// Expect cache invalidation
+	mockStorage.DeleteActorKeyHistoryMock.Expect(context.Background(), "https://remote.example/users/alice").Return(nil)
+	// Expect fresh public key archival
+	mockStorage.ArchiveKeyHistoryMock.Inspect(func(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) {
+		if actorIRI != "https://remote.example/users/alice" {
+			t.Errorf("Expected actorIRI %q, got %q", "https://remote.example/users/alice", actorIRI)
+		}
+		if keyType != "RSA" {
+			t.Errorf("Expected keyType %q, got %q", "RSA", keyType)
+		}
+		if publicKeyPEM != freshPublicKeyPEM {
+			t.Errorf("Expected public key PEM %q, got %q", freshPublicKeyPEM, publicKeyPEM)
+		}
+	}).Return(nil)
+
+	// 4. Mock Remote Fetcher
+	mockFetcher := portmock.NewRemoteFetcherMock(mc)
+	remoteActorJSON := fmt.Sprintf(`{
+		"publicKey": {
+			"id": "%s",
+			"owner": "https://remote.example/users/alice",
+			"publicKeyPem": %q
+		}
+	}`, keyID, freshPublicKeyPEM)
+
+	mockFetcher.FetchSignedMock.Expect(context.Background(), "https://remote.example/users/alice", "", "", "").Return([]byte(remoteActorJSON), nil)
+
+	// 5. Instantiate and verify fallback block triggers perfectly
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, mockFetcher)
+
+	if err := verifier.Verify(request, body); err != nil {
+		t.Fatalf("Verifier rejected rotated signature fallback path: %v", err)
+	}
+
+	actorIRI := request.Header.Get("X-Actor-IRI")
+	expectedIRI := "https://remote.example/users/alice"
+	if actorIRI != expectedIRI {
+		t.Errorf("Expected extracted X-Actor-IRI %q, got %q", expectedIRI, actorIRI)
 	}
 }

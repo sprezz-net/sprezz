@@ -20,6 +20,7 @@ import (
 	"sprezz/internal/adapters/out/minio"
 	"sprezz/internal/adapters/out/postgres"
 	"sprezz/internal/config"
+	"sprezz/internal/domain/port"
 	"sprezz/internal/domain/service"
 	"sprezz/internal/pkg/httpclient"
 	"sprezz/internal/pkg/workers"
@@ -34,6 +35,7 @@ type dependencies struct {
 	postgresStorage *postgres.PostgresStorage
 	activityService *service.ActivityService
 	federatedSigner *outhttp.FederatedSignerAdapter
+	remoteFetcher   port.RemoteFetcher
 }
 
 func main() {
@@ -162,6 +164,7 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 		postgresStorage: postgresStorage,
 		activityService: activityService,
 		federatedSigner: federatedSigner,
+		remoteFetcher:   remoteFetcher,
 	}
 
 	return deps, db
@@ -198,7 +201,7 @@ func startBackgroundWorkers(ctx context.Context, deps *dependencies) {
 }
 
 func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32) {
-	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage)
+	federatedVerifier := inhttp.NewFederatedSignatureVerifier(deps.postgresStorage, deps.remoteFetcher)
 	genericHandler := inhttp.NewGenericHandler(deps.postgresStorage, deps.activityService)
 	mediaUploadHandler := inhttp.NewMediaUploadHandler(deps.activityService, deps.cfg.ActivityPub.MaxMediaSizeBytes)
 

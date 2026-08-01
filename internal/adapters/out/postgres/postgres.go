@@ -1185,6 +1185,14 @@ func (s *PostgresStorage) GetHistoricalKey(ctx context.Context, actorIRI string,
 	return publicKeyPEM, nil
 }
 
+func (s *PostgresStorage) DeleteActorKeyHistory(ctx context.Context, actorIRI string) error {
+	err := s.queries().DeleteActorKeyHistory(ctx, actorIRI)
+	if err != nil {
+		return fmt.Errorf("failed to delete actor key history for %s: %w", actorIRI, err)
+	}
+	return nil
+}
+
 // mapQuadPredicateToProfile unifies graph edge vocabulary mappings cleanly
 func (s *PostgresStorage) mapQuadPredicateToProfile(profile *model.ActorProfile, predicate, object string) {
 	cleanObject := strings.Trim(object, `"'`)

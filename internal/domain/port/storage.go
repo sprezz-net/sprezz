@@ -70,6 +70,7 @@ type StoragePort interface {
 
 	ArchiveKeyHistory(ctx context.Context, actorIRI string, keyType string, publicKeyPEM string, validFrom time.Time, validTo time.Time) error
 	GetHistoricalKey(ctx context.Context, actorIRI string, keyType string, signedAt time.Time) (string, error)
+	DeleteActorKeyHistory(ctx context.Context, actorIRI string) error
 
 	// VerifyIncomingQuota runs an aggregate space metric scan against hard multi-tenant boundaries.
 	// Returns true if the incoming payload allocation size fits cleanly within safety guidelines.

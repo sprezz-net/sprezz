@@ -86,7 +86,7 @@ func TestSignatureVerifier_ObjectIntegrityProof_FEP8b32(t *testing.T) {
 		}
 	}).Return(privPEM, nil)
 
-	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, nil)
 
 	// 6. Verify (should succeed purely based on the FEP-8b32 object integrity proof, even without "Signature" header!)
 	if err := verifier.Verify(request, signedDocBytes); err != nil {
@@ -184,7 +184,7 @@ func TestSignatureVerifier_FEP8c13_AuthorAndForwardingProof(t *testing.T) {
 		return "", fmt.Errorf("key not found")
 	})
 
-	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage)
+	verifier := inhttp.NewFederatedSignatureVerifier(mockStorage, nil)
 
 	// 8. Verify
 	if err := verifier.Verify(request, forwardedBytes); err != nil {
