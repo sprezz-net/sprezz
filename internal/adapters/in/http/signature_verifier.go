@@ -34,6 +34,12 @@ var _ middleware.SignatureVerifier = (*FederatedSignatureVerifier)(nil)
 // Verify serves as a highly flat orchestration entry point with minimal cognitive complexity.
 func (v *FederatedSignatureVerifier) Verify(r *http.Request, body []byte) error {
 	ctx := r.Context()
+
+	// Try FEP-8b32 Object Integrity Proof verification first
+	if found, err := v.CheckAndVerifyIntegrityProof(r, body); found {
+		return err
+	}
+
 	sigHeader := r.Header.Get("Signature")
 	if sigHeader == "" {
 		return fmt.Errorf("missing signature header")
@@ -108,6 +114,9 @@ func (v *FederatedSignatureVerifier) resolvePublicKeyPEM(ctx context.Context, r 
 	}
 
 	v.assertActorIdentityHeader(r, actorIRI)
+	if keyType == "Ed25519" {
+		return dualKeys.PrivateKeyEd25519PEM, nil
+	}
 	return dualKeys.PrivateKeyRSAPEM, nil
 }
 
