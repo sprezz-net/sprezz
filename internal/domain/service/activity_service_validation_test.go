@@ -808,3 +808,143 @@ func TestProcessInboundTask_AddRemove_FEP400e(t *testing.T) {
 		})
 	}
 }
+
+type fepFe34TestCase struct {
+	name         string
+	actor        string
+	objectID     string
+	attributedTo string
+	expectError  bool
+	errContains  string
+}
+
+func runFEPfe34ComplianceTestCase(t *testing.T, ctx context.Context, svc *service.ActivityService, tc fepFe34TestCase) {
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/create-1",
+		ObjectIRI:   tc.objectID,
+		Payload: []byte(`{
+			"type": "Create",
+			"actor": "` + tc.actor + `",
+			"object": {
+				"type": "Note",
+				"id": "` + tc.objectID + `",
+				"attributedTo": "` + tc.attributedTo + `"
+			}
+		}`),
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if !tc.expectError {
+		if err != nil {
+			t.Fatalf("expected success, got error: %v", err)
+		}
+		return
+	}
+
+	if err == nil {
+		t.Fatalf("expected error containing %q, got nil", tc.errContains)
+	}
+	if !strings.Contains(err.Error(), tc.errContains) {
+		t.Errorf("expected error containing %q, got: %v", tc.errContains, err)
+	}
+}
+
+func TestProcessInboundTask_Create_FEPfe34_Compliance(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+
+	mockStorage.GetActorDualKeysMock.Optional().Return(nil, errors.New("not local"))
+	mockStorage.SaveGraphVersionMock.Optional().Return(nil)
+	mockParser.ToQuadsMock.Optional().Return([]model.Quad{}, nil)
+	mockStorage.StreamQuadsBySubjectMock.Optional()
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		return []model.Quad{
+			{GraphID: 1, Subject: subjectIRI, Predicate: model.PredicatePublicKeyPem, Object: "mock-pubkey"},
+		}, nil
+	})
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	tests := []fepFe34TestCase{
+		{
+			name:         "Valid Create: actor matches owner, same-origin",
+			actor:        "https://remote.com/actor/alice",
+			objectID:     "https://remote.com/note/1",
+			attributedTo: "https://remote.com/actor/alice",
+			expectError:  false,
+		},
+		{
+			name:         "Spoofed attributedTo: object id origin does not match attributedTo origin",
+			actor:        "https://remote.com/actor/alice",
+			objectID:     "https://remote.com/note/1",
+			attributedTo: "https://victim.com/actor/bob",
+			expectError:  true,
+			errContains:  "security violation: object origin domain remote.com does not match owner domain victim.com",
+		},
+		{
+			name:         "Mismatched owner: actor does not match attributedTo but domains are same",
+			actor:        "https://remote.com/actor/alice",
+			objectID:     "https://remote.com/note/1",
+			attributedTo: "https://remote.com/actor/bob",
+			expectError:  true,
+			errContains:  "security violation: actor https://remote.com/actor/alice is not authorized to create object owned by https://remote.com/actor/bob",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			runFEPfe34ComplianceTestCase(t, ctx, svc, tc)
+		})
+	}
+}
+
+func TestProcessInboundTask_Announce_FEPfe34_Compliance(t *testing.T) {
+	mc := minimock.NewController(t)
+	ctx := context.Background()
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+
+	mockStorage.GetActorDualKeysMock.Optional().Return(nil, errors.New("not local"))
+	mockStorage.StreamQuadsBySubjectMock.Optional()
+
+	mockStorage.StreamQuadsBySubjectMock.Set(func(ctx context.Context, subjectIRI string) ([]model.Quad, error) {
+		return []model.Quad{
+			{GraphID: 1, Subject: subjectIRI, Predicate: model.PredicatePublicKeyPem, Object: "mock-pubkey"},
+		}, nil
+	})
+
+	svc := service.NewActivityService(mockStorage, mockParser, portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	// Announce activity contains a spoofed embedded object:
+	// Object ID: https://remote.com/note/1 (remote.com)
+	// Object Owner (attributedTo): https://victim.com/actor/bob (victim.com) -> Spoofed owner!
+	task := model.InboundTask{
+		ID:          "018c0000-0000-7000-8000-000000000001",
+		ActivityIRI: "https://remote.com/act/announce-1",
+		ObjectIRI:   "https://remote.com/note/1",
+		Payload: []byte(`{
+			"type": "Announce",
+			"actor": "https://remote.com/actor/alice",
+			"object": {
+				"type": "Note",
+				"id": "https://remote.com/note/1",
+				"attributedTo": "https://victim.com/actor/bob"
+			}
+		}`),
+	}
+
+	err := svc.ProcessInboundTask(ctx, task)
+	if err == nil {
+		t.Fatal("expected global FEP-fe34 same-origin check to fail on spoofed embedded object in Announce activity")
+	}
+	expectedErr := "security violation: object origin domain remote.com does not match owner domain victim.com"
+	if !strings.Contains(err.Error(), expectedErr) {
+		t.Errorf("expected error containing %q, got: %v", expectedErr, err)
+	}
+}

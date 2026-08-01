@@ -11,6 +11,33 @@ import (
 	"sprezz/internal/domain/model"
 )
 
+// validateEmbeddedObjectOrigins enforces FEP-fe34 same-origin checks between object id and owner (attributedTo/actor).
+func (s *ActivityService) validateEmbeddedObjectOrigins(object interface{}) error {
+	validateFn := func(objMap map[string]interface{}) error {
+		idVal := objMap["id"]
+		if idVal == nil {
+			idVal = objMap["@id"]
+		}
+		currObjID := parseStringOrID(idVal)
+
+		attrVal := objMap["attributedTo"]
+		if attrVal == nil {
+			attrVal = objMap["actor"]
+		}
+		attributedTo := parseStringOrID(attrVal)
+
+		if currObjID != "" && attributedTo != "" {
+			objDomain := extractDomain(currObjID)
+			attrDomain := extractDomain(attributedTo)
+			if objDomain != "" && attrDomain != "" && objDomain != attrDomain {
+				return fmt.Errorf("security violation: object origin domain %s does not match owner domain %s", objDomain, attrDomain)
+			}
+		}
+		return nil
+	}
+	return ExecuteOnHeterogeneousObjects(object, validateFn)
+}
+
 // validateInboundActivity runs strict security, origin, identity, and state checks on inbound activities
 func (s *ActivityService) validateInboundActivity(ctx context.Context, activityIRI string, payload []byte) error {
 	var activity struct {
@@ -28,6 +55,10 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 	actorIRI := parseStringOrID(activity.Actor)
 	if actorIRI == "" {
 		return nil
+	}
+
+	if err := s.validateEmbeddedObjectOrigins(activity.Object); err != nil {
+		return err
 	}
 
 	if activity.Type == model.ShortUndo || activity.Type == model.ShortDelete || activity.Type == model.ShortUpdate {
@@ -118,6 +149,20 @@ func (s *ActivityService) validateMutatingVerb(ctx context.Context, activityIRI,
 	return nil
 }
 
+func (s *ActivityService) validateObjectOwnership(actorIRI string, objMap map[string]interface{}) error {
+	attrVal := objMap["attributedTo"]
+	if attrVal == nil {
+		attrVal = objMap["actor"]
+	}
+	attributedTo := parseStringOrID(attrVal)
+
+	if attributedTo != "" && actorIRI != attributedTo {
+		return fmt.Errorf("security violation: actor %s is not authorized to create object owned by %s", actorIRI, attributedTo)
+	}
+
+	return nil
+}
+
 func (s *ActivityService) validateCreateVerb(ctx context.Context, actorIRI string, object interface{}) error {
 	objID := parseStringOrID(object)
 	if objID != "" {
@@ -126,6 +171,14 @@ func (s *ActivityService) validateCreateVerb(ctx context.Context, actorIRI strin
 		if actorDomain != "" && objectDomain != "" && actorDomain != objectDomain {
 			return fmt.Errorf("security violation: actor domain %s does not match object origin domain %s", actorDomain, objectDomain)
 		}
+	}
+
+	validateObjectMap := func(objMap map[string]interface{}) error {
+		return s.validateObjectOwnership(actorIRI, objMap)
+	}
+
+	if err := ExecuteOnHeterogeneousObjects(object, validateObjectMap); err != nil {
+		return err
 	}
 
 	if err := s.validateActorSelfCreation(actorIRI, object); err != nil {
