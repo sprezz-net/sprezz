@@ -509,7 +509,7 @@ func TestProcessInboundMediaTask_QuotaSuccess(t *testing.T) {
 	}
 	task := model.InboundTask{Payload: []byte(`{}`)}
 
-	err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+	_, err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
 	if err != nil {
 		t.Fatalf("Expected quota allocation confirmation to pass successfully, got error: %v", err)
 	}
@@ -535,7 +535,7 @@ func TestProcessInboundMediaTask_QuotaBreached(t *testing.T) {
 	}
 	task := model.InboundTask{Payload: []byte(`{}`)}
 
-	err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+	_, err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
 	if err == nil {
 		t.Fatal("Expected pre-flight processing loop to intercept the oversized allocation, but got nil")
 	}

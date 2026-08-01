@@ -2,6 +2,7 @@ package cryptoutil
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 )
@@ -66,4 +67,22 @@ func DecodeBase58(src string) ([]byte, error) {
 	res := make([]byte, numZeroes+len(decoded))
 	copy(res[numZeroes:], decoded)
 	return res, nil
+}
+
+// ToDigestMultibase converts a raw SHA-256 byte slice to a base58btc encoded multihash digest string starting with "z"
+func ToDigestMultibase(sha256Bytes []byte) string {
+	// Multihash prefix: 0x12 (SHA-256) and 0x20 (length 32)
+	multihash := make([]byte, 0, 2+len(sha256Bytes))
+	multihash = append(multihash, 0x12, 0x20)
+	multihash = append(multihash, sha256Bytes...)
+	return "z" + EncodeBase58(multihash)
+}
+
+// ToDigestMultibaseFromHex converts a hex-encoded SHA-256 string to a multibase base58btc digest string starting with "z"
+func ToDigestMultibaseFromHex(sha256Hex string) (string, error) {
+	bytes, err := hex.DecodeString(sha256Hex)
+	if err != nil {
+		return "", err
+	}
+	return ToDigestMultibase(bytes), nil
 }

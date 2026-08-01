@@ -34,8 +34,8 @@ func (q *Queries) GetTenantStorageUsageAndCeiling(ctx context.Context, id int32)
 }
 
 const insertMediaAttachment = `-- name: InsertMediaAttachment :one
-INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size, width, height)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (object_name) DO UPDATE
 SET sha256_hex = EXCLUDED.sha256_hex -- Ensure fallback idempotency
 RETURNING id
@@ -47,6 +47,8 @@ type InsertMediaAttachmentParams struct {
 	Sha256Hex    string `json:"sha256_hex"`
 	ContentType  string `json:"content_type"`
 	FileSize     int64  `json:"file_size"`
+	Width        *int32 `json:"width"`
+	Height       *int32 `json:"height"`
 }
 
 func (q *Queries) InsertMediaAttachment(ctx context.Context, arg InsertMediaAttachmentParams) (pgtype.UUID, error) {
@@ -56,6 +58,8 @@ func (q *Queries) InsertMediaAttachment(ctx context.Context, arg InsertMediaAtta
 		arg.Sha256Hex,
 		arg.ContentType,
 		arg.FileSize,
+		arg.Width,
+		arg.Height,
 	)
 	var id pgtype.UUID
 	err := row.Scan(&id)

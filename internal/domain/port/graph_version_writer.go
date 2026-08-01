@@ -25,4 +25,6 @@ type MediaAttachmentParams struct {
 	ObjectIRI    string
 	Payload      []byte
 	Quads        []model.Quad
+	Width        int
+	Height       int
 }

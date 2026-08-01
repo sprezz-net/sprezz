@@ -129,6 +129,8 @@ type MediaAttachment struct {
 	ContentType  string             `json:"content_type"`
 	FileSize     int64              `json:"file_size"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	Width        *int32             `json:"width"`
+	Height       *int32             `json:"height"`
 }
 
 type NomadicIdentity struct {

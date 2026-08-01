@@ -371,6 +371,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 9. **`FEP-8c13` (Context-Authority Routing with Object Integrity Proofs for Restricted Threads)**: Standardizes thread routing and authority boundaries. Fully implemented in the domain service layer (`context_integrity_proof.go`) by supporting recursive field-exclusion Author Proofs and lexicographically-sorted JCS Forwarding Proof generation and verification, and integrated into the signature verification perimeter middleware.
 10. **`FEP-4ccd` (Pending Followers Collection and Pending Following Collection)**: Standardizes managing pending follow requests using dedicated collections. Fully implemented in the handler and services.
 11. **`FEP-c648` (Blocked Collection)**: Recommends exposing standard `blocked` and `blocks` collections for user-controlled actor-level blocks. Fully implemented in the handler, services, and storage.
+12. **`FEP-1311` (Media Attachments)**: Standardizes metadata properties (like `mediaType`, `digestMultibase` integrity checks, `size`, and image `width`/`height` dimensions) on ActivityPub attachments. Fully implemented inside our media handler, dimension-extraction streaming pipeline, and multibase digest generation.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
@@ -390,7 +391,6 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 6. **`FEP-fc48` (Generic ActivityPub server)**: When creating objects also create the attached supported collections. This will allow for full sementic routing.
 7. **`FEP-9098` (Custom emojis)**
 8. **`FEP-044f` (Consent-respecting quote posts)**
-9. **`FEP-1311` (Media Attachments)**
 
 ### 7.4 Privacy and Audience Rules
 

@@ -1,6 +1,6 @@
 -- name: InsertMediaAttachment :one
-INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO media_attachments (object_name, original_name, sha256_hex, content_type, file_size, width, height)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (object_name) DO UPDATE
 SET sha256_hex = EXCLUDED.sha256_hex -- Ensure fallback idempotency
 RETURNING id;

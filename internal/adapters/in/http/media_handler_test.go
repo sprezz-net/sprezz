@@ -3,11 +3,14 @@ package http_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
 	"strings"
 	"testing"
 
@@ -35,7 +38,14 @@ func createMultipartRequest(t *testing.T, activityJSON string, filenames []strin
 
 	// Loop over all provided attachments to mock array parameters
 	for i, filename := range filenames {
-		part, err := writer.CreateFormFile("attachment", filename)
+		h := make(textproto.MIMEHeader)
+		h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="attachment"; filename=%q`, filename))
+		if strings.HasSuffix(filename, ".jpg") || strings.HasSuffix(filename, ".jpeg") {
+			h.Set("Content-Type", "image/jpeg")
+		} else {
+			h.Set("Content-Type", "application/octet-stream")
+		}
+		part, err := writer.CreatePart(h)
 		if err != nil {
 			t.Fatalf("failed to create multipart form attachment file boundary: %v", err)
 		}
@@ -96,9 +106,27 @@ func TestMediaUploadHandler_ServeHTTP_Success(t *testing.T) {
 		t.Errorf("Expected status code %d (Accepted), got %d. Response: %s", http.StatusAccepted, rr.Code, rr.Body.String())
 	}
 
-	expectedSubstring := `"status":"committed"`
-	if !strings.Contains(rr.Body.String(), expectedSubstring) {
-		t.Errorf("Expected response body byte output matrix to contain %s, got %s", expectedSubstring, rr.Body.String())
+	var resp struct {
+		Status      string                   `json:"status"`
+		ObjectKeys  []string                 `json:"object_keys"`
+		Attachments []inhttp.MediaAttachment `json:"attachments"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Status != "committed" {
+		t.Errorf("Expected status 'committed', got %q", resp.Status)
+	}
+	if len(resp.Attachments) != 2 {
+		t.Fatalf("Expected 2 attachments, got %d", len(resp.Attachments))
+	}
+	// Attachment 1 is a jpg, so mapped to Image
+	if resp.Attachments[0].Type != "Image" {
+		t.Errorf("Expected first attachment to be Image, got %q", resp.Attachments[0].Type)
+	}
+	if !strings.HasPrefix(resp.Attachments[0].DigestMultibase, "zQm") {
+		t.Errorf("Expected first attachment digestMultibase to start with 'zQm', got %q", resp.Attachments[0].DigestMultibase)
 	}
 }
 
@@ -348,7 +376,7 @@ func TestProcessInboundMediaTask_Success(t *testing.T) {
 		Payload:     []byte(`{}`),
 	}
 
-	if err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task); err != nil {
+	if _, err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task); err != nil {
 		t.Fatalf("Expected successful execution of individual media stream iteration block, got error: %v", err)
 	}
 
@@ -391,7 +419,7 @@ func TestProcessInboundMediaTask_StorageCommitFailure(t *testing.T) {
 	}
 	task := model.InboundTask{Payload: []byte(`{}`)}
 
-	err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+	_, err := svc.ProcessInboundMediaTask(ctx, mediaCtx, task)
 	if err == nil {
 		t.Fatal("Expected functional bubble up error from internal service tracking due to database failure context, got nil")
 	}
@@ -454,8 +482,8 @@ func TestMediaUploadHandler_ServeHTTP_QuotaCeilingBreached(t *testing.T) {
 
 	// Configure the service stub to simulate an immediate validation failure
 	mockSvc := portmock.NewActivityServicePortMock(mc)
-	mockSvc.ProcessInboundMediaTaskMock.Set(func(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) error {
-		return errors.New("storage authorization ceiling threshold exceeded")
+	mockSvc.ProcessInboundMediaTaskMock.Set(func(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) (port.MediaAttachmentInfo, error) {
+		return port.MediaAttachmentInfo{}, errors.New("storage authorization ceiling threshold exceeded")
 	})
 
 	handler := inhttp.NewMediaUploadHandler(mockSvc, 10*1024*1024)

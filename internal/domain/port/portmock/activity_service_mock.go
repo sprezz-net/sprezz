@@ -48,7 +48,7 @@ type ActivityServicePortMock struct {
 	beforeGetFollowersTimelineCounter uint64
 	GetFollowersTimelineMock          mActivityServicePortMockGetFollowersTimeline
 
-	funcProcessInboundMediaTask          func(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask) (err error)
+	funcProcessInboundMediaTask          func(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask) (m1 mm_port.MediaAttachmentInfo, err error)
 	funcProcessInboundMediaTaskOrigin    string
 	inspectFuncProcessInboundMediaTask   func(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask)
 	afterProcessInboundMediaTaskCounter  uint64
@@ -1803,6 +1803,7 @@ type ActivityServicePortMockProcessInboundMediaTaskParamPtrs struct {
 
 // ActivityServicePortMockProcessInboundMediaTaskResults contains results of the ActivityServicePort.ProcessInboundMediaTask
 type ActivityServicePortMockProcessInboundMediaTaskResults struct {
+	m1  mm_port.MediaAttachmentInfo
 	err error
 }
 
@@ -1930,7 +1931,7 @@ func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask
 }
 
 // Return sets up results that will be returned by ActivityServicePort.ProcessInboundMediaTask
-func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask) Return(err error) *ActivityServicePortMock {
+func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask) Return(m1 mm_port.MediaAttachmentInfo, err error) *ActivityServicePortMock {
 	if mmProcessInboundMediaTask.mock.funcProcessInboundMediaTask != nil {
 		mmProcessInboundMediaTask.mock.t.Fatalf("ActivityServicePortMock.ProcessInboundMediaTask mock is already set by Set")
 	}
@@ -1938,13 +1939,13 @@ func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask
 	if mmProcessInboundMediaTask.defaultExpectation == nil {
 		mmProcessInboundMediaTask.defaultExpectation = &ActivityServicePortMockProcessInboundMediaTaskExpectation{mock: mmProcessInboundMediaTask.mock}
 	}
-	mmProcessInboundMediaTask.defaultExpectation.results = &ActivityServicePortMockProcessInboundMediaTaskResults{err}
+	mmProcessInboundMediaTask.defaultExpectation.results = &ActivityServicePortMockProcessInboundMediaTaskResults{m1, err}
 	mmProcessInboundMediaTask.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
 	return mmProcessInboundMediaTask.mock
 }
 
 // Set uses given function f to mock the ActivityServicePort.ProcessInboundMediaTask method
-func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask) Set(f func(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask) (err error)) *ActivityServicePortMock {
+func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask) Set(f func(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask) (m1 mm_port.MediaAttachmentInfo, err error)) *ActivityServicePortMock {
 	if mmProcessInboundMediaTask.defaultExpectation != nil {
 		mmProcessInboundMediaTask.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.ProcessInboundMediaTask method")
 	}
@@ -1975,8 +1976,8 @@ func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask
 }
 
 // Then sets up ActivityServicePort.ProcessInboundMediaTask return parameters for the expectation previously defined by the When method
-func (e *ActivityServicePortMockProcessInboundMediaTaskExpectation) Then(err error) *ActivityServicePortMock {
-	e.results = &ActivityServicePortMockProcessInboundMediaTaskResults{err}
+func (e *ActivityServicePortMockProcessInboundMediaTaskExpectation) Then(m1 mm_port.MediaAttachmentInfo, err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockProcessInboundMediaTaskResults{m1, err}
 	return e.mock
 }
 
@@ -2002,7 +2003,7 @@ func (mmProcessInboundMediaTask *mActivityServicePortMockProcessInboundMediaTask
 }
 
 // ProcessInboundMediaTask implements mm_port.ActivityServicePort
-func (mmProcessInboundMediaTask *ActivityServicePortMock) ProcessInboundMediaTask(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask) (err error) {
+func (mmProcessInboundMediaTask *ActivityServicePortMock) ProcessInboundMediaTask(ctx context.Context, mediaCtx mm_port.InboundMediaContext, task model.InboundTask) (m1 mm_port.MediaAttachmentInfo, err error) {
 	mm_atomic.AddUint64(&mmProcessInboundMediaTask.beforeProcessInboundMediaTaskCounter, 1)
 	defer mm_atomic.AddUint64(&mmProcessInboundMediaTask.afterProcessInboundMediaTaskCounter, 1)
 
@@ -2022,7 +2023,7 @@ func (mmProcessInboundMediaTask *ActivityServicePortMock) ProcessInboundMediaTas
 	for _, e := range mmProcessInboundMediaTask.ProcessInboundMediaTaskMock.expectations {
 		if minimock.Equal(*e.params, mm_params) {
 			mm_atomic.AddUint64(&e.Counter, 1)
-			return e.results.err
+			return e.results.m1, e.results.err
 		}
 	}
 
@@ -2059,7 +2060,7 @@ func (mmProcessInboundMediaTask *ActivityServicePortMock) ProcessInboundMediaTas
 		if mm_results == nil {
 			mmProcessInboundMediaTask.t.Fatal("No results are set for the ActivityServicePortMock.ProcessInboundMediaTask")
 		}
-		return (*mm_results).err
+		return (*mm_results).m1, (*mm_results).err
 	}
 	if mmProcessInboundMediaTask.funcProcessInboundMediaTask != nil {
 		return mmProcessInboundMediaTask.funcProcessInboundMediaTask(ctx, mediaCtx, task)

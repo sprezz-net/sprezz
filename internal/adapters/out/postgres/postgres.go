@@ -667,6 +667,15 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		return fmt.Errorf("payload rejected: storage ceiling threshold exceeded for tenant ID %d", tenantRow.ID)
 	}
 
+	// Helper to convert int to *int32 for sqlc
+	int32Ptr := func(v int) *int32 {
+		if v == 0 {
+			return nil
+		}
+		res := int32(v)
+		return &res
+	}
+
 	// 3. Register the physical media file details globally inside the centralized registry bucket
 	mediaID, err := queries.InsertMediaAttachment(ctx, db.InsertMediaAttachmentParams{
 		ObjectName:   params.ObjectName,
@@ -674,6 +683,8 @@ func (s *PostgresStorage) SaveGraphVersionWithMedia(ctx context.Context, params 
 		Sha256Hex:    params.SHA256Hex,
 		ContentType:  params.ContentType,
 		FileSize:     params.FileSize,
+		Width:        int32Ptr(params.Width),
+		Height:       int32Ptr(params.Height),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to register central media registry entry: %w", err)

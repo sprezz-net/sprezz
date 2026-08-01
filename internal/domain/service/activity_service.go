@@ -5,6 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+	"io"
 	"strings"
 	"time"
 
@@ -250,25 +255,36 @@ func (s *ActivityService) ingestContextItem(ctx context.Context, tenantID int32,
 }
 
 // ProcessInboundMediaTask pipelines a media stream to MinIO and links it transactionally to the graph metadata.
-func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) error {
+func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx port.InboundMediaContext, task model.InboundTask) (port.MediaAttachmentInfo, error) {
 	if s.mediaStorage == nil {
-		return fmt.Errorf("media storage engine driver is not configured")
+		return port.MediaAttachmentInfo{}, fmt.Errorf("media storage engine driver is not configured")
 	}
 
 	_, err := s.checkMediaQuota(ctx, mediaCtx.TenantID, mediaCtx.Size)
 	if err != nil {
-		return err
+		return port.MediaAttachmentInfo{}, err
+	}
+
+	var width, height int
+	if seeker, ok := mediaCtx.MediaStream.(io.ReadSeeker); ok {
+		if strings.HasPrefix(mediaCtx.ContentType, "image/") {
+			if cfg, _, err := image.DecodeConfig(seeker); err == nil {
+				width = cfg.Width
+				height = cfg.Height
+			}
+			_, _ = seeker.Seek(0, io.SeekStart) // Rewind stream!
+		}
 	}
 
 	stableKey, sha256Hex, err := s.mediaStorage.PutObject(ctx, mediaCtx.ObjectName, mediaCtx.MediaStream, mediaCtx.ContentType)
 	if err != nil {
-		return fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
+		return port.MediaAttachmentInfo{}, fmt.Errorf("media workflow aborted due to storage upload failure: %w", err)
 	}
 
 	quads, err := s.parser.ToQuads(ctx, 0, task.ObjectIRI, task.Payload)
 	if err != nil {
 		_ = s.mediaStorage.DeleteObject(ctx, stableKey)
-		return fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
+		return port.MediaAttachmentInfo{}, fmt.Errorf("failed to parse activity payload to quads during media task: %w", err)
 	}
 
 	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
@@ -284,16 +300,28 @@ func (s *ActivityService) ProcessInboundMediaTask(ctx context.Context, mediaCtx 
 			ObjectIRI:    task.ObjectIRI,
 			Payload:      task.Payload,
 			Quads:        quads,
+			Width:        width,
+			Height:       height,
 		})
 		if err != nil {
 			_ = s.mediaStorage.DeleteObject(ctx, stableKey)
-			return fmt.Errorf("failed to commit graph and media attachment relationships: %w", err)
+			return port.MediaAttachmentInfo{}, fmt.Errorf("failed to commit graph and media attachment relationships: %w", err)
 		}
-		return nil
+		digest, _ := cryptoutil.ToDigestMultibaseFromHex(sha256Hex)
+		return port.MediaAttachmentInfo{
+			ObjectName:      stableKey,
+			OriginalName:    mediaCtx.OriginalName,
+			SHA256Hex:       sha256Hex,
+			DigestMultibase: digest,
+			ContentType:     mediaCtx.ContentType,
+			Size:            mediaCtx.Size,
+			Width:           width,
+			Height:          height,
+		}, nil
 	}
 
 	_ = s.mediaStorage.DeleteObject(ctx, stableKey)
-	return fmt.Errorf("storage port does not implement required GraphVersionWriter extension")
+	return port.MediaAttachmentInfo{}, fmt.Errorf("storage port does not implement required GraphVersionWriter extension")
 }
 
 // PurgeOrphanedMedia provides the domain coordination step for clearing stranded files.

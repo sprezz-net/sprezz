@@ -15,6 +15,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// MediaAttachment represents the FEP-1311 compliant media attachment format.
+type MediaAttachment struct {
+	Type            string `json:"type"`
+	Name            string `json:"name,omitempty"`
+	URL             string `json:"url"`
+	Width           int    `json:"width,omitempty"`
+	Height          int    `json:"height,omitempty"`
+	MediaType       string `json:"mediaType"`
+	DigestMultibase string `json:"digestMultibase,omitempty"`
+	Size            int64  `json:"size"`
+}
+
 // MediaUploadHandler orchestrates high-performance multi-part incoming attachment streaming.
 type MediaUploadHandler struct {
 	activitySvc port.ActivityServicePort
@@ -72,7 +84,7 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	completedObjectKeys, err := h.processUploadFiles(ctx, tenantID, actorIRI, activityJSON, envelope.ID, envelope.Object, files)
+	attachments, err := h.processUploadFiles(ctx, tenantID, actorIRI, activityJSON, envelope.ID, envelope.Object, files)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		errMsg := err.Error()
@@ -83,17 +95,38 @@ func (h *MediaUploadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var completedObjectKeys []string
+	mediaAttachments := make([]MediaAttachment, 0, len(attachments))
+	for _, info := range attachments {
+		completedObjectKeys = append(completedObjectKeys, info.ObjectName)
+		mediaAttachments = append(mediaAttachments, MediaAttachment{
+			Type:            mapContentTypeToType(info.ContentType),
+			Name:            info.OriginalName,
+			URL:             "https://" + tenantID + "/" + info.ObjectName,
+			Width:           info.Width,
+			Height:          info.Height,
+			MediaType:       info.ContentType,
+			DigestMultibase: info.DigestMultibase,
+			Size:            info.Size,
+		})
+	}
+
 	// Success Manifest Response Writeout
 	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeJSON)
 	w.WriteHeader(http.StatusAccepted)
 
-	responseBytes := fmt.Appendf(nil, `{"status":"committed","object_keys":%v}`, h.marshalKeysJSON(completedObjectKeys))
-	_, _ = w.Write(responseBytes)
+	respMap := map[string]interface{}{
+		"status":      "committed",
+		"object_keys": completedObjectKeys,
+		"attachments": mediaAttachments,
+	}
+	_ = json.NewEncoder(w).Encode(respMap)
 }
 
 // processUploadFiles handles parsing, limits verification, and physical upload execution for files batch
-func (h *MediaUploadHandler) processUploadFiles(ctx context.Context, tenantID, actorIRI, activityJSON, activityID, objectIRI string, files []*multipart.FileHeader) ([]string, error) {
+func (h *MediaUploadHandler) processUploadFiles(ctx context.Context, tenantID, actorIRI, activityJSON, activityID, objectIRI string, files []*multipart.FileHeader) ([]port.MediaAttachmentInfo, error) {
 	var completedObjectKeys []string
+	var completedAttachments []port.MediaAttachmentInfo
 
 	for _, fileHeader := range files {
 		if fileHeader.Size > h.maxFileSize {
@@ -135,17 +168,19 @@ func (h *MediaUploadHandler) processUploadFiles(ctx context.Context, tenantID, a
 		}
 
 		// Process single iteration unit
-		if err := h.activitySvc.ProcessInboundMediaTask(ctx, mediaCtx, task); err != nil {
+		info, err := h.activitySvc.ProcessInboundMediaTask(ctx, mediaCtx, task)
+		if err != nil {
 			_ = fileStream.Close()
 			h.executeCompensatingCleanup(completedObjectKeys)
 			return nil, err
 		}
 
 		completedObjectKeys = append(completedObjectKeys, tempObjectKey)
+		completedAttachments = append(completedAttachments, info)
 		_ = fileStream.Close() // Immediate deterministic release
 	}
 
-	return completedObjectKeys, nil
+	return completedAttachments, nil
 }
 
 // executeCompensatingCleanup runs a reverse pruning sequence if an iteration fails mid-loop
@@ -164,15 +199,15 @@ func (h *MediaUploadHandler) writeError(w http.ResponseWriter, status int, msg s
 	_, _ = w.Write(errorBytes)
 }
 
-// marshalKeysJSON processes the tracked string slice into a raw JSON array
-// without triggering standard interface reflection or redundant heap copies.
-func (h *MediaUploadHandler) marshalKeysJSON(keys []string) string {
-	if len(keys) == 0 {
-		return "[]"
+func mapContentTypeToType(contentType string) string {
+	if strings.HasPrefix(contentType, "image/") {
+		return "Image"
 	}
-	bytes, err := json.Marshal(keys)
-	if err != nil {
-		return "[]"
+	if strings.HasPrefix(contentType, "audio/") {
+		return "Audio"
 	}
-	return string(bytes)
+	if strings.HasPrefix(contentType, "video/") {
+		return "Video"
+	}
+	return "Document"
 }

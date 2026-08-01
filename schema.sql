@@ -157,6 +157,8 @@ CREATE TABLE media_attachments (
     sha256_hex CHAR(64) NOT NULL,                -- Cryptographic content fingerprint signature
     content_type VARCHAR(255) NOT NULL,
     file_size BIGINT NOT NULL,
+    width INT,
+    height INT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
