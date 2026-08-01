@@ -76,10 +76,18 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 	// Create a graph version payload block for the actor profile
 	const inboxSuffix = "/inbox"
 	payloadMap := map[string]interface{}{
+		"@context": []interface{}{
+			"https://www.w3.org/ns/activitystreams",
+			"https://purl.archive.org/socialweb/pending/1",
+		},
 		"id":                actorIRI,
 		"type":              "Application",
 		"preferredUsername": "server",
 		"inbox":             actorIRI + inboxSuffix,
+		"followers":         actorIRI + "/followers",
+		"following":         actorIRI + "/following",
+		"pendingFollowers":  actorIRI + "/pendingFollowers",
+		"pendingFollowing":  actorIRI + "/pendingFollowing",
 		"endpoints": map[string]interface{}{
 			"sharedInbox": "https://" + domain + inboxSuffix,
 		},

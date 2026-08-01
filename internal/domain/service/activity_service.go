@@ -443,6 +443,14 @@ func (s *ActivityService) isGraphAuthorized(graphID int64, readerActorIRI string
 // parses payloads into intermediate quads, applies case-insensitive privacy-aware audience checks,
 // and streams down a safe, filtered set of authorized payload slices.
 func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error) {
+	// Special Case: pendingFollowers and pendingFollowing are only readable by the owner of the collection (readerActorIRI == actorIRI)
+	if collection == "pendingFollowers" || collection == "pendingFollowing" {
+		if readerActorIRI == "" || readerActorIRI != actorIRI {
+			return [][]byte{}, nil
+		}
+		return s.storage.GetCollectionPayloads(ctx, actorIRI, collection, limit, offset)
+	}
+
 	// 1. Stream the raw candidate payload entries directly out of your postgres storage engine port
 	rawPayloads, err := s.storage.GetCollectionPayloads(ctx, actorIRI, collection, limit, offset)
 	if err != nil {

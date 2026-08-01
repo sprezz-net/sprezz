@@ -186,14 +186,16 @@ func (s *PostgresStorage) GetCollectionPayloads(ctx context.Context, actorIRI, c
 		return queries.GetInboxPayloads(ctx, db.GetInboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
 	case "outbox":
 		return queries.GetOutboxPayloads(ctx, db.GetOutboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
-	case "pending_follows":
-		return s.getPendingFollowsPayloads(ctx, actorIRI, limit, offset)
+	case "pendingFollowers":
+		return s.getPendingFollowersPayloads(ctx, actorIRI, limit, offset)
+	case "pendingFollowing":
+		return s.getPendingFollowingPayloads(ctx, actorIRI, limit, offset)
 	default:
 		return nil, fmt.Errorf("unsupported collection %q", collection)
 	}
 }
 
-func (s *PostgresStorage) getPendingFollowsPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {
+func (s *PostgresStorage) getPendingFollowersPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {
 	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
 	if tenantID == 0 {
 		host := extractDomain(actorIRI)
@@ -214,15 +216,66 @@ func (s *PostgresStorage) getPendingFollowsPayloads(ctx context.Context, actorIR
 		JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
 		WHERE rs_obj.tenant_id = $1
 		  AND rs_obj.object = $2
-		  AND (rs_obj.predicate ILIKE '%object%' OR rs_obj.predicate ILIKE '%as:object%')
+		  AND (rs_obj.predicate = 'https://www.w3.org/ns/activitystreams#object' OR rs_obj.predicate = 'object')
 		  AND rs_type.tenant_id = $1
-		  AND rs_type.predicate ILIKE '%type%'
-		  AND rs_type.object ILIKE '%Follow%'
+		  AND (rs_type.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' OR rs_type.predicate = 'type')
+		  AND (rs_type.object = 'https://www.w3.org/ns/activitystreams#Follow' OR rs_type.object = 'Follow')
 		  AND NOT EXISTS (
 			  SELECT 1 FROM rdf_statements rs_state
 			  WHERE rs_state.subject = g.activity_id
 				AND rs_state.tenant_id = $1
-				AND (rs_state.predicate ILIKE '%accepted%' OR rs_state.predicate ILIKE '%rejected%' OR rs_state.predicate ILIKE '%result%')
+				AND (rs_state.predicate = 'https://www.w3.org/ns/activitystreams#accepted' OR rs_state.predicate = 'https://www.w3.org/ns/activitystreams#rejected' OR rs_state.predicate = 'https://www.w3.org/ns/activitystreams#result')
+		  )
+		ORDER BY g.created_at DESC
+		LIMIT $3 OFFSET $4;
+	`
+	rows, err := s.db.Query(ctx, query, tenantID, actorIRI, int32(limit), int32(offset))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payloads [][]byte
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		payloads = append(payloads, payload)
+	}
+	return payloads, nil
+}
+
+func (s *PostgresStorage) getPendingFollowingPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		host := extractDomain(actorIRI)
+		if host != "" {
+			if tRow, err := s.queries().GetTenantByDomain(ctx, host); err == nil {
+				tenantID = tRow.ID
+			}
+		}
+	}
+	if tenantID == 0 {
+		tenantID = 1
+	}
+
+	query := `
+		SELECT DISTINCT g.payload
+		FROM rdf_graphs g
+		JOIN rdf_statements rs_actor ON g.activity_id = rs_actor.subject
+		JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
+		WHERE rs_actor.tenant_id = $1
+		  AND rs_actor.object = $2
+		  AND (rs_actor.predicate = 'https://www.w3.org/ns/activitystreams#actor' OR rs_actor.predicate = 'actor')
+		  AND rs_type.tenant_id = $1
+		  AND (rs_type.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' OR rs_type.predicate = 'type')
+		  AND (rs_type.object = 'https://www.w3.org/ns/activitystreams#Follow' OR rs_type.object = 'Follow')
+		  AND NOT EXISTS (
+			  SELECT 1 FROM rdf_statements rs_state
+			  WHERE rs_state.subject = g.activity_id
+				AND rs_state.tenant_id = $1
+				AND (rs_state.predicate = 'https://www.w3.org/ns/activitystreams#accepted' OR rs_state.predicate = 'https://www.w3.org/ns/activitystreams#rejected' OR rs_state.predicate = 'https://www.w3.org/ns/activitystreams#result')
 		  )
 		ORDER BY g.created_at DESC
 		LIMIT $3 OFFSET $4;

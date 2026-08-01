@@ -104,6 +104,11 @@ const (
 	PredicateContext        = NamespaceActivityStreams + "context"
 	PredicateContextHistory = "https://w3id.org/fep/171b/contextHistory"
 
+	// FEP-4ccd Pending Followers / Following Collection Predicates
+	NamespacePending          = "https://purl.archive.org/socialweb/pending#"
+	PredicatePendingFollowers = NamespacePending + "pendingFollowers"
+	PredicatePendingFollowing = NamespacePending + "pendingFollowing"
+
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"
 

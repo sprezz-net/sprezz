@@ -64,7 +64,7 @@ func (h *GenericHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func extractCollection(requestedIRI string) (string, string) {
-	suffixes := []string{"/inbox", "/outbox", "/followers", "/following", "/likes", "/shares", "/replies", "/contextHistory", "/context"}
+	suffixes := []string{"/inbox", "/outbox", "/followers", "/following", "/likes", "/shares", "/replies", "/contextHistory", "/context", "/pendingFollowers", "/pendingFollowing"}
 	for _, suffix := range suffixes {
 		if strings.HasSuffix(requestedIRI, suffix) {
 			return strings.TrimPrefix(suffix, "/"), strings.TrimSuffix(requestedIRI, suffix)
@@ -231,7 +231,7 @@ func (h *GenericHandler) servePayloadCollection(w http.ResponseWriter, r *http.R
 		items = append(items, json.RawMessage(payload))
 	}
 	w.Header().Set(httputil.HeaderContentType, httputil.ContentTypeLDJSON)
-	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": r.URL.String(), "orderedItems": items})
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"type": "OrderedCollection", "id": r.URL.String(), "totalItems": len(items), "orderedItems": items})
 }
 
 func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {

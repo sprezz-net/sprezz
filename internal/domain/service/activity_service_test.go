@@ -382,6 +382,42 @@ func TestActivityService_GetCollectionTimeline_PrivacyScoping(t *testing.T) {
 	}
 }
 
+func TestActivityService_GetCollectionTimeline_PendingCollections(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	ctx := context.Background()
+	actorIRI := "https://sprezz.net/alice"
+	readerBob := "https://remote.com/bob"
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockStorage.GetCollectionPayloadsMock.Set(func(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
+		if a == actorIRI && (c == "pendingFollowers" || c == "pendingFollowing") {
+			return [][]byte{[]byte(`{"id":"follow-1"}`)}, nil
+		}
+		return nil, nil
+	})
+
+	svc := service.NewActivityService(mockStorage, portmock.NewJSONLDParserPortMock(mc), portmock.NewMediaStoragePortMock(mc), createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	// Test Case 1: Owner (Alice) requests pendingFollowers
+	results, err := svc.GetCollectionTimeline(ctx, actorIRI, actorIRI, "pendingFollowers", 10, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("Expected owner to see 1 pending follower activity, got %d", len(results))
+	}
+
+	// Test Case 2: Non-owner (Bob) requests pendingFollowers (should see 0 items)
+	resultsBob, err := svc.GetCollectionTimeline(ctx, readerBob, actorIRI, "pendingFollowers", 10, 0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resultsBob) != 0 {
+		t.Errorf("Expected non-owner to see 0 pending follower activities, got %d", len(resultsBob))
+	}
+}
+
 func TestRotateLocalActorKeys_Success(t *testing.T) {
 	mc := minimock.NewController(t)
 
