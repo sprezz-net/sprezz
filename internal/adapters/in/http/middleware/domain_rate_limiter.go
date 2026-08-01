@@ -59,6 +59,10 @@ func (l *DomainRateLimiter) Allow(domain string) bool {
 }
 
 // DomainRateLimitMiddleware limits requests from federated servers based on their domain.
+// Security Note: It acts explicitly on the registrable domain (top-level + 1 components)
+// of the cryptographically-verified sending actor's IRI (e.g. extracted from 'X-Actor-IRI'
+// after signature validation), protecting against randomized subdomain floods while
+// completely isolating rate limits across independent domains.
 type DomainRateLimitMiddleware struct {
 	limiter *DomainRateLimiter
 }
@@ -88,10 +92,11 @@ func (m *DomainRateLimitMiddleware) Handler(next http.Handler) http.Handler {
 	})
 }
 
-// isCollectionPath checks if the given path targets an ActivityPub collection using model.IsCollection.
+// isCollectionPath checks if the given path targets an ActivityPub collection using model.IsCollectionPathSuffix.
 func isCollectionPath(path string) bool {
 	path = strings.TrimPrefix(path, "/")
-	if model.IsCollection(path) {
+	path = strings.ToLower(path)
+	if model.IsCollectionPathSuffix(path) {
 		return true
 	}
 	idx := strings.LastIndex(path, "/")
@@ -99,10 +104,11 @@ func isCollectionPath(path string) bool {
 		return false
 	}
 	lastSegment := path[idx+1:]
-	return model.IsCollection(lastSegment)
+	return model.IsCollectionPathSuffix(lastSegment)
 }
 
-// extractActorDomain safely parses out the host/domain from an actor IRI using httputil prefix constants.
+// extractActorDomain safely parses out the host/domain from an actor IRI using httputil prefix constants,
+// extracting only the top-level + 1 domain components (registrable domain) to defeat randomized subdomain floods.
 func extractActorDomain(actorIRI string) string {
 	if !strings.HasPrefix(actorIRI, httputil.HTTPSPrefix) && !strings.HasPrefix(actorIRI, httputil.HTTPPrefix) {
 		return ""
@@ -115,5 +121,12 @@ func extractActorDomain(actorIRI string) string {
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
 	}
-	return strings.ToLower(host)
+	host = strings.ToLower(host)
+
+	// Extract last and second-to-last components (e.g. "sub.example.com" -> "example.com")
+	hostParts := strings.Split(host, ".")
+	if len(hostParts) >= 2 {
+		return hostParts[len(hostParts)-2] + "." + hostParts[len(hostParts)-1]
+	}
+	return host
 }

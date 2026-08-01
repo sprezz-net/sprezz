@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
 	"sprezz/internal/pkg/httputil"
 )
@@ -41,17 +42,16 @@ func (v *SignatureValidator) isActivityPubMime(contentType string) bool {
 }
 
 func (v *SignatureValidator) isCollectionPost(path string) bool {
-	return strings.HasSuffix(path, "/inbox") ||
-		strings.HasSuffix(path, "/outbox") ||
-		strings.HasSuffix(path, "/followers") ||
-		strings.HasSuffix(path, "/following") ||
-		strings.HasSuffix(path, "/likes") ||
-		strings.HasSuffix(path, "/shares") ||
-		strings.HasSuffix(path, "/replies") ||
-		strings.HasSuffix(path, "/contextHistory") ||
-		strings.HasSuffix(path, "/context") ||
-		path == "/inbox" ||
-		path == "/outbox"
+	path = strings.TrimPrefix(path, "/")
+	path = strings.ToLower(path)
+	if model.IsCollectionPathSuffix(path) {
+		return true
+	}
+	idx := strings.LastIndex(path, "/")
+	if idx == -1 {
+		return false
+	}
+	return model.IsCollectionPathSuffix(path[idx+1:])
 }
 
 func (v *SignatureValidator) checkPostMime(r *http.Request, contentType string, isActivityPub bool) (int, string) {

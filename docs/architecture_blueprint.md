@@ -595,21 +595,11 @@ flowchart TD
 3. **Transactional DDL Isolation**: Each migration script executes within an explicit database transaction block. If an individual statement fails, the entire migration generation rolls back completely to maintain database schema cleanliness. Non-transactional elements (such as custom Enum typings) are isolated within dedicated statement block boundaries (`-- +goose StatementBegin/End`) to align with PostgreSQL isolation constraints.
 4. **Log Masking**: Structural changes and schema initialization phases use strict log masking. Raw SQL arguments, custom schema parameters, and database metadata are prevented from leaking into the standard system logs, preserving information perimeter boundaries.
 
-## 13. Implementation Status
-
-The repository currently provides the hexagonal ports, a simplified unified wildcard HTTP routing adapter (`GenericHandler`) for GET/POST resources and collections, the complete `MediaUploadHandler` for multi-part media uploads featuring sequential streaming, memory isolation, and pre-flight storage quota checks, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher with high-performance shared-inbox consolidation and delivery, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, full privacy-aware timeline traversal filters across indexed collection resources, and an explicit object-dereferencing filter for strict graph validation of side-effect mutations.
-
-Additionally, the **Database Migration Subsystem** is fully operational. It leverages embedded filesystem compilation (`go:embed`), standard runtime interoperability adapters (`pgx/v5/stdlib`), and a fail-fast boot sequence execution block to cleanly isolate structural DDL schema synchronization tasks ahead of downstream worker pools.
-
-The remaining architectural work is to:
-
-- Add PostgreSQL integration coverage for transaction and concurrency guarantees.
-
-## 14. Inbound Traffic Security & Spam Mitigation
+## 13. Inbound Traffic Security & Spam Mitigation
 
 The Sprezz server implements advanced validation and defense mechanisms directly inside the HTTP driving adapter layer to insulate the core database, transaction loops, and worker pools from federated spam and resource-exhaustion attacks.
 
-### 14.1 Shared Inbox Blind Spot Processing Guard
+### 13.1 Shared Inbox Blind Spot Processing Guard
 
 A major vulnerability vector in global shared inboxes is processing unaddressed activities that target no one on our local server. To block this:
 
@@ -618,11 +608,21 @@ A major vulnerability vector in global shared inboxes is processing unaddressed 
 3. **Local Target Cross-Reference**: It cross-references the targets against our local active credentials ledger using `h.storage.GetActorDualKeys(ctx, target)`.
 4. **Early Fail-Fast Drop**: If none of the addressing targets maps to a valid local actor, the request is immediately rejected with `400 Bad Request` before enqueuing or processing. This prevents attackers from triggering heavy CPU/database load processing junk messages meant for nobody on our system.
 
-### 14.2 Configurable Domain-Level Rate-Limiting
+### 13.2 Configurable Domain-Level Rate-Limiting
 
 When a remote actor interacts with our server for the first time, local profile rows are generated. To block automated blind profile flooding from randomized subdomain networks:
 
-1. **Post-Signature Domain extraction**: Immediately after an incoming request successfully completes cryptographic HTTP Signature validation, the `DomainRateLimitMiddleware` extracts the host/domain string of the verified `actorIRI` using helper parsing structures tied to standard `httputil` prefix constants (`https://` and `http://`).
-2. **Path Specificity Enforcement**: To prevent unneeded performance overhead and avoid disrupting public media access or local uploads, the rate-limiting checks are exclusively applied to POST requests targeting active collections (verified dynamically against `model.IsCollection`).
-3. **Sliding-Window Rate Limiter**: The middleware cross-references the extracted domain against a thread-safe, memory-efficient sliding-window limiter.
-4. **early DoS Protection**: If requests from a specific remote actor domain exceed the configured threshold (default `100` requests per `1m` window), the connection is immediately terminated with `429 Too Many Requests`. This protects local storage from database exhaustion while ensuring independent benign domains on shared TLDs are never grouped or throttled together.
+1. **Post-Signature Domain extraction (Verified Sending Actor's Registrable Domain)**: Immediately after an incoming request successfully completes cryptographic HTTP Signature validation, the `DomainRateLimitMiddleware` extracts the registrable domain—the **top-level + 1 components** (e.g. `example.com` from `sub.example.com`)—of the **verified sending actor IRI** (retrieved from context via `GetAuthenticatedActor(r.Context())`, *not* from the untrusted network IP or the client-supplied HTTP Host/Origin headers). This is parsed using helper structures tied to standard `httputil` prefix constants (`https://` and `http://`).
+2. **Path Specificity Enforcement**: To prevent unneeded performance overhead and avoid disrupting public media access or local uploads, the rate-limiting checks are exclusively applied to POST requests targeting active collections (verified dynamically against `model.IsCollectionPathSuffix` to normalise and validate the path suffix).
+3. **Sliding-Window Rate Limiter (Defeating Subdomain Floods)**: The middleware cross-references the extracted verified actor's registrable domain against a thread-safe, memory-efficient sliding-window limiter. Grouping by registrable domain completely defeats randomized subdomain floods (e.g., `sub1.attacker.com` and `sub2.attacker.com` are grouped under the single limit pool of `attacker.com`).
+4. **early DoS Protection**: If requests from a specific remote actor domain exceed the configured threshold (default `100` requests per `1m` window), the connection is immediately terminated with `429 Too Many Requests`. This protects local storage from database exhaustion while ensuring independent benign domains on shared TLDs (such as `google.com` vs `github.com`) are completely isolated.
+
+## 14. Implementation Status
+
+The repository currently provides the hexagonal ports, a simplified unified wildcard HTTP routing adapter (`GenericHandler`) for GET/POST resources and collections, the complete `MediaUploadHandler` for multi-part media uploads featuring sequential streaming, memory isolation, and pre-flight storage quota checks, signed inbound verification, tenant delivery records, JSON-LD parsing with embedded contexts, deterministic blank-node rewriting, pgx/sqlc PostgreSQL access, actor and collection endpoints, the type-safe generic `BatchWorkerEngine` background framework, a fully functional asynchronous outbound queue worker loop, a signed outbound dispatcher with high-performance shared-inbox consolidation and delivery, a high-performance content-addressed MinIO streaming adapter featuring concurrent SHA-256 hashing, a transaction-isolated database persistence mapping engine, full privacy-aware timeline traversal filters across indexed collection resources, and an explicit object-dereferencing filter for strict graph validation of side-effect mutations.
+
+Additionally, the **Database Migration Subsystem** is fully operational. It leverages embedded filesystem compilation (`go:embed`), standard runtime interoperability adapters (`pgx/v5/stdlib`), and a fail-fast boot sequence execution block to cleanly isolate structural DDL schema synchronization tasks ahead of downstream worker pools.
+
+The remaining architectural work is to:
+
+- Add PostgreSQL integration coverage for transaction and concurrency guarantees.

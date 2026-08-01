@@ -42,23 +42,23 @@ func TestDomainRateLimitMiddleware_Handler(t *testing.T) {
 		t.Errorf("Expected first request for domain 'example.com' to be accepted, got %d", status)
 	}
 
-	// 3. Request 2 for domain "example.com" -> allowed
-	if status := runRequest(http.MethodPost, "/inbox", "https://example.com/actor/bob"); status != http.StatusAccepted {
-		t.Errorf("Expected second request for domain 'example.com' to be accepted, got %d", status)
+	// 3. Request 2 for subdomain "sub.example.com" -> allowed (maps to example.com registrable domain)
+	if status := runRequest(http.MethodPost, "/inbox", "https://sub.example.com/actor/bob"); status != http.StatusAccepted {
+		t.Errorf("Expected second request for domain 'example.com' (subdomain) to be accepted, got %d", status)
 	}
 
 	// 4. Request 3 for domain "example.com" on a non-collection POST route -> should bypass rate limiter (e.g. media upload)
-	if status := runRequest(http.MethodPost, "/media/upload", "https://example.com/actor/charlie"); status != http.StatusAccepted {
+	if status := runRequest(http.MethodPost, "/media/upload", "https://sub2.example.com/actor/charlie"); status != http.StatusAccepted {
 		t.Errorf("Expected media upload to bypass rate limiter, got %d", status)
 	}
 
 	// 5. Request 4 for domain "example.com" on a GET inbox route -> should bypass rate limiter
-	if status := runRequest(http.MethodGet, "/inbox", "https://example.com/actor/charlie"); status != http.StatusAccepted {
+	if status := runRequest(http.MethodGet, "/inbox", "https://sub3.example.com/actor/charlie"); status != http.StatusAccepted {
 		t.Errorf("Expected GET inbox to bypass rate limiter, got %d", status)
 	}
 
-	// 6. Request 5 for domain "example.com" on a real POST inbox route -> rate limited (exceeded limit of 2)
-	if status := runRequest(http.MethodPost, "/inbox", "https://example.com/actor/charlie"); status != http.StatusTooManyRequests {
+	// 6. Request 5 for domain "example.com" on a real POST inbox route -> rate limited (exceeded limit of 2, subdomains grouped)
+	if status := runRequest(http.MethodPost, "/inbox", "https://another-sub.example.com/actor/charlie"); status != http.StatusTooManyRequests {
 		t.Errorf("Expected third POST request to inbox for domain 'example.com' to be rate limited, got %d", status)
 	}
 

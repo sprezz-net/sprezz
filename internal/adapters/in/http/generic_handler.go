@@ -70,9 +70,9 @@ func extractCollection(requestedIRI string) (string, string) {
 	if idx == -1 {
 		return "", requestedIRI
 	}
-	lastSegment := requestedIRI[idx+1:]
-	if model.IsCollection(lastSegment) {
-		return lastSegment, requestedIRI[:idx]
+	lastSegment := strings.ToLower(requestedIRI[idx+1:])
+	if model.IsCollectionPathSuffix(lastSegment) {
+		return model.PathSuffixToCollectionShortName(lastSegment), requestedIRI[:idx]
 	}
 	return "", requestedIRI
 }
@@ -370,7 +370,7 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/"+model.ShortInbox {
+	if strings.ToLower(r.URL.Path) == "/"+model.PathSuffixSharedInbox {
 		if !h.hasLocalRecipient(ctx, body) {
 			http.Error(w, "Bad Request: No valid local actor addressed in shared inbox delivery", http.StatusBadRequest)
 			return

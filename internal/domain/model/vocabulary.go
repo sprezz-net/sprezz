@@ -149,6 +149,23 @@ const (
 	ShortContextHistory   = "contextHistory"
 	ShortFollowersSync    = "followers_synchronization"
 
+	// URI Path Suffixes for routing and collection requests
+	PathSuffixInbox            = "inbox"
+	PathSuffixSharedInbox      = "inbox" // Decoupled shared inbox URI path slug
+	PathSuffixOutbox           = "outbox"
+	PathSuffixFollowers        = "followers"
+	PathSuffixFollowing        = "following"
+	PathSuffixPendingFollowers = "pendingFollowers"
+	PathSuffixPendingFollowing = "pendingFollowing"
+	PathSuffixBlocked          = "blocked"
+	PathSuffixBlocks           = "blocks"
+	PathSuffixLikes            = "likes"
+	PathSuffixShares           = "shares"
+	PathSuffixReplies          = "replies"
+	PathSuffixContext          = "context"
+	PathSuffixContextHistory   = "contextHistory"
+	PathSuffixFollowersSync    = "followers_synchronization"
+
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"
 
@@ -219,4 +236,59 @@ func IsCollection(collection string) bool {
 		collection == ShortContext ||
 		collection == ShortContextHistory ||
 		collection == ShortFollowersSync
+}
+
+// IsCollectionPathSuffix checks if a given URL path segment matches any supported collection path.
+func IsCollectionPathSuffix(suffix string) bool {
+	return suffix == PathSuffixInbox ||
+		suffix == PathSuffixSharedInbox ||
+		suffix == PathSuffixOutbox ||
+		suffix == PathSuffixFollowers ||
+		suffix == PathSuffixFollowing ||
+		suffix == PathSuffixPendingFollowers ||
+		suffix == PathSuffixPendingFollowing ||
+		suffix == PathSuffixBlocked ||
+		suffix == PathSuffixBlocks ||
+		suffix == PathSuffixLikes ||
+		suffix == PathSuffixShares ||
+		suffix == PathSuffixReplies ||
+		suffix == PathSuffixContext ||
+		suffix == PathSuffixContextHistory ||
+		suffix == PathSuffixFollowersSync
+}
+
+// PathSuffixToCollectionShortName maps a path suffix to the corresponding domain model short name predicate.
+func PathSuffixToCollectionShortName(suffix string) string {
+	switch suffix {
+	case PathSuffixInbox:
+		return ShortInbox
+	case PathSuffixOutbox:
+		return ShortOutbox
+	case PathSuffixFollowers:
+		return ShortFollowers
+	case PathSuffixFollowing:
+		return ShortFollowing
+	case PathSuffixPendingFollowers:
+		return ShortPendingFollowers
+	case PathSuffixPendingFollowing:
+		return ShortPendingFollowing
+	case PathSuffixBlocked:
+		return ShortBlocked
+	case PathSuffixBlocks:
+		return ShortBlocks
+	case PathSuffixLikes:
+		return ShortLikes
+	case PathSuffixShares:
+		return ShortShares
+	case PathSuffixReplies:
+		return ShortReplies
+	case PathSuffixContext:
+		return ShortContext
+	case PathSuffixContextHistory:
+		return ShortContextHistory
+	case PathSuffixFollowersSync:
+		return ShortFollowersSync
+	default:
+		return ""
+	}
 }
