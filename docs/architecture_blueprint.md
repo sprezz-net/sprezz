@@ -147,7 +147,7 @@ For incoming HTTP requests, signature validation is dynamically routed based on 
 1. **Endpoint Exclusions**: Any request targeting well-known paths (such as `/.well-known/*`) is completely excluded from signature validation.
 2. **POST Request Signature Rules**:
    - A `POST` request must provide a `Content-Type` header; otherwise, it is rejected with a `400 Bad Request`.
-   - **Strict Collection Content-Type Guard**: Any `POST` request targeting any ActivityPub collection endpoint (paths matching or ending in `/inbox`, `/outbox`, `/followers`, `/following`, `/likes`, `/shares`, or `/replies`) is strictly required to assert standard ActivityPub MIME parameters (`application/activity+json` or `application/ld+json`). Any POST requests to these endpoints using non-standard media configurations (such as `text/plain` or `application/json`) are immediately rejected on the validation perimeter with **`HTTP 415 Unsupported Media Type`**. This ensures unauthenticated, spoof-configured payloads cannot bypass signature validation to reach downstream parsers.
+   - **Strict Collection Content-Type Guard**: Any `POST` request targeting any ActivityPub collection endpoint (paths matching or ending in `/inbox`, `/outbox`, `/followers`, `/following`, `/likes`, `/shares`, `/replies`, `/blocked`, or `/blocks`) is strictly required to assert standard ActivityPub MIME parameters (`application/activity+json` or `application/ld+json`). Any POST requests to these endpoints using non-standard media configurations (such as `text/plain` or `application/json`) are immediately rejected on the validation perimeter with **`HTTP 415 Unsupported Media Type`**. This ensures unauthenticated, spoof-configured payloads cannot bypass signature validation to reach downstream parsers.
    - If the `Content-Type` is an ActivityPub type (`application/activity+json` or `application/ld+json`), signature verification is strictly mandatory. A missing or invalid signature header results in a `401 Unauthorized` rejection.
    - For non-collection endpoints (such as multi-part media `/upload`), non-ActivityPub `Content-Type` payloads bypass signature verification.
 3. **GET Request Signature Rules**:
@@ -370,6 +370,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 8. **`FEP-8b32` (Object Integrity Proofs)**: Decouples authentication from transport and delivery by allowing self-authenticating objects and activities signed using `DataIntegrityProof` with the `eddsa-jcs-2022` cryptosuite. Fully implemented within our incoming verification layers to evaluate integrity proofs as the highest-priority authentication path.
 9. **`FEP-8c13` (Context-Authority Routing with Object Integrity Proofs for Restricted Threads)**: Standardizes thread routing and authority boundaries. Fully implemented in the domain service layer (`context_integrity_proof.go`) by supporting recursive field-exclusion Author Proofs and lexicographically-sorted JCS Forwarding Proof generation and verification, and integrated into the signature verification perimeter middleware.
 10. **`FEP-4ccd` (Pending Followers Collection and Pending Following Collection)**: Standardizes managing pending follow requests using dedicated collections. Fully implemented in the handler and services.
+11. **`FEP-c648` (Blocked Collection)**: Recommends exposing standard `blocked` and `blocks` collections for user-controlled actor-level blocks. Fully implemented in the handler, services, and storage.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
@@ -390,7 +391,6 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 7. **`FEP-9098` (Custom emojis)**
 8. **`FEP-044f` (Consent-respecting quote posts)**
 9. **`FEP-1311` (Media Attachments)**
-10. **`FEP-c648` (Blocked Collection)**: Recommends exposing standard `blocked` and `blocks` collections for user-controlled actor-level blocks.
 
 ### 7.4 Privacy and Audience Rules
 
@@ -490,7 +490,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - A clean database starts with all required tables, indexes, and enum types.
 - A valid signed inbox request is accepted once and is safely deduplicated on replay.
 - Invalid signatures, mismatched digests, stale dates, blocked domains, malformed JSON, and oversized bodies are rejected before queue insertion.
-- Inbound `POST` requests to collections (`/inbox`, `/outbox`, `/followers`, `/following`) with missing or invalid `Content-Type` headers are blocked directly at the middleware boundary with the appropriate HTTP status codes (`400 Bad Request` or `415 Unsupported Media Type`).
+- Inbound `POST` requests to collections (`/inbox`, `/outbox`, `/followers`, `/following`, `/blocked`, `/blocks`) with missing or invalid `Content-Type` headers are blocked directly at the middleware boundary with the appropriate HTTP status codes (`400 Bad Request` or `415 Unsupported Media Type`).
 - Concurrent workers claim disjoint queue records.
 - High-throughput streaming operations leverage integer-based `QuadID` structures (with inline literal text values) to isolate IRI/Named Node string heap replication from the database engine, bypassing the interning dictionary for arbitrary literal values.
 - Ingestion and database save loops employ thread-safe pointer wrapper factories (`boolPtr`, `stringPtr`, `int64Ptr`) and pre-allocated boolean variables to prevent heap escape and minimize GC overhead.

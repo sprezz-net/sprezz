@@ -1189,3 +1189,61 @@ func TestProcessInboundTask_ActorSpoofing_PathAgnostic(t *testing.T) {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
+
+func TestActivityService_GetCollectionTimeline_BlockedCollections(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	ctx := context.Background()
+	actorIRI := "https://local.example/users/alice"
+	readerBob := "https://local.example/users/bob"
+
+	mockStorage := portmock.NewStorageAndGraphWriterMock(mc)
+	mockParser := portmock.NewJSONLDParserPortMock(mc)
+	mockMedia := portmock.NewMediaStoragePortMock(mc)
+
+	svc := service.NewActivityService(mockStorage, mockParser, mockMedia, createTestFetcher(mc), service.ActivityServiceConfig{})
+
+	blockPayload := []byte(`{"type":"Block","id":"block-1"}`)
+	mockStorage.GetCollectionPayloadsMock.Set(func(ctx context.Context, a, c string, l, o int) ([][]byte, error) {
+		if a == actorIRI && (c == model.ShortBlocked || c == model.ShortBlocks) {
+			return [][]byte{blockPayload}, nil
+		}
+		return nil, errors.New("unsupported")
+	})
+
+	// Test Case 1: Owner (Alice) requests blocked collection
+	results, err := svc.GetCollectionTimeline(ctx, actorIRI, actorIRI, model.ShortBlocked, 10, 0)
+	if err != nil {
+		t.Fatalf("Expected success for owner reading blocked, got: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result, got %d", len(results))
+	}
+
+	// Test Case 2: Owner (Alice) requests blocks collection
+	resultsBlocks, err := svc.GetCollectionTimeline(ctx, actorIRI, actorIRI, model.ShortBlocks, 10, 0)
+	if err != nil {
+		t.Fatalf("Expected success for owner reading blocks, got: %v", err)
+	}
+	if len(resultsBlocks) != 1 {
+		t.Errorf("Expected 1 result, got %d", len(resultsBlocks))
+	}
+
+	// Test Case 3: Non-owner (Bob) requests blocked (should see 0 items)
+	resultsBob, err := svc.GetCollectionTimeline(ctx, readerBob, actorIRI, model.ShortBlocked, 10, 0)
+	if err != nil {
+		t.Fatalf("Expected success for non-owner, got: %v", err)
+	}
+	if len(resultsBob) != 0 {
+		t.Errorf("Expected 0 results for non-owner, got %d", len(resultsBob))
+	}
+
+	// Test Case 4: Non-owner (Bob) requests blocks (should see 0 items)
+	resultsBobBlocks, err := svc.GetCollectionTimeline(ctx, readerBob, actorIRI, model.ShortBlocks, 10, 0)
+	if err != nil {
+		t.Fatalf("Expected success for non-owner reading blocks, got: %v", err)
+	}
+	if len(resultsBobBlocks) != 0 {
+		t.Errorf("Expected 0 results for non-owner, got %d", len(resultsBobBlocks))
+	}
+}

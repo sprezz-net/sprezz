@@ -443,8 +443,8 @@ func (s *ActivityService) isGraphAuthorized(graphID int64, readerActorIRI string
 // parses payloads into intermediate quads, applies case-insensitive privacy-aware audience checks,
 // and streams down a safe, filtered set of authorized payload slices.
 func (s *ActivityService) GetCollectionTimeline(ctx context.Context, readerActorIRI string, actorIRI string, collection string, limit, offset int) ([][]byte, error) {
-	// Special Case: pendingFollowers and pendingFollowing are only readable by the owner of the collection (readerActorIRI == actorIRI)
-	if collection == "pendingFollowers" || collection == "pendingFollowing" {
+	// Special Case: pendingFollowers, pendingFollowing, blocked, and blocks are only readable by the owner of the collection (readerActorIRI == actorIRI)
+	if model.IsPrivateCollection(collection) {
 		if readerActorIRI == "" || readerActorIRI != actorIRI {
 			return [][]byte{}, nil
 		}

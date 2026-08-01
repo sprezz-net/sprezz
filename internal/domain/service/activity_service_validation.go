@@ -407,7 +407,7 @@ func (s *ActivityService) hasGroupOrCollectionType(targetMap *ThreadSafePredicat
 	for pred, objects := range targetMap.m {
 		if pred == model.RDFType {
 			for _, obj := range objects {
-				if model.IsGroupOrCollection(obj) {
+				if model.IsGroupOrCollectionType(obj) {
 					return true
 				}
 			}

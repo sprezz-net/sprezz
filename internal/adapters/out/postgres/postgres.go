@@ -182,17 +182,144 @@ func extractDomain(iri string) string {
 func (s *PostgresStorage) GetCollectionPayloads(ctx context.Context, actorIRI, collection string, limit, offset int) ([][]byte, error) {
 	queries := s.queries()
 	switch collection {
-	case "inbox":
+	case model.ShortInbox:
 		return queries.GetInboxPayloads(ctx, db.GetInboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
-	case "outbox":
+	case model.ShortOutbox:
 		return queries.GetOutboxPayloads(ctx, db.GetOutboxPayloadsParams{ActorIri: actorIRI, Limit: int32(limit), Offset: int32(offset)})
-	case "pendingFollowers":
+	case model.ShortPendingFollowers:
 		return s.getPendingFollowersPayloads(ctx, actorIRI, limit, offset)
-	case "pendingFollowing":
+	case model.ShortPendingFollowing:
 		return s.getPendingFollowingPayloads(ctx, actorIRI, limit, offset)
+	case model.ShortBlocked:
+		return s.getBlockedPayloads(ctx, actorIRI, limit, offset)
+	case model.ShortBlocks:
+		return s.getBlocksPayloads(ctx, actorIRI, limit, offset)
 	default:
 		return nil, fmt.Errorf("unsupported collection %q", collection)
 	}
+}
+
+func (s *PostgresStorage) getBlocksPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		host := extractDomain(actorIRI)
+		if host != "" {
+			if tRow, err := s.queries().GetTenantByDomain(ctx, host); err == nil {
+				tenantID = tRow.ID
+			}
+		}
+	}
+	if tenantID == 0 {
+		tenantID = 1
+	}
+
+	query := `
+		SELECT DISTINCT g.payload, g.created_at
+		FROM rdf_graphs g
+		JOIN rdf_statements rs_actor ON g.activity_id = rs_actor.subject
+		JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
+		WHERE rs_actor.tenant_id = $1
+		  AND rs_actor.object = $2
+		  AND (rs_actor.predicate = 'https://www.w3.org/ns/activitystreams#actor' OR rs_actor.predicate = 'actor')
+		  AND rs_type.tenant_id = $1
+		  AND (rs_type.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' OR rs_type.predicate = 'type')
+		  AND (rs_type.object = 'https://www.w3.org/ns/activitystreams#Block' OR rs_type.object = 'Block')
+		  AND NOT EXISTS (
+			  SELECT 1
+			  FROM rdf_statements rs_undo
+			  JOIN rdf_statements rs_undo_type ON rs_undo.subject = rs_undo_type.subject
+			  JOIN rdf_statements rs_undo_actor ON rs_undo.subject = rs_undo_actor.subject
+			  WHERE rs_undo_actor.tenant_id = $1
+				AND rs_undo_actor.object = $2
+				AND (rs_undo_actor.predicate = 'https://www.w3.org/ns/activitystreams#actor' OR rs_undo_actor.predicate = 'actor')
+				AND rs_undo_type.tenant_id = $1
+				AND (rs_undo_type.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' OR rs_undo_type.predicate = 'type')
+				AND (rs_undo_type.object = 'https://www.w3.org/ns/activitystreams#Undo' OR rs_undo_type.object = 'Undo')
+				AND (rs_undo.predicate = 'https://www.w3.org/ns/activitystreams#object' OR rs_undo.predicate = 'object')
+				AND rs_undo.object = g.activity_id
+		  )
+		ORDER BY g.created_at DESC
+		LIMIT $3 OFFSET $4;
+	`
+	rows, err := s.db.Query(ctx, query, tenantID, actorIRI, int32(limit), int32(offset))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payloads [][]byte
+	for rows.Next() {
+		var payload []byte
+		var createdAt time.Time
+		if err := rows.Scan(&payload, &createdAt); err != nil {
+			return nil, err
+		}
+		payloads = append(payloads, payload)
+	}
+	return payloads, nil
+}
+
+func (s *PostgresStorage) getBlockedPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {
+	tenantID, _ := ctx.Value(model.TenantIDKey).(int32)
+	if tenantID == 0 {
+		host := extractDomain(actorIRI)
+		if host != "" {
+			if tRow, err := s.queries().GetTenantByDomain(ctx, host); err == nil {
+				tenantID = tRow.ID
+			}
+		}
+	}
+	if tenantID == 0 {
+		tenantID = 1
+	}
+
+	query := `
+		SELECT DISTINCT rs_obj.object, g.created_at
+		FROM rdf_graphs g
+		JOIN rdf_statements rs_actor ON g.activity_id = rs_actor.subject
+		JOIN rdf_statements rs_type ON g.activity_id = rs_type.subject
+		JOIN rdf_statements rs_obj ON g.activity_id = rs_obj.subject
+		WHERE rs_actor.tenant_id = $1
+		  AND rs_actor.object = $2
+		  AND (rs_actor.predicate = 'https://www.w3.org/ns/activitystreams#actor' OR rs_actor.predicate = 'actor')
+		  AND rs_type.tenant_id = $1
+		  AND (rs_type.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' OR rs_type.predicate = 'type')
+		  AND (rs_type.object = 'https://www.w3.org/ns/activitystreams#Block' OR rs_type.object = 'Block')
+		  AND rs_obj.tenant_id = $1
+		  AND (rs_obj.predicate = 'https://www.w3.org/ns/activitystreams#object' OR rs_obj.predicate = 'object')
+		  AND NOT EXISTS (
+			  SELECT 1
+			  FROM rdf_statements rs_undo
+			  JOIN rdf_statements rs_undo_type ON rs_undo.subject = rs_undo_type.subject
+			  JOIN rdf_statements rs_undo_actor ON rs_undo.subject = rs_undo_actor.subject
+			  WHERE rs_undo_actor.tenant_id = $1
+				AND rs_undo_actor.object = $2
+				AND (rs_undo_actor.predicate = 'https://www.w3.org/ns/activitystreams#actor' OR rs_undo_actor.predicate = 'actor')
+				AND rs_undo_type.tenant_id = $1
+				AND (rs_undo_type.predicate = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#type' OR rs_undo_type.predicate = 'type')
+				AND (rs_undo_type.object = 'https://www.w3.org/ns/activitystreams#Undo' OR rs_undo_type.object = 'Undo')
+				AND (rs_undo.predicate = 'https://www.w3.org/ns/activitystreams#object' OR rs_undo.predicate = 'object')
+				AND rs_undo.object = g.activity_id
+		  )
+		ORDER BY g.created_at DESC
+		LIMIT $3 OFFSET $4;
+	`
+	rows, err := s.db.Query(ctx, query, tenantID, actorIRI, int32(limit), int32(offset))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payloads [][]byte
+	for rows.Next() {
+		var object string
+		var createdAt time.Time
+		if err := rows.Scan(&object, &createdAt); err != nil {
+			return nil, err
+		}
+		payloads = append(payloads, fmt.Appendf(nil, "%q", object))
+	}
+	return payloads, nil
 }
 
 func (s *PostgresStorage) getPendingFollowersPayloads(ctx context.Context, actorIRI string, limit, offset int) ([][]byte, error) {

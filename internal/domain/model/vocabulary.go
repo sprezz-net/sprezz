@@ -109,6 +109,21 @@ const (
 	PredicatePendingFollowers = NamespacePending + "pendingFollowers"
 	PredicatePendingFollowing = NamespacePending + "pendingFollowing"
 
+	// Collection short names / slugs
+	ShortInbox            = "inbox"
+	ShortOutbox           = "outbox"
+	ShortFollowers        = "followers"
+	ShortFollowing        = "following"
+	ShortPendingFollowers = "pendingFollowers"
+	ShortPendingFollowing = "pendingFollowing"
+	ShortBlocked          = "blocked"
+	ShortBlocks           = "blocks"
+	ShortLikes            = "likes"
+	ShortShares           = "shares"
+	ShortReplies          = "replies"
+	ShortContext          = "context"
+	ShortContextHistory   = "contextHistory"
+
 	// ActivityPub Public Addressing Target
 	PublicAudience = NamespaceActivityStreams + "Public"
 
@@ -148,9 +163,34 @@ func IsCollectionType(uri string) bool {
 		uri == CollectionPageOrdered
 }
 
-// IsGroupOrCollection checks if a given type string is a Group or any Collection variety exactly.
-func IsGroupOrCollection(t string) bool {
+// IsGroupOrCollectionType checks if a given type string is a Group or any Collection variety exactly.
+func IsGroupOrCollectionType(t string) bool {
 	return t == ShortGroup ||
 		t == ActorGroup ||
 		IsCollectionType(t)
+}
+
+// IsPrivateCollection checks if a collection short name represents a private, non-public collection.
+func IsPrivateCollection(collection string) bool {
+	return collection == ShortPendingFollowers ||
+		collection == ShortPendingFollowing ||
+		collection == ShortBlocked ||
+		collection == ShortBlocks
+}
+
+// IsCollection checks if a collection short name represents a supported collection in the system.
+func IsCollection(collection string) bool {
+	return collection == ShortInbox ||
+		collection == ShortOutbox ||
+		collection == ShortFollowers ||
+		collection == ShortFollowing ||
+		collection == ShortPendingFollowers ||
+		collection == ShortPendingFollowing ||
+		collection == ShortBlocked ||
+		collection == ShortBlocks ||
+		collection == ShortLikes ||
+		collection == ShortShares ||
+		collection == ShortReplies ||
+		collection == ShortContext ||
+		collection == ShortContextHistory
 }
