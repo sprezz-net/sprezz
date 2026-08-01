@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/port/portmock"
-	"sprezz/internal/pkg/integrityproof"
-	"sprezz/internal/pkg/jcs"
+	"sprezz/internal/pkg/cryptoutil"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestSignatureVerifier_ObjectIntegrityProof_FEP8b32(t *testing.T) {
@@ -55,12 +55,12 @@ func TestSignatureVerifier_ObjectIntegrityProof_FEP8b32(t *testing.T) {
 	keyID := "https://local.example/users/alice#ed25519-key"
 	created := "2023-02-24T23:36:38Z"
 
-	signedDoc, err := integrityproof.SignDataIntegrityProof(docMap, priv, keyID, created)
+	signedDoc, err := cryptoutil.SignDataIntegrityProof(docMap, priv, keyID, created)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	signedDocBytes, err := jcs.Format(signedDoc)
+	signedDocBytes, err := cryptoutil.FormatJCS(signedDoc)
 	if err != nil {
 		signedDocBytes, err = json.Marshal(signedDoc)
 		if err != nil {

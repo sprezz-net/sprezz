@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestHandleWebfinger_Success_ByHandle(t *testing.T) {

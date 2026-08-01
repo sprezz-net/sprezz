@@ -8,11 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestGenericHandler_GetProfile_Success(t *testing.T) {

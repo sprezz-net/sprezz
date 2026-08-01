@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"sprezz/internal/domain/port"
 	"sync"
 	"time"
+
+	"sprezz/internal/domain/port"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"

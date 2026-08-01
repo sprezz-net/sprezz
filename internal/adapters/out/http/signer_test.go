@@ -1,8 +1,6 @@
 package http_test
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"context"
 	"crypto"
 	"crypto/ed25519"
@@ -19,6 +17,7 @@ import (
 	"testing"
 
 	outhttp "sprezz/internal/adapters/out/http"
+	"sprezz/internal/pkg/httputil"
 )
 
 type testKeys struct {

@@ -1,8 +1,6 @@
 package http
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"context"
 	"encoding/json"
 	"fmt"
@@ -11,6 +9,7 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/httputil"
 )
 
 type WebfingerResponse struct {

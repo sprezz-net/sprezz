@@ -1,4 +1,4 @@
-package jcs
+package cryptoutil
 
 import (
 	"bytes"
@@ -7,8 +7,8 @@ import (
 	"strconv"
 )
 
-// Format returns the JSON Canonicalization Scheme (JCS) RFC 8785 representation of the given value.
-func Format(v interface{}) ([]byte, error) {
+// FormatJCS returns the JSON Canonicalization Scheme (JCS) RFC 8785 representation of the given value.
+func FormatJCS(v interface{}) ([]byte, error) {
 	if v == nil {
 		return []byte("null"), nil
 	}
@@ -48,14 +48,14 @@ func formatMap(val map[string]interface{}) ([]byte, error) {
 		if i > 0 {
 			buf.WriteByte(',')
 		}
-		keyBytes, err := Format(k)
+		keyBytes, err := FormatJCS(k)
 		if err != nil {
 			return nil, err
 		}
 		buf.Write(keyBytes)
 		buf.WriteByte(':')
 
-		valBytes, err := Format(val[k])
+		valBytes, err := FormatJCS(val[k])
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +72,7 @@ func formatSlice(val []interface{}) ([]byte, error) {
 		if i > 0 {
 			buf.WriteByte(',')
 		}
-		elemBytes, err := Format(elem)
+		elemBytes, err := FormatJCS(elem)
 		if err != nil {
 			return nil, err
 		}
@@ -120,5 +120,5 @@ func formatFallback(v interface{}) ([]byte, error) {
 	if err := d.Decode(&genericVal); err != nil {
 		return nil, err
 	}
-	return Format(genericVal)
+	return FormatJCS(genericVal)
 }

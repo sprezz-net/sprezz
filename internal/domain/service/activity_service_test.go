@@ -15,11 +15,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
 	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
+	"sprezz/internal/pkg/cryptoutil"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestProcessInboundTask_Success(t *testing.T) {
@@ -387,7 +389,7 @@ func TestRotateLocalActorKeys_Success(t *testing.T) {
 	actorIRI := "https://example.com"
 
 	// Mock existing seed private/public credentials configuration setup
-	seedKeys, err := model.MintNewKeyPair()
+	seedKeys, err := cryptoutil.MintNewKeyPair()
 	if err != nil {
 		t.Fatalf("failed setup: %v", err)
 	}

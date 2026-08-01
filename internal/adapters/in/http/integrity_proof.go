@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"sprezz/internal/pkg/integrityproof"
+	"sprezz/internal/pkg/cryptoutil"
 )
 
 // CheckAndVerifyIntegrityProof checks for the presence of a FEP-8b32 Object Integrity Proof.
@@ -55,7 +55,7 @@ func (v *FederatedSignatureVerifier) CheckAndVerifyIntegrityProof(r *http.Reques
 		return true, fmt.Errorf("verification key is not an Ed25519 public key")
 	}
 
-	valid, err := integrityproof.VerifyDataIntegrityProof(docMap, ed25519PubKey)
+	valid, err := cryptoutil.VerifyDataIntegrityProof(docMap, ed25519PubKey)
 	if err != nil {
 		return true, err
 	}

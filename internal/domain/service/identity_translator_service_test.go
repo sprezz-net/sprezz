@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestIdentityTranslatorService_InjectNomadicTriples_Success(t *testing.T) {

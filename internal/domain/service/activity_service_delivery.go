@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+
+	"github.com/google/uuid"
 )
 
 // extractAddressingTargets pulls addressing target IRIs from the activity JSON payload

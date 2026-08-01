@@ -8,6 +8,7 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/cryptoutil"
 
 	"github.com/google/uuid"
 )
@@ -54,7 +55,7 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 	}
 
 	// NEW: Call the centralized key minting function
-	newKeys, err := model.MintNewKeyPair()
+	newKeys, err := cryptoutil.MintNewKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to mint dual-key pair: %w", err)
 	}
@@ -67,7 +68,7 @@ func (s *BootstrapService) provisionServerActor(ctx context.Context, domain stri
 	}
 
 	// Derive public key block for the RDF record
-	pubKey, err := model.ExtractRSAPublicKey(newKeys.RSAPrivatePEM)
+	pubKey, err := cryptoutil.ExtractRSAPublicKey(newKeys.RSAPrivatePEM)
 	if err != nil {
 		return fmt.Errorf("failed to extract public key: %w", err)
 	}

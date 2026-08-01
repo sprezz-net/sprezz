@@ -7,11 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/adapters/out/federation"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/pkg/workers"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestOutboundWorkerEngine_Lifecycle(t *testing.T) {

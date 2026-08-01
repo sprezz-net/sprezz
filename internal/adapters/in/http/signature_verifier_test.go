@@ -17,9 +17,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gojuno/minimock/v3"
 	inhttp "sprezz/internal/adapters/in/http"
 	"sprezz/internal/domain/port/portmock"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestSignatureVerifier_MultiAlgorithm_TableDriven(t *testing.T) {

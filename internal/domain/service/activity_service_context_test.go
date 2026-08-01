@@ -5,9 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func verifyQuad(t *testing.T, res []model.Quad, subject, predicate, expectedObject string) bool {

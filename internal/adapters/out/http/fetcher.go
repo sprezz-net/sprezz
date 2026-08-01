@@ -1,14 +1,14 @@
 package http
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"context"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"time"
+
+	"sprezz/internal/pkg/httputil"
 )
 
 type RemoteFetcherAdapter struct {

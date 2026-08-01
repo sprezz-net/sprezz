@@ -1,8 +1,6 @@
 package http
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"bytes"
 	"context"
 	"crypto"
@@ -16,6 +14,8 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"sprezz/internal/pkg/httputil"
 )
 
 type FederatedSignerAdapter struct {

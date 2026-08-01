@@ -1,13 +1,10 @@
-package integrityproof
+package cryptoutil
 
 import (
 	"crypto/ed25519"
 	"crypto/sha256"
 	"fmt"
 	"strings"
-
-	"sprezz/internal/pkg/base58"
-	"sprezz/internal/pkg/jcs"
 )
 
 // ParseEd25519PublicKeyMultibase parses a public key multibase string (e.g. "z6Mkr...")
@@ -16,7 +13,7 @@ func ParseEd25519PublicKeyMultibase(multibaseKey string) (ed25519.PublicKey, err
 	if !strings.HasPrefix(multibaseKey, "z") {
 		return nil, fmt.Errorf("invalid multibase public key encoding: must start with 'z'")
 	}
-	raw, err := base58.Decode(multibaseKey[1:])
+	raw, err := DecodeBase58(multibaseKey[1:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base58 public key: %w", err)
 	}
@@ -33,7 +30,7 @@ func ParseEd25519PrivateKeyMultibase(multibaseKey string) (ed25519.PrivateKey, e
 	if !strings.HasPrefix(multibaseKey, "z") {
 		return nil, fmt.Errorf("invalid multibase private key encoding: must start with 'z'")
 	}
-	raw, err := base58.Decode(multibaseKey[1:])
+	raw, err := DecodeBase58(multibaseKey[1:])
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base58 private key: %w", err)
 	}
@@ -68,14 +65,14 @@ func SignDataIntegrityProof(docMap map[string]interface{}, privKey ed25519.Priva
 	}
 
 	// 3. Canonicalize document using JCS and compute SHA-256 hash
-	docBytes, err := jcs.Format(docToSign)
+	docBytes, err := FormatJCS(docToSign)
 	if err != nil {
 		return nil, fmt.Errorf("failed to canonicalize document: %w", err)
 	}
 	docHash := sha256.Sum256(docBytes)
 
 	// 4. Canonicalize proof configuration using JCS and compute SHA-256 hash
-	proofBytes, err := jcs.Format(proofConfig)
+	proofBytes, err := FormatJCS(proofConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to canonicalize proof configuration: %w", err)
 	}
@@ -88,7 +85,7 @@ func SignDataIntegrityProof(docMap map[string]interface{}, privKey ed25519.Priva
 	sigBytes := ed25519.Sign(privKey, sigInput)
 
 	// 7. Base58btc encode signature and prepend "z"
-	proofValue := "z" + base58.Encode(sigBytes)
+	proofValue := "z" + EncodeBase58(sigBytes)
 
 	// 8. Append proof to original document
 	signedDoc := make(map[string]interface{})
@@ -144,14 +141,14 @@ func VerifyDataIntegrityProof(docMap map[string]interface{}, pubKey ed25519.Publ
 	}
 
 	// 3. Canonicalize document using JCS and compute SHA-256 hash
-	docBytes, err := jcs.Format(docToVerify)
+	docBytes, err := FormatJCS(docToVerify)
 	if err != nil {
 		return false, fmt.Errorf("failed to canonicalize document: %w", err)
 	}
 	docHash := sha256.Sum256(docBytes)
 
 	// 4. Canonicalize proof configuration using JCS and compute SHA-256 hash
-	proofBytes, err := jcs.Format(proofConfig)
+	proofBytes, err := FormatJCS(proofConfig)
 	if err != nil {
 		return false, fmt.Errorf("failed to canonicalize proof configuration: %w", err)
 	}
@@ -161,7 +158,7 @@ func VerifyDataIntegrityProof(docMap map[string]interface{}, pubKey ed25519.Publ
 	sigInput := append(proofHash[:], docHash[:]...)
 
 	// 6. Decode Base58btc signature
-	sigBytes, err := base58.Decode(proofValue[1:])
+	sigBytes, err := DecodeBase58(proofValue[1:])
 	if err != nil {
 		return false, fmt.Errorf("failed to decode proofValue signature: %w", err)
 	}

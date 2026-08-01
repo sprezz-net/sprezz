@@ -1,4 +1,4 @@
-package model
+package cryptoutil
 
 import (
 	"crypto/ed25519"
@@ -14,7 +14,7 @@ type GeneratedDualKeys struct {
 	Ed25519PrivatePEM string
 }
 
-// MintNewKeyPair centralizes the 2048-bit RSA and Ed25519 key-generation workflow [source: 5].
+// MintNewKeyPair centralizes the 2048-bit RSA and Ed25519 key-generation workflow.
 func MintNewKeyPair() (*GeneratedDualKeys, error) {
 	privKeyRSA, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -40,7 +40,7 @@ func MintNewKeyPair() (*GeneratedDualKeys, error) {
 	}, nil
 }
 
-// ExtractRSAPublicKey derives a public key block from an RSA private PEM string [source: 5].
+// ExtractRSAPublicKey derives a public key block from an RSA private PEM string.
 func ExtractRSAPublicKey(privateKeyPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil {
@@ -69,7 +69,7 @@ func ExtractRSAPublicKey(privateKeyPEM string) (string, error) {
 	return string(pem.EncodeToMemory(pubBlock)), nil
 }
 
-// ExtractEd25519PublicKey derives a public key block from an Ed25519 private PEM string [source: 5].
+// ExtractEd25519PublicKey derives a public key block from an Ed25519 private PEM string.
 func ExtractEd25519PublicKey(privateKeyPEM string) (string, error) {
 	block, _ := pem.Decode([]byte(privateKeyPEM))
 	if block == nil {

@@ -1,17 +1,17 @@
 package middleware_test
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/domain/port/portmock"
+	"sprezz/internal/pkg/httputil"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 type mockSignatureVerifier struct {

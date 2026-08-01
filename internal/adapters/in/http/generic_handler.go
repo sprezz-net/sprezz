@@ -1,8 +1,6 @@
 package http
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,6 +10,7 @@ import (
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/httputil"
 
 	"github.com/google/uuid"
 )

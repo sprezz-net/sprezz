@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gojuno/minimock/v3"
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port/portmock"
 	"sprezz/internal/domain/service"
+
+	"github.com/gojuno/minimock/v3"
 )
 
 func TestProcessInboundTask_Create_Spoof(t *testing.T) {

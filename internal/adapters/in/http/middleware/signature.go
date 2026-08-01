@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"sprezz/internal/pkg/httputil"
-
 	"bytes"
 	"context"
 	"io"
@@ -10,6 +8,7 @@ import (
 	"strings"
 
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/httputil"
 )
 
 // The shared package-visible contextKey is natively inherited from tenant.go.

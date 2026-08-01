@@ -4,8 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/piprate/json-gold/ld"
 	"sprezz/internal/adapters/out/jsonld"
+
+	"github.com/piprate/json-gold/ld"
 )
 
 // mockFallbackLoader intercepts requests routed outside local memory spaces

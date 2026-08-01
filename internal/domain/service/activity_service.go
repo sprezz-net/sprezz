@@ -10,6 +10,7 @@ import (
 
 	"sprezz/internal/domain/model"
 	"sprezz/internal/domain/port"
+	"sprezz/internal/pkg/cryptoutil"
 
 	"github.com/google/uuid"
 )
@@ -488,20 +489,20 @@ func (s *ActivityService) RotateLocalActorKeys(ctx context.Context, tenantID int
 	validFrom := now.Add(-24 * time.Hour)
 
 	// Archive steps remain compact
-	rsaPubKeyPEM, err := model.ExtractRSAPublicKey(dualKeys.PrivateKeyRSAPEM)
+	rsaPubKeyPEM, err := cryptoutil.ExtractRSAPublicKey(dualKeys.PrivateKeyRSAPEM)
 	if err == nil {
 		_ = s.storage.ArchiveKeyHistory(ctx, actorIRI, "RSA", rsaPubKeyPEM, validFrom, now)
 	}
 
 	if dualKeys.PrivateKeyEd25519PEM != "" {
-		edPubKeyPEM, err := model.ExtractEd25519PublicKey(dualKeys.PrivateKeyEd25519PEM)
+		edPubKeyPEM, err := cryptoutil.ExtractEd25519PublicKey(dualKeys.PrivateKeyEd25519PEM)
 		if err == nil {
 			_ = s.storage.ArchiveKeyHistory(ctx, actorIRI, "Ed25519", edPubKeyPEM, validFrom, now)
 		}
 	}
 
 	// Reuse the identical centralized key minting function
-	newKeys, err := model.MintNewKeyPair()
+	newKeys, err := cryptoutil.MintNewKeyPair()
 	if err != nil {
 		return "", fmt.Errorf("failed to mint fresh keys during rotation: %w", err)
 	}

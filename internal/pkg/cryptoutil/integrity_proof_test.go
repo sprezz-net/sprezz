@@ -1,11 +1,10 @@
-package integrityproof_test
+package cryptoutil_test
 
 import (
 	"encoding/json"
 	"testing"
 
-	"sprezz/internal/pkg/integrityproof"
-	"sprezz/internal/pkg/jcs"
+	"sprezz/internal/pkg/cryptoutil"
 )
 
 const (
@@ -47,7 +46,7 @@ func TestIntegrityProof_CanonicalizeDoc(t *testing.T) {
 		}
 	}
 
-	docBytes, err := jcs.Format(docToSign)
+	docBytes, err := cryptoutil.FormatJCS(docToSign)
 	if err != nil {
 		t.Fatalf("Failed JCS formatting: %v", err)
 	}
@@ -71,7 +70,7 @@ func TestIntegrityProof_CanonicalizeProof(t *testing.T) {
 		"created":            testCreatedTime,
 	}
 
-	proofBytes, err := jcs.Format(proofConfig)
+	proofBytes, err := cryptoutil.FormatJCS(proofConfig)
 	if err != nil {
 		t.Fatalf("Failed JCS proof formatting: %v", err)
 	}
@@ -88,12 +87,12 @@ func TestIntegrityProof_SigningAndVerification(t *testing.T) {
 		t.Fatalf("Failed to parse document JSON: %v", err)
 	}
 
-	privKey, err := integrityproof.ParseEd25519PrivateKeyMultibase(testSecretKeyMultibase)
+	privKey, err := cryptoutil.ParseEd25519PrivateKeyMultibase(testSecretKeyMultibase)
 	if err != nil {
 		t.Fatalf("Failed to parse private key multibase: %v", err)
 	}
 
-	signedDoc, err := integrityproof.SignDataIntegrityProof(docMap, privKey, testVerificationMethod, testCreatedTime)
+	signedDoc, err := cryptoutil.SignDataIntegrityProof(docMap, privKey, testVerificationMethod, testCreatedTime)
 	if err != nil {
 		t.Fatalf("Failed to sign document: %v", err)
 	}
@@ -115,12 +114,12 @@ func TestIntegrityProof_SigningAndVerification(t *testing.T) {
 	}
 
 	actorPublicKeyMultibase := "z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2"
-	pubKey, err := integrityproof.ParseEd25519PublicKeyMultibase(actorPublicKeyMultibase)
+	pubKey, err := cryptoutil.ParseEd25519PublicKeyMultibase(actorPublicKeyMultibase)
 	if err != nil {
 		t.Fatalf("Failed to parse public key multibase: %v", err)
 	}
 
-	valid, err := integrityproof.VerifyDataIntegrityProof(signedDoc, pubKey)
+	valid, err := cryptoutil.VerifyDataIntegrityProof(signedDoc, pubKey)
 	if err != nil {
 		t.Fatalf("Failed to verify document: %v", err)
 	}
@@ -164,9 +163,9 @@ func TestIntegrityProof_InvalidSignatures(t *testing.T) {
 	}
 
 	actorPublicKeyMultibase := "z6MkrJVnaZkeFzdQyMZu1cgjg7k1pZZ6pvBQ7XJPt4swbTQ2"
-	pubKey, _ := integrityproof.ParseEd25519PublicKeyMultibase(actorPublicKeyMultibase)
+	pubKey, _ := cryptoutil.ParseEd25519PublicKeyMultibase(actorPublicKeyMultibase)
 
-	valid, err := integrityproof.VerifyDataIntegrityProof(docMap, pubKey)
+	valid, err := cryptoutil.VerifyDataIntegrityProof(docMap, pubKey)
 	if err == nil {
 		t.Errorf("Expected verification error for tampered document, got nil")
 	}
