@@ -494,23 +494,19 @@ If a database transaction, quad conversion, or dictionary mapping aborts, an aut
 
 To safely swallow multiple concurrent attachments under streaming loads, the incoming HTTP Driving Adapter plane implements a strict, sequential multi-part form loop:
 
-```text
-[Incoming HTTP Multipart Payload]
-                │
-                ├── r.MultipartForm.File["attachment"] (Array Matrix Lookup)
-                │
-     ┌──────────┴──────────┐
-     ▼                     ▼
-[Attachment 1]        [Attachment 2]  ... (Processed Sequentially for Memory Isolation)
-     │                     │
-     ├── 1. Pre-Flight Ingestion Quota Audit (Hard Ceiling Guard)
-     ├── 2. Open Stream Block Allocation (32MB Max In-Memory Cache Buffer)
-     ├── 3. Stack-Allocated Hashing (io.TeeReader stream to MinIO)
-     └── 4. Atomic Transaction Group Commit (SaveGraphVersionWithMedia via Core Service)
-                │
-                └─► [Any Failure Condition Triggered Mid-Loop]
-                            │
-                            └─► Execute Compensating Rollback (PurgeOrphanedMedia)
+```mermaid
+flowchart TD
+    In[Incoming HTTP Multipart Payload] --> Parse[Parse r.MultipartForm.File['attachment']]
+    Parse --> Loop[Process Files Sequentially]
+    Loop --> Quota{1. Pre-Flight Ingestion Quota Audit}
+    Quota -->|Ceiling Exceeded| Fail413[HTTP 413 Payload Too Large]
+    Quota -->|Authorized| Alloc[2. Open Stream Block Allocation (32MB Max)]
+    Alloc --> Hash[3. Stack-Allocated io.TeeReader Hashing & Stream to MinIO]
+    Hash --> Commit{4. SaveGraphVersionWithMedia DB Transaction}
+    Commit -->|Success| Next[Proceed to Next File]
+    Commit -->|Failure| Rollback[5. Execute Compensating Rollback (PurgeOrphanedMedia)]
+    Rollback --> Del[Delete Stored Objects from MinIO]
+    Del --> Exit[Abort Request with HTTP 500]
 ```
 
 1. **Memory Isolation Strategy**: The handler processes files using an explicit `for...range` loop instead of unbounded concurrent routines. File descriptors are deterministically closed at the footer of each iteration block rather than deferred, preventing unmanaged socket spikes and allocation leaks during massive multi-part batch intake.
