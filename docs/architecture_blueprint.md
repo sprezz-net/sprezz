@@ -365,7 +365,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 4. **`FEP-1b12` (Group Federation)**: Outlines standard handle matching and group subscription behavior (`Join`/`Leave` operations). Fully implemented via inbound `Join`/`Leave` auto-accept state transitions, automatic database-backed follow membership updates/deletions, and programmatic members-only `Announce` auto-relay loops to the Group's followers collection.
 5. **`FEP-7888` (Context / Conversation Thread Traversal)**: Standardizes traversing replies/conversation threads. Fully implemented. Top-level notes automatically establish a `<root_post_iri>/context` collection IRI, which reply notes inherit. Remote context collections are actively fetched and back-filled asynchronously on-demand when encountering new threads.
 6. **`FEP-400e` (Publicly-appendable ActivityPub Collections)**: Standardizes appendable collections by non-owners. Fully implemented as a strict opt-in mechanism; all collections are non-public by default, and third-party `Add`/`Remove` actions are only permitted if the target collection explicitly defines `publicAppend: true` in its metadata.
-7. **`FEP-35b7` (Fediverse Servers, Instances, and Tenants)**: See [section about Multi-Tenancy](#5-multi-tenancy-and-resource-schema-boundaries) in Sprezz.
+7. **`FEP-35b7` (Fediverse Servers, Instances, and Tenants)**: Fully implemented by isolating multi-tenant boundaries via implicit domain-based graph partitioning, routing decoupled instance-wide shared inboxes via a system-wide server actor, and resolving base-domain WebFinger queries back to that server actor.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
