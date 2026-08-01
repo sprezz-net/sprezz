@@ -11,6 +11,7 @@ database:
   # password:
   dbname: "sprezz"
   sslmode: "disable"
+  statement_timeout: "5s"
 
 minio:
   endpoint: "127.0.0.1:9005"

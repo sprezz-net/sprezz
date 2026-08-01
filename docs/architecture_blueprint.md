@@ -523,6 +523,7 @@ PostgreSQL is the system of record. A pgx connection pool must:
 - Bound maximum and minimum connections.
 - Bound connection lifetime.
 - Close cleanly during shutdown.
+- Prevent connection pool exhaustion under Denial of Service (DoS) attacks by enforcing a configurable query-level execution limit (defaulting to a safe `5s` statement timeout via `POSTGRES_STATEMENT_TIMEOUT` and pgxpool's `statement_timeout` runtime parameter).
 
 The database schema is installed during clean Compose initialization. Existing database volumes require an explicit migration or schema-application step because initialization scripts do not rerun for an already-initialized volume.
 
@@ -548,6 +549,7 @@ The implementation is functionally aligned with this blueprint when the followin
 - pgx/sqlc integration tests cover UUIDs, JSONB, PostgreSQL arrays, transactions, and row-locking behavior.
 - A parser or quad persistence failure leaves no orphaned graph version.
 - Inbound side-effect mutations (Undo, Delete, Update) are programmatically verified against the original target graph's owner and the actor's RDF public key entries before updating any database quads.
+- Connection pool exhaustion defenses abort long-running queries exceeding the configured statement timeout limit (defaulting to 5 seconds).
 
 ### 11.1 Multipart Media Form Attachment Upload Loop Criteria
 

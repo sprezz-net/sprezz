@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -99,6 +100,11 @@ func initDependencies() (*dependencies, *pgxpool.Pool) {
 	dbConfig.MaxConns = 25
 	dbConfig.MinConns = 10
 	dbConfig.MaxConnLifetime = 5 * time.Minute
+
+	timeoutMs := cfg.Database.StatementTimeout.Milliseconds()
+	if timeoutMs > 0 {
+		dbConfig.ConnConfig.RuntimeParams["statement_timeout"] = fmt.Sprintf("%d", timeoutMs)
+	}
 
 	log.Println("Connecting to database...")
 	db, err := pgxpool.NewWithConfig(context.Background(), dbConfig)

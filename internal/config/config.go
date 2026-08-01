@@ -10,12 +10,13 @@ import (
 )
 
 type DatabaseConfig struct {
-	Host     string `yaml:"host" env:"POSTGRES_HOST" env-default:"localhost"`
-	Port     string `yaml:"port" env:"POSTGRES_PORT" env-default:"5433"`
-	User     string `yaml:"user" env:"POSTGRES_USER" env-default:"sprezz_user"`
-	Password string `yaml:"password" env:"POSTGRES_PASSWORD"`
-	DBName   string `yaml:"dbname" env:"POSTGRES_DB" env-default:"sprezz"`
-	SSLMode  string `yaml:"sslmode" env:"POSTGRES_SSLMODE" env-default:"disable"`
+	Host             string        `yaml:"host" env:"POSTGRES_HOST" env-default:"localhost"`
+	Port             string        `yaml:"port" env:"POSTGRES_PORT" env-default:"5433"`
+	User             string        `yaml:"user" env:"POSTGRES_USER" env-default:"sprezz_user"`
+	Password         string        `yaml:"password" env:"POSTGRES_PASSWORD"`
+	DBName           string        `yaml:"dbname" env:"POSTGRES_DB" env-default:"sprezz"`
+	SSLMode          string        `yaml:"sslmode" env:"POSTGRES_SSLMODE" env-default:"disable"`
+	StatementTimeout time.Duration `yaml:"statement_timeout" env:"POSTGRES_STATEMENT_TIMEOUT" env-default:"5s"`
 }
 
 type MinIOConfig struct {
