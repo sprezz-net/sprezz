@@ -42,4 +42,6 @@ type ActivityServicePort interface {
 	AcceptFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error
 	RejectFollow(ctx context.Context, followedActorIRI, followActivityIRI string) error
 	SyncFollowers(ctx context.Context, actorIRI, remoteCollectionID, remoteSyncURL, expectedDigest string) error
+	AcceptQuoteRequest(ctx context.Context, localActorIRI, quoteRequestIRI, stampIRI string) error
+	RejectQuoteRequest(ctx context.Context, localActorIRI, quoteRequestIRI string) error
 }

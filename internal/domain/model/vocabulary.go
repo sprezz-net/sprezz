@@ -12,6 +12,7 @@ const (
 	NamespaceRDF             = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
 	NamespaceSecurity        = "https://w3id.org/security#"
 	NamespaceZot             = "http://purl.org/zot/protocol/"
+	NamespaceGoToSocial      = "https://gotosocial.org/ns#"
 
 	// Base document domain prefix URLs for contexts mapping
 	BaseW3OrgHTTPS = "https://w3.org"
@@ -45,9 +46,11 @@ const (
 	ShortEmojiReact = "EmojiReact"
 
 	// Object short names
-	ShortNote      = "Note"
-	ShortTombstone = "Tombstone"
-	ShortEmoji     = "Emoji"
+	ShortNote               = "Note"
+	ShortTombstone          = "Tombstone"
+	ShortEmoji              = "Emoji"
+	ShortQuoteRequest       = "QuoteRequest"
+	ShortQuoteAuthorization = "QuoteAuthorization"
 
 	// Canonical vocabulary URIs used to scan actor graphs
 	PredicatePreferredUsername = NamespaceActivityStreams + "preferredUsername"
@@ -65,50 +68,65 @@ const (
 	ActorApplication  = NamespaceActivityStreams + ShortApplication
 
 	// ActivityPub Object/Activity Types (dynamically constructed)
-	TypeFollow     = NamespaceActivityStreams + ShortFollow
-	TypeAccept     = NamespaceActivityStreams + ShortAccept
-	TypeReject     = NamespaceActivityStreams + ShortReject
-	TypeCreate     = NamespaceActivityStreams + ShortCreate
-	TypeLike       = NamespaceActivityStreams + ShortLike
-	TypeDislike    = NamespaceActivityStreams + ShortDislike
-	TypeAnnounce   = NamespaceActivityStreams + ShortAnnounce
-	TypeUndo       = NamespaceActivityStreams + ShortUndo
-	TypeDelete     = NamespaceActivityStreams + ShortDelete
-	TypeUpdate     = NamespaceActivityStreams + ShortUpdate
-	TypeAdd        = NamespaceActivityStreams + ShortAdd
-	TypeRemove     = NamespaceActivityStreams + ShortRemove
-	TypeJoin       = NamespaceActivityStreams + ShortJoin
-	TypeLeave      = NamespaceActivityStreams + ShortLeave
-	TypeQuestion   = NamespaceActivityStreams + ShortQuestion
-	TypeEmojiReact = "http://litepub.social/ns#EmojiReact"
-	TypeEmoji      = "http://joinmastodon.org/ns#Emoji"
-	TypeNote       = NamespaceActivityStreams + ShortNote
-	TypeTombstone  = NamespaceActivityStreams + ShortTombstone
+	TypeFollow             = NamespaceActivityStreams + ShortFollow
+	TypeAccept             = NamespaceActivityStreams + ShortAccept
+	TypeReject             = NamespaceActivityStreams + ShortReject
+	TypeCreate             = NamespaceActivityStreams + ShortCreate
+	TypeLike               = NamespaceActivityStreams + ShortLike
+	TypeDislike            = NamespaceActivityStreams + ShortDislike
+	TypeAnnounce           = NamespaceActivityStreams + ShortAnnounce
+	TypeUndo               = NamespaceActivityStreams + ShortUndo
+	TypeDelete             = NamespaceActivityStreams + ShortDelete
+	TypeUpdate             = NamespaceActivityStreams + ShortUpdate
+	TypeAdd                = NamespaceActivityStreams + ShortAdd
+	TypeRemove             = NamespaceActivityStreams + ShortRemove
+	TypeJoin               = NamespaceActivityStreams + ShortJoin
+	TypeLeave              = NamespaceActivityStreams + ShortLeave
+	TypeQuestion           = NamespaceActivityStreams + ShortQuestion
+	TypeEmojiReact         = "http://litepub.social/ns#EmojiReact"
+	TypeEmoji              = "http://joinmastodon.org/ns#Emoji"
+	TypeNote               = NamespaceActivityStreams + ShortNote
+	TypeTombstone          = NamespaceActivityStreams + ShortTombstone
+	TypeQuoteRequest       = "https://w3id.org/fep/044f#QuoteRequest"
+	TypeQuoteAuthorization = "https://w3id.org/fep/044f#QuoteAuthorization"
 
 	// Vocabulary predicates
-	PredicateInbox          = NamespaceActivityStreams + "inbox"
-	PredicateSharedInbox    = NamespaceActivityStreams + "sharedInbox"
-	PredicatePublicAppend   = "https://w3id.org/fep/400e/publicAppend"
-	PredicateFollower       = NamespaceActivityStreams + "follower"
-	PredicateAccepted       = NamespaceActivityStreams + "accepted"
-	PredicateRejected       = NamespaceActivityStreams + "rejected"
-	PredicateActor          = NamespaceActivityStreams + "actor"
-	PredicateAttributedTo   = NamespaceActivityStreams + "attributedTo"
-	PredicateObject         = NamespaceActivityStreams + "object"
-	PredicateResult         = NamespaceActivityStreams + "result"
-	PredicateTo             = NamespaceActivityStreams + "to"
-	PredicateCc             = NamespaceActivityStreams + "cc"
-	PredicateBto            = NamespaceActivityStreams + "bto"
-	PredicateBcc            = NamespaceActivityStreams + "bcc"
-	PredicateAudience       = NamespaceActivityStreams + "audience"
-	PredicateFollowers      = NamespaceActivityStreams + "followers"
-	PredicateEndTime        = NamespaceActivityStreams + "endTime"
-	PredicateVoted          = NamespaceActivityStreams + "voted"
-	PredicateLiked          = NamespaceActivityStreams + "liked"
-	PredicateContext        = NamespaceActivityStreams + "context"
-	PredicateContextHistory = "https://w3id.org/fep/171b/contextHistory"
-	PredicateQuote          = "https://w3id.org/fep/044f#quote"
-	PredicateEmojiReactions = "http://fedibird.com/ns#emojiReactions"
+	PredicateInbox              = NamespaceActivityStreams + "inbox"
+	PredicateSharedInbox        = NamespaceActivityStreams + "sharedInbox"
+	PredicatePublicAppend       = "https://w3id.org/fep/400e/publicAppend"
+	PredicateFollower           = NamespaceActivityStreams + "follower"
+	PredicateAccepted           = NamespaceActivityStreams + "accepted"
+	PredicateRejected           = NamespaceActivityStreams + "rejected"
+	PredicateActor              = NamespaceActivityStreams + "actor"
+	PredicateAttributedTo       = NamespaceActivityStreams + "attributedTo"
+	PredicateObject             = NamespaceActivityStreams + "object"
+	PredicateResult             = NamespaceActivityStreams + "result"
+	PredicateTo                 = NamespaceActivityStreams + "to"
+	PredicateCc                 = NamespaceActivityStreams + "cc"
+	PredicateBto                = NamespaceActivityStreams + "bto"
+	PredicateBcc                = NamespaceActivityStreams + "bcc"
+	PredicateAudience           = NamespaceActivityStreams + "audience"
+	PredicateFollowers          = NamespaceActivityStreams + "followers"
+	PredicateEndTime            = NamespaceActivityStreams + "endTime"
+	PredicateVoted              = NamespaceActivityStreams + "voted"
+	PredicateLiked              = NamespaceActivityStreams + "liked"
+	PredicateContext            = NamespaceActivityStreams + "context"
+	PredicateContextHistory     = "https://w3id.org/fep/171b/contextHistory"
+	PredicateQuote              = "https://w3id.org/fep/044f#quote"
+	PredicateQuoteAuthorization = "https://w3id.org/fep/044f#quoteAuthorization"
+	PredicateEmojiReactions     = "http://fedibird.com/ns#emojiReactions"
+	PredicateInstrument         = NamespaceActivityStreams + "instrument"
+
+	// GoToSocial specific predicates
+	PredicateInteractingObject = NamespaceGoToSocial + "interactingObject"
+	PredicateInteractionTarget = NamespaceGoToSocial + "interactionTarget"
+	PredicateInteractionPolicy = NamespaceGoToSocial + "interactionPolicy"
+	PredicateCanQuote          = NamespaceGoToSocial + "canQuote"
+	PredicateManualApproval    = NamespaceGoToSocial + "manualApproval"
+	PredicateAutomaticApproval = NamespaceGoToSocial + "automaticApproval"
+
+	// Interaction policy values
+	PolicyManual = "manual"
 
 	// FEP-4ccd Pending Followers / Following Collection Predicates
 	NamespacePending          = "https://purl.archive.org/socialweb/pending#"

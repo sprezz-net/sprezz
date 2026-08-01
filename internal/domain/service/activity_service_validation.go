@@ -14,11 +14,12 @@ import (
 // validateInboundActivity runs strict security, origin, identity, and state checks on inbound activities
 func (s *ActivityService) validateInboundActivity(ctx context.Context, activityIRI string, payload []byte) error {
 	var activity struct {
-		ID     string      `json:"id"`
-		Type   string      `json:"type"`
-		Actor  interface{} `json:"actor"`
-		Object interface{} `json:"object"`
-		Target interface{} `json:"target"`
+		ID         string      `json:"id"`
+		Type       string      `json:"type"`
+		Actor      interface{} `json:"actor"`
+		Object     interface{} `json:"object"`
+		Target     interface{} `json:"target"`
+		Instrument interface{} `json:"instrument"`
 	}
 	if err := json.Unmarshal(payload, &activity); err != nil {
 		return nil
@@ -35,13 +36,13 @@ func (s *ActivityService) validateInboundActivity(ctx context.Context, activityI
 		}
 	}
 
-	return s.validateCoreInteractions(ctx, actorIRI, activity.Type, activity.Object, activity.Target)
+	return s.validateCoreInteractions(ctx, actorIRI, activity.Type, activity.Object, activity.Target, activity.Instrument)
 }
 
-func (s *ActivityService) validateCoreInteractions(ctx context.Context, actorIRI, actType string, object, target interface{}) error {
+func (s *ActivityService) validateCoreInteractions(ctx context.Context, actorIRI, actType string, object, target, instrument interface{}) error {
 	switch actType {
 	case model.ShortCreate:
-		return s.validateCreateVerb(actorIRI, object)
+		return s.validateCreateVerb(ctx, actorIRI, object)
 	case model.ShortAccept, model.ShortReject:
 		return s.validateAcceptRejectVerb(ctx, actorIRI, actType, object)
 	case model.ShortAdd, model.ShortRemove:
@@ -54,6 +55,8 @@ func (s *ActivityService) validateCoreInteractions(ctx context.Context, actorIRI
 		return s.validateJoinLeaveVerb(ctx, object)
 	case model.ShortQuestion:
 		return s.validateQuestionVerb(ctx, actorIRI, actType, object)
+	case model.ShortQuoteRequest, model.TypeQuoteRequest:
+		return s.validateQuoteRequestVerb(actorIRI, object, instrument)
 	}
 	return nil
 }
@@ -115,7 +118,7 @@ func (s *ActivityService) validateMutatingVerb(ctx context.Context, activityIRI,
 	return nil
 }
 
-func (s *ActivityService) validateCreateVerb(actorIRI string, object interface{}) error {
+func (s *ActivityService) validateCreateVerb(ctx context.Context, actorIRI string, object interface{}) error {
 	objID := parseStringOrID(object)
 	if objID != "" {
 		actorDomain := extractDomain(actorIRI)
@@ -125,7 +128,11 @@ func (s *ActivityService) validateCreateVerb(actorIRI string, object interface{}
 		}
 	}
 
-	return s.validateActorSelfCreation(actorIRI, object)
+	if err := s.validateActorSelfCreation(actorIRI, object); err != nil {
+		return err
+	}
+
+	return s.validateQuotePostConsent(ctx, actorIRI, object)
 }
 
 // validateActorSelfCreation enforces that only the actor themselves can create/represent their own profile.

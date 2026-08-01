@@ -27,6 +27,13 @@ type ActivityServicePortMock struct {
 	beforeAcceptFollowCounter uint64
 	AcceptFollowMock          mActivityServicePortMockAcceptFollow
 
+	funcAcceptQuoteRequest          func(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string) (err error)
+	funcAcceptQuoteRequestOrigin    string
+	inspectFuncAcceptQuoteRequest   func(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string)
+	afterAcceptQuoteRequestCounter  uint64
+	beforeAcceptQuoteRequestCounter uint64
+	AcceptQuoteRequestMock          mActivityServicePortMockAcceptQuoteRequest
+
 	funcDispatchOutboundActivity          func(ctx context.Context, activityIRI string, actorIRI string, payload []byte) (err error)
 	funcDispatchOutboundActivityOrigin    string
 	inspectFuncDispatchOutboundActivity   func(ctx context.Context, activityIRI string, actorIRI string, payload []byte)
@@ -76,6 +83,13 @@ type ActivityServicePortMock struct {
 	beforeRejectFollowCounter uint64
 	RejectFollowMock          mActivityServicePortMockRejectFollow
 
+	funcRejectQuoteRequest          func(ctx context.Context, localActorIRI string, quoteRequestIRI string) (err error)
+	funcRejectQuoteRequestOrigin    string
+	inspectFuncRejectQuoteRequest   func(ctx context.Context, localActorIRI string, quoteRequestIRI string)
+	afterRejectQuoteRequestCounter  uint64
+	beforeRejectQuoteRequestCounter uint64
+	RejectQuoteRequestMock          mActivityServicePortMockRejectQuoteRequest
+
 	funcSyncFollowers          func(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string) (err error)
 	funcSyncFollowersOrigin    string
 	inspectFuncSyncFollowers   func(ctx context.Context, actorIRI string, remoteCollectionID string, remoteSyncURL string, expectedDigest string)
@@ -94,6 +108,9 @@ func NewActivityServicePortMock(t minimock.Tester) *ActivityServicePortMock {
 
 	m.AcceptFollowMock = mActivityServicePortMockAcceptFollow{mock: m}
 	m.AcceptFollowMock.callArgs = []*ActivityServicePortMockAcceptFollowParams{}
+
+	m.AcceptQuoteRequestMock = mActivityServicePortMockAcceptQuoteRequest{mock: m}
+	m.AcceptQuoteRequestMock.callArgs = []*ActivityServicePortMockAcceptQuoteRequestParams{}
 
 	m.DispatchOutboundActivityMock = mActivityServicePortMockDispatchOutboundActivity{mock: m}
 	m.DispatchOutboundActivityMock.callArgs = []*ActivityServicePortMockDispatchOutboundActivityParams{}
@@ -115,6 +132,9 @@ func NewActivityServicePortMock(t minimock.Tester) *ActivityServicePortMock {
 
 	m.RejectFollowMock = mActivityServicePortMockRejectFollow{mock: m}
 	m.RejectFollowMock.callArgs = []*ActivityServicePortMockRejectFollowParams{}
+
+	m.RejectQuoteRequestMock = mActivityServicePortMockRejectQuoteRequest{mock: m}
+	m.RejectQuoteRequestMock.callArgs = []*ActivityServicePortMockRejectQuoteRequestParams{}
 
 	m.SyncFollowersMock = mActivityServicePortMockSyncFollowers{mock: m}
 	m.SyncFollowersMock.callArgs = []*ActivityServicePortMockSyncFollowersParams{}
@@ -494,6 +514,410 @@ func (m *ActivityServicePortMock) MinimockAcceptFollowInspect() {
 	if !m.AcceptFollowMock.invocationsDone() && afterAcceptFollowCounter > 0 {
 		m.t.Errorf("Expected %d calls to ActivityServicePortMock.AcceptFollow at\n%s but found %d calls",
 			mm_atomic.LoadUint64(&m.AcceptFollowMock.expectedInvocations), m.AcceptFollowMock.expectedInvocationsOrigin, afterAcceptFollowCounter)
+	}
+}
+
+type mActivityServicePortMockAcceptQuoteRequest struct {
+	optional           bool
+	mock               *ActivityServicePortMock
+	defaultExpectation *ActivityServicePortMockAcceptQuoteRequestExpectation
+	expectations       []*ActivityServicePortMockAcceptQuoteRequestExpectation
+
+	callArgs []*ActivityServicePortMockAcceptQuoteRequestParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// ActivityServicePortMockAcceptQuoteRequestExpectation specifies expectation struct of the ActivityServicePort.AcceptQuoteRequest
+type ActivityServicePortMockAcceptQuoteRequestExpectation struct {
+	mock               *ActivityServicePortMock
+	params             *ActivityServicePortMockAcceptQuoteRequestParams
+	paramPtrs          *ActivityServicePortMockAcceptQuoteRequestParamPtrs
+	expectationOrigins ActivityServicePortMockAcceptQuoteRequestExpectationOrigins
+	results            *ActivityServicePortMockAcceptQuoteRequestResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// ActivityServicePortMockAcceptQuoteRequestParams contains parameters of the ActivityServicePort.AcceptQuoteRequest
+type ActivityServicePortMockAcceptQuoteRequestParams struct {
+	ctx             context.Context
+	localActorIRI   string
+	quoteRequestIRI string
+	stampIRI        string
+}
+
+// ActivityServicePortMockAcceptQuoteRequestParamPtrs contains pointers to parameters of the ActivityServicePort.AcceptQuoteRequest
+type ActivityServicePortMockAcceptQuoteRequestParamPtrs struct {
+	ctx             *context.Context
+	localActorIRI   *string
+	quoteRequestIRI *string
+	stampIRI        *string
+}
+
+// ActivityServicePortMockAcceptQuoteRequestResults contains results of the ActivityServicePort.AcceptQuoteRequest
+type ActivityServicePortMockAcceptQuoteRequestResults struct {
+	err error
+}
+
+// ActivityServicePortMockAcceptQuoteRequestOrigins contains origins of expectations of the ActivityServicePort.AcceptQuoteRequest
+type ActivityServicePortMockAcceptQuoteRequestExpectationOrigins struct {
+	origin                string
+	originCtx             string
+	originLocalActorIRI   string
+	originQuoteRequestIRI string
+	originStampIRI        string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Optional() *mActivityServicePortMockAcceptQuoteRequest {
+	mmAcceptQuoteRequest.optional = true
+	return mmAcceptQuoteRequest
+}
+
+// Expect sets up expected params for ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Expect(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string) *mActivityServicePortMockAcceptQuoteRequest {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation == nil {
+		mmAcceptQuoteRequest.defaultExpectation = &ActivityServicePortMockAcceptQuoteRequestExpectation{}
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.paramPtrs != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by ExpectParams functions")
+	}
+
+	mmAcceptQuoteRequest.defaultExpectation.params = &ActivityServicePortMockAcceptQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI, stampIRI}
+	mmAcceptQuoteRequest.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmAcceptQuoteRequest.expectations {
+		if minimock.Equal(e.params, mmAcceptQuoteRequest.defaultExpectation.params) {
+			mmAcceptQuoteRequest.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmAcceptQuoteRequest.defaultExpectation.params)
+		}
+	}
+
+	return mmAcceptQuoteRequest
+}
+
+// ExpectCtxParam1 sets up expected param ctx for ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) ExpectCtxParam1(ctx context.Context) *mActivityServicePortMockAcceptQuoteRequest {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation == nil {
+		mmAcceptQuoteRequest.defaultExpectation = &ActivityServicePortMockAcceptQuoteRequestExpectation{}
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.params != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Expect")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmAcceptQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptQuoteRequestParamPtrs{}
+	}
+	mmAcceptQuoteRequest.defaultExpectation.paramPtrs.ctx = &ctx
+	mmAcceptQuoteRequest.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmAcceptQuoteRequest
+}
+
+// ExpectLocalActorIRIParam2 sets up expected param localActorIRI for ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) ExpectLocalActorIRIParam2(localActorIRI string) *mActivityServicePortMockAcceptQuoteRequest {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation == nil {
+		mmAcceptQuoteRequest.defaultExpectation = &ActivityServicePortMockAcceptQuoteRequestExpectation{}
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.params != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Expect")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmAcceptQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptQuoteRequestParamPtrs{}
+	}
+	mmAcceptQuoteRequest.defaultExpectation.paramPtrs.localActorIRI = &localActorIRI
+	mmAcceptQuoteRequest.defaultExpectation.expectationOrigins.originLocalActorIRI = minimock.CallerInfo(1)
+
+	return mmAcceptQuoteRequest
+}
+
+// ExpectQuoteRequestIRIParam3 sets up expected param quoteRequestIRI for ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) ExpectQuoteRequestIRIParam3(quoteRequestIRI string) *mActivityServicePortMockAcceptQuoteRequest {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation == nil {
+		mmAcceptQuoteRequest.defaultExpectation = &ActivityServicePortMockAcceptQuoteRequestExpectation{}
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.params != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Expect")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmAcceptQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptQuoteRequestParamPtrs{}
+	}
+	mmAcceptQuoteRequest.defaultExpectation.paramPtrs.quoteRequestIRI = &quoteRequestIRI
+	mmAcceptQuoteRequest.defaultExpectation.expectationOrigins.originQuoteRequestIRI = minimock.CallerInfo(1)
+
+	return mmAcceptQuoteRequest
+}
+
+// ExpectStampIRIParam4 sets up expected param stampIRI for ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) ExpectStampIRIParam4(stampIRI string) *mActivityServicePortMockAcceptQuoteRequest {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation == nil {
+		mmAcceptQuoteRequest.defaultExpectation = &ActivityServicePortMockAcceptQuoteRequestExpectation{}
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.params != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Expect")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmAcceptQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockAcceptQuoteRequestParamPtrs{}
+	}
+	mmAcceptQuoteRequest.defaultExpectation.paramPtrs.stampIRI = &stampIRI
+	mmAcceptQuoteRequest.defaultExpectation.expectationOrigins.originStampIRI = minimock.CallerInfo(1)
+
+	return mmAcceptQuoteRequest
+}
+
+// Inspect accepts an inspector function that has same arguments as the ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Inspect(f func(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string)) *mActivityServicePortMockAcceptQuoteRequest {
+	if mmAcceptQuoteRequest.mock.inspectFuncAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("Inspect function is already set for ActivityServicePortMock.AcceptQuoteRequest")
+	}
+
+	mmAcceptQuoteRequest.mock.inspectFuncAcceptQuoteRequest = f
+
+	return mmAcceptQuoteRequest
+}
+
+// Return sets up results that will be returned by ActivityServicePort.AcceptQuoteRequest
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Return(err error) *ActivityServicePortMock {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	if mmAcceptQuoteRequest.defaultExpectation == nil {
+		mmAcceptQuoteRequest.defaultExpectation = &ActivityServicePortMockAcceptQuoteRequestExpectation{mock: mmAcceptQuoteRequest.mock}
+	}
+	mmAcceptQuoteRequest.defaultExpectation.results = &ActivityServicePortMockAcceptQuoteRequestResults{err}
+	mmAcceptQuoteRequest.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmAcceptQuoteRequest.mock
+}
+
+// Set uses given function f to mock the ActivityServicePort.AcceptQuoteRequest method
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Set(f func(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string) (err error)) *ActivityServicePortMock {
+	if mmAcceptQuoteRequest.defaultExpectation != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.AcceptQuoteRequest method")
+	}
+
+	if len(mmAcceptQuoteRequest.expectations) > 0 {
+		mmAcceptQuoteRequest.mock.t.Fatalf("Some expectations are already set for the ActivityServicePort.AcceptQuoteRequest method")
+	}
+
+	mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest = f
+	mmAcceptQuoteRequest.mock.funcAcceptQuoteRequestOrigin = minimock.CallerInfo(1)
+	return mmAcceptQuoteRequest.mock
+}
+
+// When sets expectation for the ActivityServicePort.AcceptQuoteRequest which will trigger the result defined by the following
+// Then helper
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) When(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string) *ActivityServicePortMockAcceptQuoteRequestExpectation {
+	if mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.AcceptQuoteRequest mock is already set by Set")
+	}
+
+	expectation := &ActivityServicePortMockAcceptQuoteRequestExpectation{
+		mock:               mmAcceptQuoteRequest.mock,
+		params:             &ActivityServicePortMockAcceptQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI, stampIRI},
+		expectationOrigins: ActivityServicePortMockAcceptQuoteRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmAcceptQuoteRequest.expectations = append(mmAcceptQuoteRequest.expectations, expectation)
+	return expectation
+}
+
+// Then sets up ActivityServicePort.AcceptQuoteRequest return parameters for the expectation previously defined by the When method
+func (e *ActivityServicePortMockAcceptQuoteRequestExpectation) Then(err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockAcceptQuoteRequestResults{err}
+	return e.mock
+}
+
+// Times sets number of times ActivityServicePort.AcceptQuoteRequest should be invoked
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Times(n uint64) *mActivityServicePortMockAcceptQuoteRequest {
+	if n == 0 {
+		mmAcceptQuoteRequest.mock.t.Fatalf("Times of ActivityServicePortMock.AcceptQuoteRequest mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmAcceptQuoteRequest.expectedInvocations, n)
+	mmAcceptQuoteRequest.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmAcceptQuoteRequest
+}
+
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) invocationsDone() bool {
+	if len(mmAcceptQuoteRequest.expectations) == 0 && mmAcceptQuoteRequest.defaultExpectation == nil && mmAcceptQuoteRequest.mock.funcAcceptQuoteRequest == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmAcceptQuoteRequest.mock.afterAcceptQuoteRequestCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmAcceptQuoteRequest.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// AcceptQuoteRequest implements mm_port.ActivityServicePort
+func (mmAcceptQuoteRequest *ActivityServicePortMock) AcceptQuoteRequest(ctx context.Context, localActorIRI string, quoteRequestIRI string, stampIRI string) (err error) {
+	mm_atomic.AddUint64(&mmAcceptQuoteRequest.beforeAcceptQuoteRequestCounter, 1)
+	defer mm_atomic.AddUint64(&mmAcceptQuoteRequest.afterAcceptQuoteRequestCounter, 1)
+
+	mmAcceptQuoteRequest.t.Helper()
+
+	if mmAcceptQuoteRequest.inspectFuncAcceptQuoteRequest != nil {
+		mmAcceptQuoteRequest.inspectFuncAcceptQuoteRequest(ctx, localActorIRI, quoteRequestIRI, stampIRI)
+	}
+
+	mm_params := ActivityServicePortMockAcceptQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI, stampIRI}
+
+	// Record call args
+	mmAcceptQuoteRequest.AcceptQuoteRequestMock.mutex.Lock()
+	mmAcceptQuoteRequest.AcceptQuoteRequestMock.callArgs = append(mmAcceptQuoteRequest.AcceptQuoteRequestMock.callArgs, &mm_params)
+	mmAcceptQuoteRequest.AcceptQuoteRequestMock.mutex.Unlock()
+
+	for _, e := range mmAcceptQuoteRequest.AcceptQuoteRequestMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.Counter, 1)
+		mm_want := mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.params
+		mm_want_ptrs := mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.paramPtrs
+
+		mm_got := ActivityServicePortMockAcceptQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI, stampIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmAcceptQuoteRequest.t.Errorf("ActivityServicePortMock.AcceptQuoteRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.localActorIRI != nil && !minimock.Equal(*mm_want_ptrs.localActorIRI, mm_got.localActorIRI) {
+				mmAcceptQuoteRequest.t.Errorf("ActivityServicePortMock.AcceptQuoteRequest got unexpected parameter localActorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.expectationOrigins.originLocalActorIRI, *mm_want_ptrs.localActorIRI, mm_got.localActorIRI, minimock.Diff(*mm_want_ptrs.localActorIRI, mm_got.localActorIRI))
+			}
+
+			if mm_want_ptrs.quoteRequestIRI != nil && !minimock.Equal(*mm_want_ptrs.quoteRequestIRI, mm_got.quoteRequestIRI) {
+				mmAcceptQuoteRequest.t.Errorf("ActivityServicePortMock.AcceptQuoteRequest got unexpected parameter quoteRequestIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.expectationOrigins.originQuoteRequestIRI, *mm_want_ptrs.quoteRequestIRI, mm_got.quoteRequestIRI, minimock.Diff(*mm_want_ptrs.quoteRequestIRI, mm_got.quoteRequestIRI))
+			}
+
+			if mm_want_ptrs.stampIRI != nil && !minimock.Equal(*mm_want_ptrs.stampIRI, mm_got.stampIRI) {
+				mmAcceptQuoteRequest.t.Errorf("ActivityServicePortMock.AcceptQuoteRequest got unexpected parameter stampIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.expectationOrigins.originStampIRI, *mm_want_ptrs.stampIRI, mm_got.stampIRI, minimock.Diff(*mm_want_ptrs.stampIRI, mm_got.stampIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmAcceptQuoteRequest.t.Errorf("ActivityServicePortMock.AcceptQuoteRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmAcceptQuoteRequest.AcceptQuoteRequestMock.defaultExpectation.results
+		if mm_results == nil {
+			mmAcceptQuoteRequest.t.Fatal("No results are set for the ActivityServicePortMock.AcceptQuoteRequest")
+		}
+		return (*mm_results).err
+	}
+	if mmAcceptQuoteRequest.funcAcceptQuoteRequest != nil {
+		return mmAcceptQuoteRequest.funcAcceptQuoteRequest(ctx, localActorIRI, quoteRequestIRI, stampIRI)
+	}
+	mmAcceptQuoteRequest.t.Fatalf("Unexpected call to ActivityServicePortMock.AcceptQuoteRequest. %v %v %v %v", ctx, localActorIRI, quoteRequestIRI, stampIRI)
+	return
+}
+
+// AcceptQuoteRequestAfterCounter returns a count of finished ActivityServicePortMock.AcceptQuoteRequest invocations
+func (mmAcceptQuoteRequest *ActivityServicePortMock) AcceptQuoteRequestAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmAcceptQuoteRequest.afterAcceptQuoteRequestCounter)
+}
+
+// AcceptQuoteRequestBeforeCounter returns a count of ActivityServicePortMock.AcceptQuoteRequest invocations
+func (mmAcceptQuoteRequest *ActivityServicePortMock) AcceptQuoteRequestBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmAcceptQuoteRequest.beforeAcceptQuoteRequestCounter)
+}
+
+// Calls returns a list of arguments used in each call to ActivityServicePortMock.AcceptQuoteRequest.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmAcceptQuoteRequest *mActivityServicePortMockAcceptQuoteRequest) Calls() []*ActivityServicePortMockAcceptQuoteRequestParams {
+	mmAcceptQuoteRequest.mutex.RLock()
+
+	argCopy := make([]*ActivityServicePortMockAcceptQuoteRequestParams, len(mmAcceptQuoteRequest.callArgs))
+	copy(argCopy, mmAcceptQuoteRequest.callArgs)
+
+	mmAcceptQuoteRequest.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockAcceptQuoteRequestDone returns true if the count of the AcceptQuoteRequest invocations corresponds
+// the number of defined expectations
+func (m *ActivityServicePortMock) MinimockAcceptQuoteRequestDone() bool {
+	if m.AcceptQuoteRequestMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.AcceptQuoteRequestMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.AcceptQuoteRequestMock.invocationsDone()
+}
+
+// MinimockAcceptQuoteRequestInspect logs each unmet expectation
+func (m *ActivityServicePortMock) MinimockAcceptQuoteRequestInspect() {
+	for _, e := range m.AcceptQuoteRequestMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to ActivityServicePortMock.AcceptQuoteRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterAcceptQuoteRequestCounter := mm_atomic.LoadUint64(&m.afterAcceptQuoteRequestCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.AcceptQuoteRequestMock.defaultExpectation != nil && afterAcceptQuoteRequestCounter < 1 {
+		if m.AcceptQuoteRequestMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to ActivityServicePortMock.AcceptQuoteRequest at\n%s", m.AcceptQuoteRequestMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to ActivityServicePortMock.AcceptQuoteRequest at\n%s with params: %#v", m.AcceptQuoteRequestMock.defaultExpectation.expectationOrigins.origin, *m.AcceptQuoteRequestMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcAcceptQuoteRequest != nil && afterAcceptQuoteRequestCounter < 1 {
+		m.t.Errorf("Expected call to ActivityServicePortMock.AcceptQuoteRequest at\n%s", m.funcAcceptQuoteRequestOrigin)
+	}
+
+	if !m.AcceptQuoteRequestMock.invocationsDone() && afterAcceptQuoteRequestCounter > 0 {
+		m.t.Errorf("Expected %d calls to ActivityServicePortMock.AcceptQuoteRequest at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.AcceptQuoteRequestMock.expectedInvocations), m.AcceptQuoteRequestMock.expectedInvocationsOrigin, afterAcceptQuoteRequestCounter)
 	}
 }
 
@@ -3204,6 +3628,379 @@ func (m *ActivityServicePortMock) MinimockRejectFollowInspect() {
 	}
 }
 
+type mActivityServicePortMockRejectQuoteRequest struct {
+	optional           bool
+	mock               *ActivityServicePortMock
+	defaultExpectation *ActivityServicePortMockRejectQuoteRequestExpectation
+	expectations       []*ActivityServicePortMockRejectQuoteRequestExpectation
+
+	callArgs []*ActivityServicePortMockRejectQuoteRequestParams
+	mutex    sync.RWMutex
+
+	expectedInvocations       uint64
+	expectedInvocationsOrigin string
+}
+
+// ActivityServicePortMockRejectQuoteRequestExpectation specifies expectation struct of the ActivityServicePort.RejectQuoteRequest
+type ActivityServicePortMockRejectQuoteRequestExpectation struct {
+	mock               *ActivityServicePortMock
+	params             *ActivityServicePortMockRejectQuoteRequestParams
+	paramPtrs          *ActivityServicePortMockRejectQuoteRequestParamPtrs
+	expectationOrigins ActivityServicePortMockRejectQuoteRequestExpectationOrigins
+	results            *ActivityServicePortMockRejectQuoteRequestResults
+	returnOrigin       string
+	Counter            uint64
+}
+
+// ActivityServicePortMockRejectQuoteRequestParams contains parameters of the ActivityServicePort.RejectQuoteRequest
+type ActivityServicePortMockRejectQuoteRequestParams struct {
+	ctx             context.Context
+	localActorIRI   string
+	quoteRequestIRI string
+}
+
+// ActivityServicePortMockRejectQuoteRequestParamPtrs contains pointers to parameters of the ActivityServicePort.RejectQuoteRequest
+type ActivityServicePortMockRejectQuoteRequestParamPtrs struct {
+	ctx             *context.Context
+	localActorIRI   *string
+	quoteRequestIRI *string
+}
+
+// ActivityServicePortMockRejectQuoteRequestResults contains results of the ActivityServicePort.RejectQuoteRequest
+type ActivityServicePortMockRejectQuoteRequestResults struct {
+	err error
+}
+
+// ActivityServicePortMockRejectQuoteRequestOrigins contains origins of expectations of the ActivityServicePort.RejectQuoteRequest
+type ActivityServicePortMockRejectQuoteRequestExpectationOrigins struct {
+	origin                string
+	originCtx             string
+	originLocalActorIRI   string
+	originQuoteRequestIRI string
+}
+
+// Marks this method to be optional. The default behavior of any method with Return() is '1 or more', meaning
+// the test will fail minimock's automatic final call check if the mocked method was not called at least once.
+// Optional() makes method check to work in '0 or more' mode.
+// It is NOT RECOMMENDED to use this option unless you really need it, as default behaviour helps to
+// catch the problems when the expected method call is totally skipped during test run.
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Optional() *mActivityServicePortMockRejectQuoteRequest {
+	mmRejectQuoteRequest.optional = true
+	return mmRejectQuoteRequest
+}
+
+// Expect sets up expected params for ActivityServicePort.RejectQuoteRequest
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Expect(ctx context.Context, localActorIRI string, quoteRequestIRI string) *mActivityServicePortMockRejectQuoteRequest {
+	if mmRejectQuoteRequest.mock.funcRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Set")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation == nil {
+		mmRejectQuoteRequest.defaultExpectation = &ActivityServicePortMockRejectQuoteRequestExpectation{}
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.paramPtrs != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by ExpectParams functions")
+	}
+
+	mmRejectQuoteRequest.defaultExpectation.params = &ActivityServicePortMockRejectQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI}
+	mmRejectQuoteRequest.defaultExpectation.expectationOrigins.origin = minimock.CallerInfo(1)
+	for _, e := range mmRejectQuoteRequest.expectations {
+		if minimock.Equal(e.params, mmRejectQuoteRequest.defaultExpectation.params) {
+			mmRejectQuoteRequest.mock.t.Fatalf("Expectation set by When has same params: %#v", *mmRejectQuoteRequest.defaultExpectation.params)
+		}
+	}
+
+	return mmRejectQuoteRequest
+}
+
+// ExpectCtxParam1 sets up expected param ctx for ActivityServicePort.RejectQuoteRequest
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) ExpectCtxParam1(ctx context.Context) *mActivityServicePortMockRejectQuoteRequest {
+	if mmRejectQuoteRequest.mock.funcRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Set")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation == nil {
+		mmRejectQuoteRequest.defaultExpectation = &ActivityServicePortMockRejectQuoteRequestExpectation{}
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.params != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Expect")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmRejectQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockRejectQuoteRequestParamPtrs{}
+	}
+	mmRejectQuoteRequest.defaultExpectation.paramPtrs.ctx = &ctx
+	mmRejectQuoteRequest.defaultExpectation.expectationOrigins.originCtx = minimock.CallerInfo(1)
+
+	return mmRejectQuoteRequest
+}
+
+// ExpectLocalActorIRIParam2 sets up expected param localActorIRI for ActivityServicePort.RejectQuoteRequest
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) ExpectLocalActorIRIParam2(localActorIRI string) *mActivityServicePortMockRejectQuoteRequest {
+	if mmRejectQuoteRequest.mock.funcRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Set")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation == nil {
+		mmRejectQuoteRequest.defaultExpectation = &ActivityServicePortMockRejectQuoteRequestExpectation{}
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.params != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Expect")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmRejectQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockRejectQuoteRequestParamPtrs{}
+	}
+	mmRejectQuoteRequest.defaultExpectation.paramPtrs.localActorIRI = &localActorIRI
+	mmRejectQuoteRequest.defaultExpectation.expectationOrigins.originLocalActorIRI = minimock.CallerInfo(1)
+
+	return mmRejectQuoteRequest
+}
+
+// ExpectQuoteRequestIRIParam3 sets up expected param quoteRequestIRI for ActivityServicePort.RejectQuoteRequest
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) ExpectQuoteRequestIRIParam3(quoteRequestIRI string) *mActivityServicePortMockRejectQuoteRequest {
+	if mmRejectQuoteRequest.mock.funcRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Set")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation == nil {
+		mmRejectQuoteRequest.defaultExpectation = &ActivityServicePortMockRejectQuoteRequestExpectation{}
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.params != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Expect")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation.paramPtrs == nil {
+		mmRejectQuoteRequest.defaultExpectation.paramPtrs = &ActivityServicePortMockRejectQuoteRequestParamPtrs{}
+	}
+	mmRejectQuoteRequest.defaultExpectation.paramPtrs.quoteRequestIRI = &quoteRequestIRI
+	mmRejectQuoteRequest.defaultExpectation.expectationOrigins.originQuoteRequestIRI = minimock.CallerInfo(1)
+
+	return mmRejectQuoteRequest
+}
+
+// Inspect accepts an inspector function that has same arguments as the ActivityServicePort.RejectQuoteRequest
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Inspect(f func(ctx context.Context, localActorIRI string, quoteRequestIRI string)) *mActivityServicePortMockRejectQuoteRequest {
+	if mmRejectQuoteRequest.mock.inspectFuncRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("Inspect function is already set for ActivityServicePortMock.RejectQuoteRequest")
+	}
+
+	mmRejectQuoteRequest.mock.inspectFuncRejectQuoteRequest = f
+
+	return mmRejectQuoteRequest
+}
+
+// Return sets up results that will be returned by ActivityServicePort.RejectQuoteRequest
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Return(err error) *ActivityServicePortMock {
+	if mmRejectQuoteRequest.mock.funcRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Set")
+	}
+
+	if mmRejectQuoteRequest.defaultExpectation == nil {
+		mmRejectQuoteRequest.defaultExpectation = &ActivityServicePortMockRejectQuoteRequestExpectation{mock: mmRejectQuoteRequest.mock}
+	}
+	mmRejectQuoteRequest.defaultExpectation.results = &ActivityServicePortMockRejectQuoteRequestResults{err}
+	mmRejectQuoteRequest.defaultExpectation.returnOrigin = minimock.CallerInfo(1)
+	return mmRejectQuoteRequest.mock
+}
+
+// Set uses given function f to mock the ActivityServicePort.RejectQuoteRequest method
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Set(f func(ctx context.Context, localActorIRI string, quoteRequestIRI string) (err error)) *ActivityServicePortMock {
+	if mmRejectQuoteRequest.defaultExpectation != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("Default expectation is already set for the ActivityServicePort.RejectQuoteRequest method")
+	}
+
+	if len(mmRejectQuoteRequest.expectations) > 0 {
+		mmRejectQuoteRequest.mock.t.Fatalf("Some expectations are already set for the ActivityServicePort.RejectQuoteRequest method")
+	}
+
+	mmRejectQuoteRequest.mock.funcRejectQuoteRequest = f
+	mmRejectQuoteRequest.mock.funcRejectQuoteRequestOrigin = minimock.CallerInfo(1)
+	return mmRejectQuoteRequest.mock
+}
+
+// When sets expectation for the ActivityServicePort.RejectQuoteRequest which will trigger the result defined by the following
+// Then helper
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) When(ctx context.Context, localActorIRI string, quoteRequestIRI string) *ActivityServicePortMockRejectQuoteRequestExpectation {
+	if mmRejectQuoteRequest.mock.funcRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.mock.t.Fatalf("ActivityServicePortMock.RejectQuoteRequest mock is already set by Set")
+	}
+
+	expectation := &ActivityServicePortMockRejectQuoteRequestExpectation{
+		mock:               mmRejectQuoteRequest.mock,
+		params:             &ActivityServicePortMockRejectQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI},
+		expectationOrigins: ActivityServicePortMockRejectQuoteRequestExpectationOrigins{origin: minimock.CallerInfo(1)},
+	}
+	mmRejectQuoteRequest.expectations = append(mmRejectQuoteRequest.expectations, expectation)
+	return expectation
+}
+
+// Then sets up ActivityServicePort.RejectQuoteRequest return parameters for the expectation previously defined by the When method
+func (e *ActivityServicePortMockRejectQuoteRequestExpectation) Then(err error) *ActivityServicePortMock {
+	e.results = &ActivityServicePortMockRejectQuoteRequestResults{err}
+	return e.mock
+}
+
+// Times sets number of times ActivityServicePort.RejectQuoteRequest should be invoked
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Times(n uint64) *mActivityServicePortMockRejectQuoteRequest {
+	if n == 0 {
+		mmRejectQuoteRequest.mock.t.Fatalf("Times of ActivityServicePortMock.RejectQuoteRequest mock can not be zero")
+	}
+	mm_atomic.StoreUint64(&mmRejectQuoteRequest.expectedInvocations, n)
+	mmRejectQuoteRequest.expectedInvocationsOrigin = minimock.CallerInfo(1)
+	return mmRejectQuoteRequest
+}
+
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) invocationsDone() bool {
+	if len(mmRejectQuoteRequest.expectations) == 0 && mmRejectQuoteRequest.defaultExpectation == nil && mmRejectQuoteRequest.mock.funcRejectQuoteRequest == nil {
+		return true
+	}
+
+	totalInvocations := mm_atomic.LoadUint64(&mmRejectQuoteRequest.mock.afterRejectQuoteRequestCounter)
+	expectedInvocations := mm_atomic.LoadUint64(&mmRejectQuoteRequest.expectedInvocations)
+
+	return totalInvocations > 0 && (expectedInvocations == 0 || expectedInvocations == totalInvocations)
+}
+
+// RejectQuoteRequest implements mm_port.ActivityServicePort
+func (mmRejectQuoteRequest *ActivityServicePortMock) RejectQuoteRequest(ctx context.Context, localActorIRI string, quoteRequestIRI string) (err error) {
+	mm_atomic.AddUint64(&mmRejectQuoteRequest.beforeRejectQuoteRequestCounter, 1)
+	defer mm_atomic.AddUint64(&mmRejectQuoteRequest.afterRejectQuoteRequestCounter, 1)
+
+	mmRejectQuoteRequest.t.Helper()
+
+	if mmRejectQuoteRequest.inspectFuncRejectQuoteRequest != nil {
+		mmRejectQuoteRequest.inspectFuncRejectQuoteRequest(ctx, localActorIRI, quoteRequestIRI)
+	}
+
+	mm_params := ActivityServicePortMockRejectQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI}
+
+	// Record call args
+	mmRejectQuoteRequest.RejectQuoteRequestMock.mutex.Lock()
+	mmRejectQuoteRequest.RejectQuoteRequestMock.callArgs = append(mmRejectQuoteRequest.RejectQuoteRequestMock.callArgs, &mm_params)
+	mmRejectQuoteRequest.RejectQuoteRequestMock.mutex.Unlock()
+
+	for _, e := range mmRejectQuoteRequest.RejectQuoteRequestMock.expectations {
+		if minimock.Equal(*e.params, mm_params) {
+			mm_atomic.AddUint64(&e.Counter, 1)
+			return e.results.err
+		}
+	}
+
+	if mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation != nil {
+		mm_atomic.AddUint64(&mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.Counter, 1)
+		mm_want := mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.params
+		mm_want_ptrs := mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.paramPtrs
+
+		mm_got := ActivityServicePortMockRejectQuoteRequestParams{ctx, localActorIRI, quoteRequestIRI}
+
+		if mm_want_ptrs != nil {
+
+			if mm_want_ptrs.ctx != nil && !minimock.Equal(*mm_want_ptrs.ctx, mm_got.ctx) {
+				mmRejectQuoteRequest.t.Errorf("ActivityServicePortMock.RejectQuoteRequest got unexpected parameter ctx, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.expectationOrigins.originCtx, *mm_want_ptrs.ctx, mm_got.ctx, minimock.Diff(*mm_want_ptrs.ctx, mm_got.ctx))
+			}
+
+			if mm_want_ptrs.localActorIRI != nil && !minimock.Equal(*mm_want_ptrs.localActorIRI, mm_got.localActorIRI) {
+				mmRejectQuoteRequest.t.Errorf("ActivityServicePortMock.RejectQuoteRequest got unexpected parameter localActorIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.expectationOrigins.originLocalActorIRI, *mm_want_ptrs.localActorIRI, mm_got.localActorIRI, minimock.Diff(*mm_want_ptrs.localActorIRI, mm_got.localActorIRI))
+			}
+
+			if mm_want_ptrs.quoteRequestIRI != nil && !minimock.Equal(*mm_want_ptrs.quoteRequestIRI, mm_got.quoteRequestIRI) {
+				mmRejectQuoteRequest.t.Errorf("ActivityServicePortMock.RejectQuoteRequest got unexpected parameter quoteRequestIRI, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+					mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.expectationOrigins.originQuoteRequestIRI, *mm_want_ptrs.quoteRequestIRI, mm_got.quoteRequestIRI, minimock.Diff(*mm_want_ptrs.quoteRequestIRI, mm_got.quoteRequestIRI))
+			}
+
+		} else if mm_want != nil && !minimock.Equal(*mm_want, mm_got) {
+			mmRejectQuoteRequest.t.Errorf("ActivityServicePortMock.RejectQuoteRequest got unexpected parameters, expected at\n%s:\nwant: %#v\n got: %#v%s\n",
+				mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.expectationOrigins.origin, *mm_want, mm_got, minimock.Diff(*mm_want, mm_got))
+		}
+
+		mm_results := mmRejectQuoteRequest.RejectQuoteRequestMock.defaultExpectation.results
+		if mm_results == nil {
+			mmRejectQuoteRequest.t.Fatal("No results are set for the ActivityServicePortMock.RejectQuoteRequest")
+		}
+		return (*mm_results).err
+	}
+	if mmRejectQuoteRequest.funcRejectQuoteRequest != nil {
+		return mmRejectQuoteRequest.funcRejectQuoteRequest(ctx, localActorIRI, quoteRequestIRI)
+	}
+	mmRejectQuoteRequest.t.Fatalf("Unexpected call to ActivityServicePortMock.RejectQuoteRequest. %v %v %v", ctx, localActorIRI, quoteRequestIRI)
+	return
+}
+
+// RejectQuoteRequestAfterCounter returns a count of finished ActivityServicePortMock.RejectQuoteRequest invocations
+func (mmRejectQuoteRequest *ActivityServicePortMock) RejectQuoteRequestAfterCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRejectQuoteRequest.afterRejectQuoteRequestCounter)
+}
+
+// RejectQuoteRequestBeforeCounter returns a count of ActivityServicePortMock.RejectQuoteRequest invocations
+func (mmRejectQuoteRequest *ActivityServicePortMock) RejectQuoteRequestBeforeCounter() uint64 {
+	return mm_atomic.LoadUint64(&mmRejectQuoteRequest.beforeRejectQuoteRequestCounter)
+}
+
+// Calls returns a list of arguments used in each call to ActivityServicePortMock.RejectQuoteRequest.
+// The list is in the same order as the calls were made (i.e. recent calls have a higher index)
+func (mmRejectQuoteRequest *mActivityServicePortMockRejectQuoteRequest) Calls() []*ActivityServicePortMockRejectQuoteRequestParams {
+	mmRejectQuoteRequest.mutex.RLock()
+
+	argCopy := make([]*ActivityServicePortMockRejectQuoteRequestParams, len(mmRejectQuoteRequest.callArgs))
+	copy(argCopy, mmRejectQuoteRequest.callArgs)
+
+	mmRejectQuoteRequest.mutex.RUnlock()
+
+	return argCopy
+}
+
+// MinimockRejectQuoteRequestDone returns true if the count of the RejectQuoteRequest invocations corresponds
+// the number of defined expectations
+func (m *ActivityServicePortMock) MinimockRejectQuoteRequestDone() bool {
+	if m.RejectQuoteRequestMock.optional {
+		// Optional methods provide '0 or more' call count restriction.
+		return true
+	}
+
+	for _, e := range m.RejectQuoteRequestMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			return false
+		}
+	}
+
+	return m.RejectQuoteRequestMock.invocationsDone()
+}
+
+// MinimockRejectQuoteRequestInspect logs each unmet expectation
+func (m *ActivityServicePortMock) MinimockRejectQuoteRequestInspect() {
+	for _, e := range m.RejectQuoteRequestMock.expectations {
+		if mm_atomic.LoadUint64(&e.Counter) < 1 {
+			m.t.Errorf("Expected call to ActivityServicePortMock.RejectQuoteRequest at\n%s with params: %#v", e.expectationOrigins.origin, *e.params)
+		}
+	}
+
+	afterRejectQuoteRequestCounter := mm_atomic.LoadUint64(&m.afterRejectQuoteRequestCounter)
+	// if default expectation was set then invocations count should be greater than zero
+	if m.RejectQuoteRequestMock.defaultExpectation != nil && afterRejectQuoteRequestCounter < 1 {
+		if m.RejectQuoteRequestMock.defaultExpectation.params == nil {
+			m.t.Errorf("Expected call to ActivityServicePortMock.RejectQuoteRequest at\n%s", m.RejectQuoteRequestMock.defaultExpectation.returnOrigin)
+		} else {
+			m.t.Errorf("Expected call to ActivityServicePortMock.RejectQuoteRequest at\n%s with params: %#v", m.RejectQuoteRequestMock.defaultExpectation.expectationOrigins.origin, *m.RejectQuoteRequestMock.defaultExpectation.params)
+		}
+	}
+	// if func was set then invocations count should be greater than zero
+	if m.funcRejectQuoteRequest != nil && afterRejectQuoteRequestCounter < 1 {
+		m.t.Errorf("Expected call to ActivityServicePortMock.RejectQuoteRequest at\n%s", m.funcRejectQuoteRequestOrigin)
+	}
+
+	if !m.RejectQuoteRequestMock.invocationsDone() && afterRejectQuoteRequestCounter > 0 {
+		m.t.Errorf("Expected %d calls to ActivityServicePortMock.RejectQuoteRequest at\n%s but found %d calls",
+			mm_atomic.LoadUint64(&m.RejectQuoteRequestMock.expectedInvocations), m.RejectQuoteRequestMock.expectedInvocationsOrigin, afterRejectQuoteRequestCounter)
+	}
+}
+
 type mActivityServicePortMockSyncFollowers struct {
 	optional           bool
 	mock               *ActivityServicePortMock
@@ -3645,6 +4442,8 @@ func (m *ActivityServicePortMock) MinimockFinish() {
 		if !m.minimockDone() {
 			m.MinimockAcceptFollowInspect()
 
+			m.MinimockAcceptQuoteRequestInspect()
+
 			m.MinimockDispatchOutboundActivityInspect()
 
 			m.MinimockGetCollectionTimelineInspect()
@@ -3658,6 +4457,8 @@ func (m *ActivityServicePortMock) MinimockFinish() {
 			m.MinimockPurgeOrphanedMediaInspect()
 
 			m.MinimockRejectFollowInspect()
+
+			m.MinimockRejectQuoteRequestInspect()
 
 			m.MinimockSyncFollowersInspect()
 		}
@@ -3684,6 +4485,7 @@ func (m *ActivityServicePortMock) minimockDone() bool {
 	done := true
 	return done &&
 		m.MinimockAcceptFollowDone() &&
+		m.MinimockAcceptQuoteRequestDone() &&
 		m.MinimockDispatchOutboundActivityDone() &&
 		m.MinimockGetCollectionTimelineDone() &&
 		m.MinimockGetFollowersTimelineDone() &&
@@ -3691,5 +4493,6 @@ func (m *ActivityServicePortMock) minimockDone() bool {
 		m.MinimockProcessInboundTaskDone() &&
 		m.MinimockPurgeOrphanedMediaDone() &&
 		m.MinimockRejectFollowDone() &&
+		m.MinimockRejectQuoteRequestDone() &&
 		m.MinimockSyncFollowersDone()
 }

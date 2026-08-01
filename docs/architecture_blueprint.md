@@ -378,6 +378,7 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 16. **`FEP-c0e0` (Emoji reactions)**: Standardizes the representation of emoji reactions as `EmojiReact` (or `Like` with `content`) activities targeting objects. Fully implemented by validating and storing reactions within the flexible RDF quad store.
 17. **`FEP-9098` (Custom emojis)**: Standardizes custom emoji representations (`Emoji` tags in metadata) using shortcodes and image icons. Fully implemented by parsing custom emojis from `tag` payloads and persisting them as structured RDF graphs in the quad database.
 18. **`FEP-fc48` (Generic ActivityPub server)**: Standardizes exposing side-channel interaction collections (`likes`, `shares`, `replies`, and thread `context`) on created objects. Fully implemented in Sprezz by dynamically serving URL-agnostic engagement collections mapped directly onto the core object paths, allowing full semantic routing without database schema duplication.
+19. **`FEP-044f` (Consent-respecting quote posts)**: Standardizes how quote post authorization, policy configuration, and approvals are handled. Fully implemented by checking `interactionPolicy` on quoted objects (auto-allowing public posts, defaulting to followers for non-public, and requiring manual approval when explicitly set), auto-responding to `QuoteRequest`s with generated `QuoteAuthorization` stamps, and validating third-party stamps during inbound processing.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
@@ -392,7 +393,6 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 2. **`FEP-0151` (NodeInfo in Fediverse Software (2025 edition))**
 3. **`FEP-67ff` (FEDERATION.md)**
 4. **`FEP-ae0c` (Fediverse Relay Protocols: Mastodon and LitePub)**: Unsure yet if this will be supported. The LitePub approach looks to be the part that fits best.
-5. **`FEP-044f` (Consent-respecting quote posts)**
 
 ### 7.4 Privacy and Audience Rules
 

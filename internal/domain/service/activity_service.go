@@ -117,6 +117,14 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 		return nil
 	}
 
+	isQuoteRequest, err := s.handleQuoteRequest(ctx, task, activity.Type, activity.Actor, activity.Object)
+	if err != nil {
+		return err
+	}
+	if isQuoteRequest {
+		return nil
+	}
+
 	if err := s.deliverAndForwardInbound(ctx, task); err != nil {
 		return err
 	}
@@ -721,4 +729,344 @@ func (s *ActivityService) announceGroupActivity(ctx context.Context, task model.
 	}
 
 	return s.DispatchOutboundActivity(ctx, activityIRI, groupIRI, payload)
+}
+
+func (s *ActivityService) handleQuoteRequest(ctx context.Context, task model.InboundTask, actType string, actorVal, objectVal interface{}) (bool, error) {
+	if actType != model.ShortQuoteRequest && actType != model.TypeQuoteRequest {
+		return false, nil
+	}
+
+	senderIRI := parseStringOrID(actorVal)
+	quotedIRI := parseStringOrID(objectVal)
+	if senderIRI == "" || quotedIRI == "" {
+		return false, nil
+	}
+
+	quotedQuads, err := s.storage.StreamQuadsBySubject(ctx, quotedIRI)
+	if err != nil || len(quotedQuads) == 0 {
+		return false, fmt.Errorf("target quoted post %s not found", quotedIRI)
+	}
+
+	quotedMap := NewThreadSafePredicateMap(quotedQuads)
+	localActorIRI := s.getOriginalActor(quotedMap)
+	if localActorIRI == "" {
+		return false, fmt.Errorf("could not determine local author for quoted post %s", quotedIRI)
+	}
+
+	if _, err := s.storage.GetActorDualKeys(ctx, localActorIRI); err != nil {
+		return false, nil // Not a local actor being quoted
+	}
+
+	var inst struct {
+		Instrument map[string]interface{} `json:"instrument"`
+	}
+	_ = json.Unmarshal(task.Payload, &inst)
+	quotePostID, _ := inst.Instrument["id"].(string)
+
+	approved, manual, err := s.evaluateQuoteApproval(ctx, quotedMap, localActorIRI, senderIRI)
+	if err != nil {
+		return true, err
+	}
+
+	if approved {
+		return true, s.issueQuoteApprovalStamp(ctx, task.ActivityIRI, localActorIRI, quotedIRI, quotePostID, senderIRI)
+	}
+
+	if !manual {
+		return true, s.issueQuoteRejection(ctx, task.ActivityIRI, localActorIRI, senderIRI)
+	}
+
+	return true, nil
+}
+
+func (s *ActivityService) checkManualQuotePolicy(quotedMap *ThreadSafePredicateMap) bool {
+	for pred, objects := range quotedMap.m {
+		if pred == model.PredicateInteractionPolicy {
+			for _, obj := range objects {
+				if obj == model.PolicyManual {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (s *ActivityService) checkLocalActorFollower(ctx context.Context, localActorIRI, senderIRI string) bool {
+	localActorQuads, _ := s.storage.StreamQuadsBySubject(ctx, localActorIRI)
+	localActorMap := NewThreadSafePredicateMap(localActorQuads)
+	for pred, objects := range localActorMap.m {
+		if pred == model.PredicateFollower || pred == model.PredicateFollowers {
+			for _, obj := range objects {
+				if obj == senderIRI {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (s *ActivityService) evaluateQuoteApproval(ctx context.Context, quotedMap *ThreadSafePredicateMap, localActorIRI, senderIRI string) (bool, bool, error) {
+	if s.checkManualQuotePolicy(quotedMap) {
+		return false, true, nil
+	}
+
+	isPublic, _, recipients := s.extractVisibilityAndActor(quotedMap)
+	if isPublic {
+		return true, false, nil
+	}
+
+	if s.checkLocalActorFollower(ctx, localActorIRI, senderIRI) {
+		return true, false, nil
+	}
+
+	for _, r := range recipients {
+		if r == senderIRI {
+			return true, false, nil
+		}
+	}
+
+	return false, false, nil
+}
+
+func (s *ActivityService) saveQuoteAuthorizationStamp(ctx context.Context, triggerActivityIRI, stampIRI string, stampBytes []byte) error {
+	if writer, ok := s.storage.(port.GraphVersionWriter); ok {
+		stampQuads, err := s.parser.ToQuads(ctx, 0, stampIRI, stampBytes)
+		if err == nil {
+			_ = writer.SaveGraphVersion(ctx, triggerActivityIRI, stampIRI, stampBytes, stampQuads)
+		}
+	} else {
+		graphID, err := s.storage.CreateGraphVersion(ctx, triggerActivityIRI, stampIRI, stampBytes)
+		if err == nil {
+			stampQuads, err := s.parser.ToQuads(ctx, graphID, stampIRI, stampBytes)
+			if err == nil {
+				_ = s.storage.SaveQuads(ctx, stampQuads)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *ActivityService) issueQuoteApprovalStamp(ctx context.Context, quoteRequestIRI, localActorIRI, quotedIRI, quotePostID, senderIRI string) error {
+	stampID, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	localDomain := extractDomain(localActorIRI)
+	stampIRI := fmt.Sprintf("https://%s/activity/%s", localDomain, stampID.String())
+
+	stampPayload := map[string]interface{}{
+		model.JSONLDContext: []interface{}{
+			model.ContextActivityStreams,
+			map[string]interface{}{
+				"QuoteAuthorization": model.TypeQuoteAuthorization,
+				"gts":                model.NamespaceGoToSocial,
+				"interactingObject": map[string]interface{}{
+					"@id":   model.PredicateInteractingObject,
+					"@type": "@id",
+				},
+				"interactionTarget": map[string]interface{}{
+					"@id":   model.PredicateInteractionTarget,
+					"@type": "@id",
+				},
+			},
+		},
+		"type":              "QuoteAuthorization",
+		"id":                stampIRI,
+		"attributedTo":      localActorIRI,
+		"interactingObject": quotePostID,
+		"interactionTarget": quotedIRI,
+	}
+
+	stampBytes, _ := json.Marshal(stampPayload)
+	if err := s.saveQuoteAuthorizationStamp(ctx, quoteRequestIRI, stampIRI, stampBytes); err != nil {
+		return err
+	}
+
+	acceptID, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	acceptIRI := fmt.Sprintf("https://%s/activity/%s", localDomain, acceptID.String())
+
+	acceptActivity := map[string]interface{}{
+		model.JSONLDContext: []interface{}{
+			model.ContextActivityStreams,
+			map[string]interface{}{
+				"QuoteRequest": model.TypeQuoteRequest,
+			},
+		},
+		"type":   "Accept",
+		"id":     acceptIRI,
+		"actor":  localActorIRI,
+		"object": quoteRequestIRI,
+		"result": stampIRI,
+		"to":     []string{senderIRI},
+	}
+
+	acceptBytes, _ := json.Marshal(acceptActivity)
+	return s.DispatchOutboundActivity(ctx, acceptIRI, localActorIRI, acceptBytes)
+}
+
+func (s *ActivityService) issueQuoteRejection(ctx context.Context, quoteRequestIRI, localActorIRI, senderIRI string) error {
+	rejectID, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	localDomain := extractDomain(localActorIRI)
+	rejectIRI := fmt.Sprintf("https://%s/activity/%s", localDomain, rejectID.String())
+
+	rejectActivity := map[string]interface{}{
+		model.JSONLDContext: []interface{}{
+			model.ContextActivityStreams,
+			map[string]interface{}{
+				"QuoteRequest": model.TypeQuoteRequest,
+			},
+		},
+		"type":   "Reject",
+		"id":     rejectIRI,
+		"actor":  localActorIRI,
+		"object": quoteRequestIRI,
+		"to":     []string{senderIRI},
+	}
+
+	rejectBytes, _ := json.Marshal(rejectActivity)
+	return s.DispatchOutboundActivity(ctx, rejectIRI, localActorIRI, rejectBytes)
+}
+
+func (s *ActivityService) extractQuoteRequestParams(reqMap *ThreadSafePredicateMap) (quotePostID, quotedIRI, senderIRI string) {
+	for pred, objects := range reqMap.m {
+		if len(objects) == 0 {
+			continue
+		}
+		val := objects[0]
+		switch pred {
+		case model.PredicateActor:
+			senderIRI = val
+		case model.PredicateObject:
+			quotedIRI = val
+		case model.PredicateInstrument:
+			quotePostID = val
+		}
+	}
+	return quotePostID, quotedIRI, senderIRI
+}
+
+func (s *ActivityService) AcceptQuoteRequest(ctx context.Context, localActorIRI, quoteRequestIRI, stampIRI string) error {
+	reqQuads, err := s.storage.StreamQuadsBySubject(ctx, quoteRequestIRI)
+	if err != nil || len(reqQuads) == 0 {
+		return fmt.Errorf("quote request %s not found", quoteRequestIRI)
+	}
+
+	reqMap := NewThreadSafePredicateMap(reqQuads)
+	quotePostID, quotedIRI, senderIRI := s.extractQuoteRequestParams(reqMap)
+
+	if senderIRI == "" || quotedIRI == "" || quotePostID == "" {
+		return fmt.Errorf("quote request %s is malformed or missing key parameters", quoteRequestIRI)
+	}
+
+	localDomain := extractDomain(localActorIRI)
+	if stampIRI == "" {
+		stampID, err := uuid.NewV7()
+		if err != nil {
+			return err
+		}
+		stampIRI = fmt.Sprintf("https://%s/activity/%s", localDomain, stampID.String())
+	}
+
+	stampPayload := map[string]interface{}{
+		model.JSONLDContext: []interface{}{
+			model.ContextActivityStreams,
+			map[string]interface{}{
+				"QuoteAuthorization": model.TypeQuoteAuthorization,
+				"gts":                model.NamespaceGoToSocial,
+				"interactingObject": map[string]interface{}{
+					"@id":   model.PredicateInteractingObject,
+					"@type": "@id",
+				},
+				"interactionTarget": map[string]interface{}{
+					"@id":   model.PredicateInteractionTarget,
+					"@type": "@id",
+				},
+			},
+		},
+		"type":              "QuoteAuthorization",
+		"id":                stampIRI,
+		"attributedTo":      localActorIRI,
+		"interactingObject": quotePostID,
+		"interactionTarget": quotedIRI,
+	}
+
+	stampBytes, _ := json.Marshal(stampPayload)
+	if err := s.saveQuoteAuthorizationStamp(ctx, quoteRequestIRI, stampIRI, stampBytes); err != nil {
+		return err
+	}
+
+	acceptID, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	acceptIRI := fmt.Sprintf("https://%s/activity/%s", localDomain, acceptID.String())
+
+	acceptActivity := map[string]interface{}{
+		model.JSONLDContext: []interface{}{
+			model.ContextActivityStreams,
+			map[string]interface{}{
+				"QuoteRequest": model.TypeQuoteRequest,
+			},
+		},
+		"type":   "Accept",
+		"id":     acceptIRI,
+		"actor":  localActorIRI,
+		"object": quoteRequestIRI,
+		"result": stampIRI,
+		"to":     []string{senderIRI},
+	}
+
+	acceptBytes, _ := json.Marshal(acceptActivity)
+	return s.DispatchOutboundActivity(ctx, acceptIRI, localActorIRI, acceptBytes)
+}
+
+func (s *ActivityService) RejectQuoteRequest(ctx context.Context, localActorIRI, quoteRequestIRI string) error {
+	reqQuads, err := s.storage.StreamQuadsBySubject(ctx, quoteRequestIRI)
+	if err != nil || len(reqQuads) == 0 {
+		return fmt.Errorf("quote request %s not found", quoteRequestIRI)
+	}
+
+	reqMap := NewThreadSafePredicateMap(reqQuads)
+	senderIRI := ""
+	for pred, objects := range reqMap.m {
+		if pred == model.PredicateActor && len(objects) > 0 {
+			senderIRI = objects[0]
+		}
+	}
+
+	if senderIRI == "" {
+		return fmt.Errorf("quote request %s is missing actor/sender", quoteRequestIRI)
+	}
+
+	localDomain := extractDomain(localActorIRI)
+	rejectID, err := uuid.NewV7()
+	if err != nil {
+		return err
+	}
+	rejectIRI := fmt.Sprintf("https://%s/activity/%s", localDomain, rejectID.String())
+
+	rejectActivity := map[string]interface{}{
+		model.JSONLDContext: []interface{}{
+			model.ContextActivityStreams,
+			map[string]interface{}{
+				"QuoteRequest": model.TypeQuoteRequest,
+			},
+		},
+		"type":   "Reject",
+		"id":     rejectIRI,
+		"actor":  localActorIRI,
+		"object": quoteRequestIRI,
+		"to":     []string{senderIRI},
+	}
+
+	rejectBytes, _ := json.Marshal(rejectActivity)
+	return s.DispatchOutboundActivity(ctx, rejectIRI, localActorIRI, rejectBytes)
 }
