@@ -497,7 +497,7 @@ To safely swallow multiple concurrent attachments under streaming loads, the inc
 
 ```mermaid
 flowchart TD
-    In[Incoming HTTP Multipart Payload] --> Parse[Parse r.MultipartForm.File['attachment']]
+    In[Incoming HTTP Multipart Payload] --> Parse[Parse r.MultipartForm.File attachment]
     Parse --> Loop[Process Files Sequentially]
     Loop --> Quota{1. Pre-Flight Ingestion Quota Audit}
     Quota -->|Ceiling Exceeded| Fail413[HTTP 413 Payload Too Large]
