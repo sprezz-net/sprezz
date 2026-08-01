@@ -130,8 +130,11 @@ func (s *ActivityService) ProcessInboundTask(ctx context.Context, task model.Inb
 	}
 
 	if s.enableContextBackfill {
+		// Create a detached context with a bounded 30-second timeout to prevent leaks and instant cancellations
+		detachedCtx, cancel := context.WithTimeout(model.Detach(ctx), 30*time.Second)
 		go func() {
-			_ = s.maybeTriggerContextBackfill(context.Background(), task)
+			defer cancel()
+			_ = s.maybeTriggerContextBackfill(detachedCtx, task)
 		}()
 	}
 

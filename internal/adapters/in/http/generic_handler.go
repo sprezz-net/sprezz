@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"sprezz/internal/adapters/in/http/middleware"
 	"sprezz/internal/domain/model"
@@ -346,10 +347,13 @@ func (h *GenericHandler) triggerFollowersSync(r *http.Request, authenticatedActo
 	if collectionID == "" || syncURL == "" || digest == "" {
 		return
 	}
+	// Create a detached context with a bounded 30-second timeout to prevent leaks and instant cancellations
+	detachedCtx, cancel := context.WithTimeout(model.Detach(r.Context()), 30*time.Second)
 	go func() {
+		defer cancel()
 		// Security check: only sync if the collection ID matches the authenticated actor's followers
 		if collectionID == authenticatedActor+"/followers" {
-			_ = h.service.SyncFollowers(context.Background(), authenticatedActor, collectionID, syncURL, digest)
+			_ = h.service.SyncFollowers(detachedCtx, authenticatedActor, collectionID, syncURL, digest)
 		}
 	}()
 }
@@ -367,6 +371,11 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Bad Request: Unable to read payload", http.StatusBadRequest)
+		return
+	}
+
+	if err := httputil.ValidateJSONDepth(body, 100); err != nil {
+		http.Error(w, "Bad Request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -402,9 +411,14 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Defend against TOCTOU by committing the ingestion atomically on a detached context with a short, secure timeout.
+	// This ensures that once signature is verified, client disconnects/context cancellation cannot abort the write.
+	writeCtx, cancelWrite := context.WithTimeout(model.Detach(ctx), 5*time.Second)
+	defer cancelWrite()
+
 	// Purely enqueue the inbound activity. Direct vs Shared delivery resolution is fully
 	// offloaded to the async background worker ProcessInboundTask.
-	err = h.storage.EnqueueInbound(ctx, taskID.String(), activity.ID, activity.Object.ID, tenantID, body)
+	err = h.storage.EnqueueInbound(writeCtx, taskID.String(), activity.ID, activity.Object.ID, tenantID, body)
 	if err != nil {
 		http.Error(w, "Internal Server Error: Ingestion queue failure", http.StatusInternalServerError)
 		return

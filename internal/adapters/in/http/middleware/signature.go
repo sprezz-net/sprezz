@@ -119,6 +119,43 @@ func (v *SignatureValidator) verifyAndAuthorize(ctx context.Context, r *http.Req
 	return actorIRI, 0, ""
 }
 
+// validateInbound parses and validates signature-bearing inbound requests.
+// This splits the handler workflow to keep Cognitive Complexity below the strict limit of 15.
+func (v *SignatureValidator) validateInbound(r *http.Request, isActivityPub bool) ([]byte, string, int, string) {
+	contentType := r.Header.Get(httputil.HeaderContentType)
+	if status, msg := v.checkPostMime(r, contentType, isActivityPub); status != 0 {
+		return nil, "", status, msg
+	}
+
+	shouldVerify, status, msg := v.shouldVerifySignature(r, isActivityPub)
+	if status != 0 {
+		return nil, "", status, msg
+	}
+	if !shouldVerify {
+		return nil, "", 0, ""
+	}
+
+	r.Header.Del("X-Actor-IRI")
+
+	bodyBytes, err := v.readBody(r)
+	if err != nil {
+		return nil, "", http.StatusBadRequest, "Bad Request: Unable to read request payload"
+	}
+
+	if isActivityPub && r.Method == http.MethodPost {
+		if err := httputil.ValidateJSONDepth(bodyBytes, 100); err != nil {
+			return nil, "", http.StatusBadRequest, "Bad Request: " + err.Error()
+		}
+	}
+
+	actorIRI, status, msg := v.verifyAndAuthorize(r.Context(), r, bodyBytes)
+	if status != 0 {
+		return nil, "", status, msg
+	}
+
+	return bodyBytes, actorIRI, 0, ""
+}
+
 func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if v.isWellKnown(r.URL.Path) {
@@ -129,32 +166,14 @@ func (v *SignatureValidator) Handler(next http.Handler) http.Handler {
 		contentType := r.Header.Get(httputil.HeaderContentType)
 		isActivityPub := v.isActivityPubMime(contentType)
 
-		if status, msg := v.checkPostMime(r, contentType, isActivityPub); status != 0 {
-			http.Error(w, msg, status)
-			return
-		}
-
-		shouldVerify, status, msg := v.shouldVerifySignature(r, isActivityPub)
+		_, actorIRI, status, msg := v.validateInbound(r, isActivityPub)
 		if status != 0 {
 			http.Error(w, msg, status)
 			return
 		}
-		if !shouldVerify {
+
+		if actorIRI == "" {
 			next.ServeHTTP(w, r)
-			return
-		}
-
-		r.Header.Del("X-Actor-IRI")
-
-		bodyBytes, err := v.readBody(r)
-		if err != nil {
-			http.Error(w, "Bad Request: Unable to read request payload", http.StatusBadRequest)
-			return
-		}
-
-		actorIRI, status, msg := v.verifyAndAuthorize(r.Context(), r, bodyBytes)
-		if status != 0 {
-			http.Error(w, msg, status)
 			return
 		}
 
