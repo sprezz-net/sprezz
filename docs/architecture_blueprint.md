@@ -501,7 +501,7 @@ flowchart TD
     Parse --> Loop[Process Files Sequentially]
     Loop --> Quota{1. Pre-Flight Ingestion Quota Audit}
     Quota -->|Ceiling Exceeded| Fail413[HTTP 413 Payload Too Large]
-    Quota -->|Authorized| Alloc[2. Open Stream Block Allocation (32MB Max)]
+    Quota -->|Authorized| Alloc[2. Open Stream Block Allocation 32MB Max]
     Alloc --> Hash[3. Stack-Allocated io.TeeReader Hashing & Stream to MinIO]
     Hash --> Commit{4. SaveGraphVersionWithMedia DB Transaction}
     Commit -->|Success| Next[Proceed to Next File]
