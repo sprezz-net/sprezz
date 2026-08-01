@@ -3,6 +3,7 @@ package http_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,6 +49,12 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 	mc := minimock.NewController(t)
 
 	storage := portmock.NewStoragePortMock(mc)
+	storage.GetActorDualKeysMock.Set(func(ctx context.Context, actorIRI string) (*model.ActorDualKeys, error) {
+		if actorIRI == "https://local.example/actor/alice" {
+			return &model.ActorDualKeys{}, nil
+		}
+		return nil, errors.New("not found")
+	})
 	storage.EnqueueInboundMock.Inspect(func(ctx context.Context, id, activityIRI, objectIRI string, tenantID int32, payload []byte) {
 		if activityIRI != "https://remote.com/activity-1" {
 			t.Errorf("expected activityIRI to be 'https://remote.com/activity-1', got %s", activityIRI)
@@ -59,7 +66,7 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 
 	handler := inhttp.NewGenericHandler(storage, nil)
 
-	payload := []byte(`{"id":"https://remote.com/activity-1","type":"Create","object":{"id":"https://remote.com/object-1"}}`)
+	payload := []byte(`{"id":"https://remote.com/activity-1","type":"Create","to":"https://local.example/actor/alice","object":{"id":"https://remote.com/object-1"}}`)
 	req := httptest.NewRequest(http.MethodPost, "/inbox", bytes.NewReader(payload))
 	req.Host = "local.example"
 	rec := httptest.NewRecorder()
@@ -72,6 +79,35 @@ func TestGenericHandler_PostSharedInbox_Success(t *testing.T) {
 
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("expected status 202 Accepted, got %d", rec.Code)
+	}
+}
+
+func TestGenericHandler_PostSharedInbox_BlindSpotRejected(t *testing.T) {
+	mc := minimock.NewController(t)
+
+	storage := portmock.NewStoragePortMock(mc)
+	storage.GetActorDualKeysMock.Return(nil, errors.New("not found")) // any dummy error value
+
+	handler := inhttp.NewGenericHandler(storage, nil)
+
+	// Payload addresses a remote/invalid actor or is empty addressing
+	payload := []byte(`{"id":"https://remote.com/activity-1","type":"Create","to":"https://some-other.com/actor/bob","object":{"id":"https://remote.com/object-1"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/inbox", bytes.NewReader(payload))
+	req.Host = "local.example"
+	rec := httptest.NewRecorder()
+
+	ctx := context.WithValue(req.Context(), middleware.AuthenticatedActorKey, "https://remote.com/actor")
+	ctx = context.WithValue(ctx, model.TenantIDKey, int32(1))
+	req = req.WithContext(ctx)
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400 Bad Request, got %d", rec.Code)
+	}
+
+	if !strings.Contains(rec.Body.String(), "No valid local actor addressed") {
+		t.Errorf("expected error message to complain about valid local actor, got: %s", rec.Body.String())
 	}
 }
 

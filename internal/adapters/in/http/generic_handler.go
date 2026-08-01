@@ -297,6 +297,63 @@ func parseCollectionSyncHeader(headerVal string) (collectionID, syncURL, digest 
 	return params["collectionId"], params["url"], params["digest"]
 }
 
+func (h *GenericHandler) hasLocalRecipient(ctx context.Context, body []byte) bool {
+	var envelope struct {
+		To       interface{} `json:"to"`
+		Cc       interface{} `json:"cc"`
+		Audience interface{} `json:"audience"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return false
+	}
+
+	targets := make(map[string]struct{})
+	collect := func(val interface{}) {
+		switch v := val.(type) {
+		case string:
+			targets[v] = struct{}{}
+		case []interface{}:
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					targets[s] = struct{}{}
+				}
+			}
+		}
+	}
+	collect(envelope.To)
+	collect(envelope.Cc)
+	collect(envelope.Audience)
+
+	for target := range targets {
+		target = strings.TrimSpace(target)
+		if target == "" {
+			continue
+		}
+		_, err := h.storage.GetActorDualKeys(ctx, target)
+		if err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *GenericHandler) triggerFollowersSync(r *http.Request, authenticatedActor string) {
+	syncHeader := r.Header.Get("Collection-Synchronization")
+	if syncHeader == "" || h.service == nil {
+		return
+	}
+	collectionID, syncURL, digest := parseCollectionSyncHeader(syncHeader)
+	if collectionID == "" || syncURL == "" || digest == "" {
+		return
+	}
+	go func() {
+		// Security check: only sync if the collection ID matches the authenticated actor's followers
+		if collectionID == authenticatedActor+"/followers" {
+			_ = h.service.SyncFollowers(context.Background(), authenticatedActor, collectionID, syncURL, digest)
+		}
+	}()
+}
+
 func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -311,6 +368,13 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Bad Request: Unable to read payload", http.StatusBadRequest)
 		return
+	}
+
+	if r.URL.Path == "/"+model.ShortInbox {
+		if !h.hasLocalRecipient(ctx, body) {
+			http.Error(w, "Bad Request: No valid local actor addressed in shared inbox delivery", http.StatusBadRequest)
+			return
+		}
 	}
 
 	var activity struct {
@@ -347,18 +411,7 @@ func (h *GenericHandler) handlePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Process FEP-8fcf Followers Collection synchronization asynchronously
-	syncHeader := r.Header.Get("Collection-Synchronization")
-	if syncHeader != "" && h.service != nil {
-		collectionID, syncURL, digest := parseCollectionSyncHeader(syncHeader)
-		if collectionID != "" && syncURL != "" && digest != "" {
-			go func() {
-				// Security check: only sync if the collection ID matches the authenticated actor's followers
-				if collectionID == authenticatedActor+"/followers" {
-					_ = h.service.SyncFollowers(context.Background(), authenticatedActor, collectionID, syncURL, digest)
-				}
-			}()
-		}
-	}
+	h.triggerFollowersSync(r, authenticatedActor)
 
 	w.WriteHeader(http.StatusAccepted)
 }

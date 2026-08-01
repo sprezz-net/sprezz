@@ -604,3 +604,25 @@ Additionally, the **Database Migration Subsystem** is fully operational. It leve
 The remaining architectural work is to:
 
 - Add PostgreSQL integration coverage for transaction and concurrency guarantees.
+
+## 14. Inbound Traffic Security & Spam Mitigation
+
+The Sprezz server implements advanced validation and defense mechanisms directly inside the HTTP driving adapter layer to insulate the core database, transaction loops, and worker pools from federated spam and resource-exhaustion attacks.
+
+### 14.1 Shared Inbox Blind Spot Processing Guard
+
+A major vulnerability vector in global shared inboxes is processing unaddressed activities that target no one on our local server. To block this:
+
+1. **Inbox Check**: When an incoming federated request is received, the generic HTTP handler extracts the final URL path segment. If it matches `ShortInbox` (representing `"inbox"`), we enforce local target validation.
+2. **Addressing Verification**: The handler unmarshals the payload and parses the `to`, `cc`, and `audience` fields. It filters and aggregates all recipient actor IRIs.
+3. **Local Target Cross-Reference**: It cross-references the targets against our local active credentials ledger using `h.storage.GetActorDualKeys(ctx, target)`.
+4. **Early Fail-Fast Drop**: If none of the addressing targets maps to a valid local actor, the request is immediately rejected with `400 Bad Request` before enqueuing or processing. This prevents attackers from triggering heavy CPU/database load processing junk messages meant for nobody on our system.
+
+### 14.2 Configurable Domain-Level Rate-Limiting
+
+When a remote actor interacts with our server for the first time, local profile rows are generated. To block automated blind profile flooding from randomized subdomain networks:
+
+1. **Post-Signature Domain extraction**: Immediately after an incoming request successfully completes cryptographic HTTP Signature validation, the `DomainRateLimitMiddleware` extracts the host/domain string of the verified `actorIRI` using helper parsing structures tied to standard `httputil` prefix constants (`https://` and `http://`).
+2. **Path Specificity Enforcement**: To prevent unneeded performance overhead and avoid disrupting public media access or local uploads, the rate-limiting checks are exclusively applied to POST requests targeting active collections (verified dynamically against `model.IsCollection`).
+3. **Sliding-Window Rate Limiter**: The middleware cross-references the extracted domain against a thread-safe, memory-efficient sliding-window limiter.
+4. **early DoS Protection**: If requests from a specific remote actor domain exceed the configured threshold (default `100` requests per `1m` window), the connection is immediately terminated with `429 Too Many Requests`. This protects local storage from database exhaustion while ensuring independent benign domains on shared TLDs are never grouped or throttled together.

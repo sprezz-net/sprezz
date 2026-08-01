@@ -201,6 +201,7 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32
 	})
 
 	signatureValidator := middleware.NewSignatureValidator(federatedVerifier, deps.postgresStorage)
+	domainRateLimiter := middleware.NewDomainRateLimitMiddleware(deps.cfg.ActivityPub.DomainRateLimitRequests, deps.cfg.ActivityPub.DomainRateLimitWindow)
 
 	var domains []string
 	for domain := range tenantMap {
@@ -221,6 +222,7 @@ func setupRoutingTree(r *chi.Mux, deps *dependencies, tenantMap map[string]int32
 		// Unified Greedy Catch-All Endpoint (Handles GET & POST dynamically)
 		protected.Group(func(router chi.Router) {
 			router.Use(signatureValidator.Handler)
+			router.Use(domainRateLimiter.Handler)
 			router.Get("/*", genericHandler.ServeHTTP)
 			router.Post("/*", genericHandler.ServeHTTP)
 		})
