@@ -11,12 +11,12 @@ const (
 	HTTPPrefix  = "http://"
 
 	// Standard HTTP Headers
-	HeaderContentType = "Content-Type"
-	HeaderAccept      = "Accept"
-	HeaderSignature   = "Signature"
-	HeaderDigest      = "Digest"
-	HeaderDate        = "Date"
-	HeaderHost        = "Host"
+	HeaderContentType               = "Content-Type"
+	HeaderAccept                    = "Accept"
+	HeaderSignature                 = "Signature"
+	HeaderDigest                    = "Digest"
+	HeaderDate                      = "Date"
+	HeaderHost                      = "Host"
 	HeaderCollectionSynchronization = "Collection-Synchronization"
 
 	// MIME Types
