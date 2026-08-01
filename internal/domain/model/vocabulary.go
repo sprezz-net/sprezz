@@ -27,25 +27,27 @@ const (
 	ShortApplication  = "Application"
 
 	// Activity Verb short names
-	ShortFollow   = "Follow"
-	ShortAccept   = "Accept"
-	ShortReject   = "Reject"
-	ShortCreate   = "Create"
-	ShortLike     = "Like"
-	ShortDislike  = "Dislike"
-	ShortAnnounce = "Announce"
-	ShortUndo     = "Undo"
-	ShortDelete   = "Delete"
-	ShortUpdate   = "Update"
-	ShortAdd      = "Add"
-	ShortRemove   = "Remove"
-	ShortJoin     = "Join"
-	ShortLeave    = "Leave"
-	ShortQuestion = "Question"
+	ShortFollow     = "Follow"
+	ShortAccept     = "Accept"
+	ShortReject     = "Reject"
+	ShortCreate     = "Create"
+	ShortLike       = "Like"
+	ShortDislike    = "Dislike"
+	ShortAnnounce   = "Announce"
+	ShortUndo       = "Undo"
+	ShortDelete     = "Delete"
+	ShortUpdate     = "Update"
+	ShortAdd        = "Add"
+	ShortRemove     = "Remove"
+	ShortJoin       = "Join"
+	ShortLeave      = "Leave"
+	ShortQuestion   = "Question"
+	ShortEmojiReact = "EmojiReact"
 
 	// Object short names
 	ShortNote      = "Note"
 	ShortTombstone = "Tombstone"
+	ShortEmoji     = "Emoji"
 
 	// Canonical vocabulary URIs used to scan actor graphs
 	PredicatePreferredUsername = NamespaceActivityStreams + "preferredUsername"
@@ -63,23 +65,25 @@ const (
 	ActorApplication  = NamespaceActivityStreams + ShortApplication
 
 	// ActivityPub Object/Activity Types (dynamically constructed)
-	TypeFollow    = NamespaceActivityStreams + ShortFollow
-	TypeAccept    = NamespaceActivityStreams + ShortAccept
-	TypeReject    = NamespaceActivityStreams + ShortReject
-	TypeCreate    = NamespaceActivityStreams + ShortCreate
-	TypeLike      = NamespaceActivityStreams + ShortLike
-	TypeDislike   = NamespaceActivityStreams + ShortDislike
-	TypeAnnounce  = NamespaceActivityStreams + ShortAnnounce
-	TypeUndo      = NamespaceActivityStreams + ShortUndo
-	TypeDelete    = NamespaceActivityStreams + ShortDelete
-	TypeUpdate    = NamespaceActivityStreams + ShortUpdate
-	TypeAdd       = NamespaceActivityStreams + ShortAdd
-	TypeRemove    = NamespaceActivityStreams + ShortRemove
-	TypeJoin      = NamespaceActivityStreams + ShortJoin
-	TypeLeave     = NamespaceActivityStreams + ShortLeave
-	TypeQuestion  = NamespaceActivityStreams + ShortQuestion
-	TypeNote      = NamespaceActivityStreams + ShortNote
-	TypeTombstone = NamespaceActivityStreams + ShortTombstone
+	TypeFollow     = NamespaceActivityStreams + ShortFollow
+	TypeAccept     = NamespaceActivityStreams + ShortAccept
+	TypeReject     = NamespaceActivityStreams + ShortReject
+	TypeCreate     = NamespaceActivityStreams + ShortCreate
+	TypeLike       = NamespaceActivityStreams + ShortLike
+	TypeDislike    = NamespaceActivityStreams + ShortDislike
+	TypeAnnounce   = NamespaceActivityStreams + ShortAnnounce
+	TypeUndo       = NamespaceActivityStreams + ShortUndo
+	TypeDelete     = NamespaceActivityStreams + ShortDelete
+	TypeUpdate     = NamespaceActivityStreams + ShortUpdate
+	TypeAdd        = NamespaceActivityStreams + ShortAdd
+	TypeRemove     = NamespaceActivityStreams + ShortRemove
+	TypeJoin       = NamespaceActivityStreams + ShortJoin
+	TypeLeave      = NamespaceActivityStreams + ShortLeave
+	TypeQuestion   = NamespaceActivityStreams + ShortQuestion
+	TypeEmojiReact = "http://litepub.social/ns#EmojiReact"
+	TypeEmoji      = "http://joinmastodon.org/ns#Emoji"
+	TypeNote       = NamespaceActivityStreams + ShortNote
+	TypeTombstone  = NamespaceActivityStreams + ShortTombstone
 
 	// Vocabulary predicates
 	PredicateInbox          = NamespaceActivityStreams + "inbox"
@@ -103,6 +107,8 @@ const (
 	PredicateLiked          = NamespaceActivityStreams + "liked"
 	PredicateContext        = NamespaceActivityStreams + "context"
 	PredicateContextHistory = "https://w3id.org/fep/171b/contextHistory"
+	PredicateQuote          = "https://w3id.org/fep/044f#quote"
+	PredicateEmojiReactions = "http://fedibird.com/ns#emojiReactions"
 
 	// FEP-4ccd Pending Followers / Following Collection Predicates
 	NamespacePending          = "https://purl.archive.org/socialweb/pending#"

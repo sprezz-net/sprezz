@@ -373,25 +373,26 @@ Sprezz aligns with several key Fediverse Enhancement Proposals to ensure maximum
 11. **`FEP-c648` (Blocked Collection)**: Recommends exposing standard `blocked` and `blocks` collections for user-controlled actor-level blocks. Fully implemented in the handler, services, and storage.
 12. **`FEP-1311` (Media Attachments)**: Standardizes metadata properties (like `mediaType`, `digestMultibase` integrity checks, `size`, and image `width`/`height` dimensions) on ActivityPub attachments. Fully implemented inside our media handler, dimension-extraction streaming pipeline, and multibase digest generation.
 13. **`FEP-8fcf` (Followers collection synchronization across servers)**: Standardizes detecting and correcting follow relationship discrepancies across servers using XORed SHA-256 digests of partial followers list. Fully implemented via dynamic on-the-fly digest computation, in-memory caching, the `/followers_synchronization` endpoint, and outbound `Collection-Synchronization` header injection.
+14. **`FEP-e232` (Object Links)**: Standardizes inline attachment, hashtag, and skolemized blank-node references. Fully implemented in context parsing, blank-node rewriting, and explicit tag parsing that extracts quote associations during post ingestion.
+15. **`FEP-dd4b` (Quote Posts)**: Standardizes how quote posts with embedded commentary/media are represented. Fully implemented by extracting quote attachments from the `tag` list and storing quote associations as native RDF quad relationships inside the quad store.
+16. **`FEP-c0e0` (Emoji reactions)**: Standardizes the representation of emoji reactions as `EmojiReact` (or `Like` with `content`) activities targeting objects. Fully implemented by validating and storing reactions within the flexible RDF quad store.
+17. **`FEP-9098` (Custom emojis)**: Standardizes custom emoji representations (`Emoji` tags in metadata) using shortcodes and image icons. Fully implemented by parsing custom emojis from `tag` payloads and persisting them as structured RDF graphs in the quad database.
+18. **`FEP-fc48` (Generic ActivityPub server)**: Standardizes exposing side-channel interaction collections (`likes`, `shares`, `replies`, and thread `context`) on created objects. Fully implemented in Sprezz by dynamically serving URL-agnostic engagement collections mapped directly onto the core object paths, allowing full semantic routing without database schema duplication.
 
 #### II. Partially Implemented / Aligned (Basic scaffolding or concept aligned, but not fully implemented)
 
 1. **`FEP-521a` (Representing Actors with Ed25519 Signatures)**: Outlines native cryptographic key generation, storage, and verification workflow over Ed25519 signatures. Scaffolding present. Sprezz mints and stores local Ed25519 private keys alongside RSA-2048 keys collectively, and our `SignatureVerifier` natively validates incoming FEP-521a HTTP signatures directly over `ed25519.Verify` on raw signing string bytes without hashing. Outbound signing is currently locked to RSA.
 2. **`FEP-2c59` (Decoupled Actor Profile and Migration Aliases)**: Standardizes alias mapping and verification (`alsoKnownAs`). Partially implemented. GenericHandler checks custom aliases dynamically and performs redirects with an HTTP 303 Status, but account-migration key verification is not present.
-3. **`FEP-e232` (Object Links and Inline Context References)**: Standardizes inline attachment, hashtag, and skolemized blank-node references. Partially implemented. Fully supported in parsing contexts and blank-node rewriting, but explicit parsing of FEP-e232 tag properties is not present.
-4. **Nomadic Identity and Cross-Hub Synchronization (Zot6 / Nomad Protocol)**: Standardizes multi-hub Nomadic persona clone tracking (based on the Zot6/Nomad specifications rather than a numbered FEP). Partially implemented. Sprezz provides the relational storage schema (`nomadic_identities` and `identity_clones`) and `PredicateNomadGUID` graph mapping to represent nomadic identifiers, but the background synchronization engine is not implemented.
-5. **`FEP-ae49` (Semantic Routing for ActivityPub)**: Semantic routing is used for objects and path based suffix routing for collections on those objects.
+3. **Nomadic Identity and Cross-Hub Synchronization (Zot6 / Nomad Protocol)**: Standardizes multi-hub Nomadic persona clone tracking (based on the Zot6/Nomad specifications rather than a numbered FEP). Partially implemented. Sprezz provides the relational storage schema (`nomadic_identities` and `identity_clones`) and `PredicateNomadGUID` graph mapping to represent nomadic identifiers, but the background synchronization engine is not implemented.
+4. **`FEP-ae49` (Semantic Routing for ActivityPub)**: Semantic routing is used for objects and path based suffix routing for collections on those objects.
 
 #### III. Possible Future Enhancements (Not implemented)
 
 1. **`FEP-f1d5` (NodeInfo Metadata Discovery)**: Recommends standardizing capability discovery and user metrics. Marked as a potential future enhancement.
 2. **`FEP-0151` (NodeInfo in Fediverse Software (2025 edition))**
-3. **`FEP-e232` (Object Links)**
-4. **`FEP-67ff` (FEDERATION.md)**
-5. **`FEP-ae0c` (Fediverse Relay Protocols: Mastodon and LitePub)**: Unsure yet if this will be supported. The LitePub approach looks to be the part that fits best.
-6. **`FEP-fc48` (Generic ActivityPub server)**: When creating objects also create the attached supported collections. This will allow for full sementic routing.
-7. **`FEP-9098` (Custom emojis)**
-8. **`FEP-044f` (Consent-respecting quote posts)**
+3. **`FEP-67ff` (FEDERATION.md)**
+4. **`FEP-ae0c` (Fediverse Relay Protocols: Mastodon and LitePub)**: Unsure yet if this will be supported. The LitePub approach looks to be the part that fits best.
+5. **`FEP-044f` (Consent-respecting quote posts)**
 
 ### 7.4 Privacy and Audience Rules
 

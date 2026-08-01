@@ -212,6 +212,71 @@ func (s *ActivityService) prepareInboundQuads(ctx context.Context, task model.In
 	if err != nil {
 		return nil, err
 	}
+
+	// Extract tags/attachments (quotes and custom emojis) and enrich quads
+	quotes, emojis, err := s.ExtractTagsAndAttachments(ctx, task.Payload)
+	if err == nil {
+		for _, quoteIRI := range quotes {
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   task.ObjectIRI,
+				Predicate: model.PredicateQuote,
+				Object:    quoteIRI,
+				ObjType:   model.NamedNode,
+			})
+		}
+		for _, emoji := range emojis {
+			emojiSubj := emoji.ID
+			if emojiSubj == "" {
+				emojiSubj = "_:emoji-" + strings.Trim(emoji.Name, ":")
+			}
+			iconSubj := emojiSubj + "-icon"
+
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   task.ObjectIRI,
+				Predicate: model.NamespaceActivityStreams + "tag",
+				Object:    emojiSubj,
+				ObjType:   model.NamedNode,
+			})
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   emojiSubj,
+				Predicate: model.RDFType,
+				Object:    model.TypeEmoji,
+				ObjType:   model.NamedNode,
+			})
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   emojiSubj,
+				Predicate: model.NamespaceActivityStreams + "name",
+				Object:    emoji.Name,
+				ObjType:   model.Literal,
+			})
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   emojiSubj,
+				Predicate: model.NamespaceActivityStreams + "icon",
+				Object:    iconSubj,
+				ObjType:   model.NamedNode,
+			})
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   iconSubj,
+				Predicate: model.RDFType,
+				Object:    model.NamespaceActivityStreams + "Image",
+				ObjType:   model.NamedNode,
+			})
+			quads = append(quads, model.Quad{
+				GraphID:   graphID,
+				Subject:   iconSubj,
+				Predicate: model.NamespaceActivityStreams + "url",
+				Object:    emoji.IconURL,
+				ObjType:   model.NamedNode,
+			})
+		}
+	}
+
 	return s.linkActivityToContextHistory(task, quads, graphID), nil
 }
 

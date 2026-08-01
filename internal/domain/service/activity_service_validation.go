@@ -46,7 +46,7 @@ func (s *ActivityService) validateCoreInteractions(ctx context.Context, actorIRI
 		return s.validateAcceptRejectVerb(ctx, actorIRI, actType, object)
 	case model.ShortAdd, model.ShortRemove:
 		return s.validateAddRemoveVerb(ctx, actorIRI, target, object)
-	case model.ShortLike, model.ShortDislike:
+	case model.ShortLike, model.ShortDislike, model.ShortEmojiReact:
 		return s.validateLikeDislikeVerb(ctx, actorIRI, actType, object)
 	case model.ShortAnnounce:
 		return s.validateAnnounceVerb(ctx, object)
